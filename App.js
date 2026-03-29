@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import * as Haptics from 'expo-haptics';
-import PlayerSelectScreen from './screens/PlayerSelectScreen';
+import BingoCardScreen from './screens/BingoCardScreen';
+import NewGameSetupScreen from './screens/NewGameSetupScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ScreenTransitionLayer, {
   CENTER_CIRCLE,
@@ -16,6 +17,7 @@ import ScreenTransitionLayer, {
   measureNodeRect,
 } from './components/ScreenTransitionLayer';
 import {
+  preloadBingoAssets,
   preloadHomeAssets,
   preloadPlayerSelectAssets,
 } from './utils/preloadAssets';
@@ -134,6 +136,7 @@ function PulseLogo() {
 export default function App() {
   const [fredokaLoaded] = useFredoka({ FredokaOne_400Regular });
   const [scherm, setScherm] = useState('home');
+  const [spelConfig, setSpelConfig] = useState(null);
   const [transitionState, setTransitionState] = useState({
     zichtbaar: false,
     kleur: '#D93B2B',
@@ -214,10 +217,31 @@ export default function App() {
   const fredoka = fredokaLoaded ? 'FredokaOne_400Regular' : undefined;
   let content = null;
 
-  if (scherm === 'playerSelect') {
+  if (scherm === 'newGame') {
     content = (
-      <PlayerSelectScreen
+      <NewGameSetupScreen
         onBack={() => setScherm('home')}
+        onStart={(targetRef, config) =>
+          startTransition(
+            targetRef,
+            '#D93B2B',
+            () => {
+              setSpelConfig(config);
+              setScherm('bingo');
+            },
+            () => preloadBingoAssets(config.theme, config.playerColors)
+          )
+        }
+      />
+    );
+  } else if (scherm === 'bingo' && spelConfig) {
+    content = (
+      <BingoCardScreen
+        theme={spelConfig.theme}
+        playerCount={spelConfig.playerCount}
+        playerColors={spelConfig.playerColors}
+        rules={spelConfig.rules}
+        onBack={() => setScherm('newGame')}
       />
     );
   } else if (scherm === 'settings') {
@@ -250,7 +274,7 @@ export default function App() {
                 startTransition(
                   startButtonRef,
                   '#D93B2B',
-                  () => setScherm('playerSelect'),
+                  () => setScherm('newGame'),
                   preloadPlayerSelectAssets
                 )
               }

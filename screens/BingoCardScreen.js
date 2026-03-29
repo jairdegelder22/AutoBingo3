@@ -27,20 +27,55 @@ const THEME_COLORS = {
   winter: '#6EB5FF', dieren: '#2E8B3F', voertuigen: '#2D2B55', verkeersborden: '#D93B2B',
 };
 
+function darkenHex(hex, factor = 0.82) {
+  const clean = hex.replace('#', '');
+  const value = clean.length === 3
+    ? clean.split('').map((char) => char + char).join('')
+    : clean;
+
+  const channels = [0, 2, 4].map((index) =>
+    Math.max(0, Math.min(255, Math.round(parseInt(value.slice(index, index + 2), 16) * factor)))
+  );
+
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
 function randomColors() {
   return Array.from({ length: SIZE * SIZE }, (_, i) => CELL_COLORS[i % CELL_COLORS.length])
     .sort(() => Math.random() - 0.5);
 }
 
-function findBingo(checked) {
+function getCompletedLines(checked, rules) {
   const lines = [
     [0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15],
     [0,4,8,12], [1,5,9,13], [2,6,10,14], [3,7,11,15],
-    [0,5,10,15], [3,6,9,12],
   ];
-  for (const line of lines) {
-    if (line.every(i => checked[i])) return [line[0], line[3]];
+
+  if (rules.allowDiagonal) {
+    lines.push([0,5,10,15], [3,6,9,12]);
   }
+
+  return lines.filter((line) => line.every((index) => checked[index]));
+}
+
+function findBingo(checked, rules) {
+  if (rules.winMode === 'full_card') {
+    return checked.every(Boolean) ? 'full_card' : null;
+  }
+
+  const completedLines = getCompletedLines(checked, rules);
+
+  if (rules.winMode === 'two_lines') {
+    if (completedLines.length >= 2) {
+      return [completedLines[0][0], completedLines[0][3]];
+    }
+    return null;
+  }
+
+  if (completedLines.length >= 1) {
+    return [completedLines[0][0], completedLines[0][3]];
+  }
+
   return null;
 }
 
@@ -54,7 +89,7 @@ function cellCenter(index) {
 }
 
 // ─── Cel met bounce animatie ─────────────────────────────────────────────────
-function BingoCell({ color, checked, icon, onPress }) {
+function BingoCell({ checked, checkedColor, icon, onPress }) {
   const scale = useRef(new Animated.Value(1)).current;
 
   function handlePress() {
@@ -72,7 +107,7 @@ function BingoCell({ color, checked, icon, onPress }) {
         style={[
           styles.cell,
           checked
-            ? { backgroundColor: '#F5C400', borderColor: '#D4A800' }
+            ? { backgroundColor: checkedColor, borderColor: darkenHex(checkedColor) }
             : { backgroundColor: '#FFFDF7', borderColor: '#D4C4A0' },
         ]}
         onPress={handlePress}
@@ -85,10 +120,25 @@ function BingoCell({ color, checked, icon, onPress }) {
 }
 
 // ─── Scherm ──────────────────────────────────────────────────────────────────
-export default function BingoCardScreen({ theme, playerCount, playerColors, onBack }) {
+export default function BingoCardScreen({ theme, playerCount, playerColors, rules, onBack }) {
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
-  const [icons]  = useState(() => getRandomIcons(theme));
-  const [colors] = useState(randomColors);
+  const actieveRegels = rules ?? {
+    sharedCards: true,
+    winMode: 'one_line',
+    allowDiagonal: true,
+  };
+  const [sharedIcons] = useState(() => getRandomIcons(theme));
+  const [sharedColors] = useState(randomColors);
+  const [playerIcons] = useState(() =>
+    actieveRegels.sharedCards
+      ? Array.from({ length: playerCount }, () => sharedIcons)
+      : Array.from({ length: playerCount }, () => getRandomIcons(theme))
+  );
+  const [playerCellColors] = useState(() =>
+    actieveRegels.sharedCards
+      ? Array.from({ length: playerCount }, () => sharedColors)
+      : Array.from({ length: playerCount }, randomColors)
+  );
   const [activePlayer, setActivePlayer] = useState(0);
   const [playerChecked, setPlayerChecked] = useState(() =>
     Array.from({ length: playerCount }, () => Array(SIZE * SIZE).fill(false))
@@ -96,16 +146,19 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, onBa
   const [playerWinLines, setPlayerWinLines] = useState(Array(playerCount).fill(null));
 
   const checked = playerChecked[activePlayer];
+  const icons = playerIcons[activePlayer];
+  const colors = playerCellColors[activePlayer];
   const winLine = playerWinLines[activePlayer];
   const headerKleur = THEME_COLORS[theme] ?? '#D93B2B';
   const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
+  const activePlayerColor = PLAYER_HEX[playerColors?.[activePlayer] ?? 'groen'] ?? '#2E8B3F';
 
   function handlePress(index) {
     if (winLine) return;
     const next = playerChecked.map((c, p) => p === activePlayer ? [...c] : c);
     next[activePlayer][index] = !next[activePlayer][index];
     setPlayerChecked(next);
-    const win = findBingo(next[activePlayer]);
+    const win = findBingo(next[activePlayer], actieveRegels);
     if (win) {
       const nextWins = [...playerWinLines];
       nextWins[activePlayer] = win;
@@ -114,7 +167,7 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, onBa
   }
 
   let lineOverlay = null;
-  if (winLine) {
+  if (Array.isArray(winLine)) {
     const a = cellCenter(winLine[0]);
     const b = cellCenter(winLine[1]);
     const dx = b.x - a.x;
@@ -179,8 +232,8 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, onBa
           {colors.map((color, i) => (
             <BingoCell
               key={i}
-              color={color}
               checked={checked[i]}
+              checkedColor={activePlayerColor}
               icon={icons[i]}
               onPress={() => handlePress(i)}
             />
@@ -235,8 +288,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cellIcon: {
-    width: CELL_SIZE * 0.65,
-    height: CELL_SIZE * 0.65,
+    width: CELL_SIZE * 0.82,
+    height: CELL_SIZE * 0.82,
   },
 
   line:      { position: 'absolute', height: 8, borderRadius: 4, backgroundColor: '#2E8B3F' },
