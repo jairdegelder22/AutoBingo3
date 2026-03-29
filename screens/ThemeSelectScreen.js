@@ -1,9 +1,20 @@
-import { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Animated } from 'react-native';
+import { useState, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Animated, Easing } from 'react-native';
 import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import { useFonts as useNunito, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
 import * as Haptics from 'expo-haptics';
 import BingoCardScreen from './BingoCardScreen';
+import ScreenTransitionLayer, {
+  CENTER_CIRCLE,
+  getCoverCircleFromRect,
+  getCircleFromRect,
+  getBigHoleRect,
+  measureNodeRect,
+} from '../components/ScreenTransitionLayer';
+import {
+  preloadBingoAssets,
+  preloadColorSelectAssets,
+} from '../utils/preloadAssets';
 
 const { width: W } = Dimensions.get('window');
 const BUTTON_W = W - 48;
@@ -22,18 +33,125 @@ const PREMIUM_THEMES = [
   { id: 'verkeersborden', label: 'Verkeersborden',   emoji: '⚠️', bg: '#FFFDF7', textColor: '#2D2B55', border: '#D93B2B' },
 ];
 
-export default function ThemeSelectScreen({ playerCount, playerColors, onSelect, onBack }) {
+export default function ThemeSelectScreen({ playerCount, playerColors, onBack }) {
   const [fredokaLoaded] = useFredoka({ FredokaOne_400Regular });
   const [nunitoLoaded]  = useNunito({ Nunito_600SemiBold });
   const [selectedTheme, setSelectedTheme] = useState(null);
+  const [transitionState, setTransitionState] = useState({
+    zichtbaar: false,
+    kleur: '#1A5EA8',
+    vanRect: getBigHoleRect(),
+    naarRect: CENTER_CIRCLE,
+  });
 
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-  }, []);
+  const transitionProgress = useRef(new Animated.Value(0)).current;
+  const transitionBusy = useRef(false);
+  const themeRefs = useRef({});
+
+  async function startTransition(targetRef, kleur, actie, preload = async () => {}) {
+    if (transitionBusy.current) return;
+
+    transitionBusy.current = true;
+    setTransitionState({
+      zichtbaar: true,
+      kleur,
+      vanRect: getBigHoleRect(),
+      naarRect: CENTER_CIRCLE,
+    });
+
+    const doelRect = await measureNodeRect(targetRef, CENTER_CIRCLE);
+
+    setTransitionState({
+      zichtbaar: true,
+      kleur,
+      vanRect: getBigHoleRect(),
+      naarRect: doelRect,
+    });
+
+    transitionProgress.stopAnimation();
+    transitionProgress.setValue(0);
+
+    Animated.timing(transitionProgress, {
+      toValue: 1,
+      duration: 1000,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    }).start(async () => {
+      setTransitionState((vorige) => ({
+        ...vorige,
+        vanRect: null,
+        naarRect: null,
+      }));
+
+      actie();
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 500);
+      });
+
+      await preload();
+
+      setTransitionState({
+        zichtbaar: true,
+        kleur,
+        vanRect: getCircleFromRect(doelRect),
+        naarRect: getCoverCircleFromRect(doelRect),
+      });
+
+      transitionProgress.setValue(0);
+
+      Animated.timing(transitionProgress, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        transitionBusy.current = false;
+        setTransitionState((vorige) => ({ ...vorige, zichtbaar: false }));
+      });
+    });
+  }
+
+  const fredoka = fredokaLoaded ? 'FredokaOne_400Regular' : undefined;
+  const nunito  = nunitoLoaded  ? 'Nunito_600SemiBold'    : undefined;
+
+  const renderButton = (theme) => (
+    <View
+      key={theme.id}
+      ref={(node) => {
+        themeRefs.current[theme.id] = node;
+      }}
+      collapsable={false}
+    >
+      <TouchableOpacity
+        activeOpacity={0.82}
+        style={[
+          styles.button,
+          { backgroundColor: theme.bg },
+          theme.border && { borderWidth: 2.5, borderColor: theme.border },
+        ]}
+        onPressIn={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          startTransition(
+            themeRefs.current[theme.id],
+            theme.bg,
+            () => setSelectedTheme(theme.id),
+            () => preloadBingoAssets(theme.id, playerColors)
+          );
+        }}
+      >
+        <Text style={styles.buttonEmoji}>{theme.emoji}</Text>
+        <Text style={[styles.buttonText, { color: theme.textColor, fontFamily: fredoka }]}>
+          {theme.label}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  let content = null;
 
   if (selectedTheme) {
-    return (
+    content = (
       <BingoCardScreen
         theme={selectedTheme}
         playerCount={playerCount}
@@ -41,61 +159,51 @@ export default function ThemeSelectScreen({ playerCount, playerColors, onSelect,
         onBack={() => setSelectedTheme(null)}
       />
     );
+  } else {
+    content = (
+      <>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Text style={styles.backText}>←</Text>
+          </TouchableOpacity>
+          <Text style={[styles.headerText, { fontFamily: fredoka }]}>Kies een thema</Text>
+          <View style={styles.backButton} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.sectionLabel, { fontFamily: nunito }]}>Gratis</Text>
+          <View style={styles.lijst}>
+            {FREE_THEMES.map(renderButton)}
+          </View>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLijn} />
+            <Text style={[styles.dividerTekst, { fontFamily: nunito }]}>Premium</Text>
+            <View style={styles.dividerLijn} />
+          </View>
+
+          <View style={styles.lijst}>
+            {PREMIUM_THEMES.map(renderButton)}
+          </View>
+
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      </>
+    );
   }
 
-  const fredoka = fredokaLoaded ? 'FredokaOne_400Regular' : undefined;
-  const nunito  = nunitoLoaded  ? 'Nunito_600SemiBold'    : undefined;
-
-  const renderButton = (theme) => (
-    <TouchableOpacity
-      key={theme.id}
-      activeOpacity={0.82}
-      style={[
-        styles.button,
-        { backgroundColor: theme.bg },
-        theme.border && { borderWidth: 2.5, borderColor: theme.border },
-      ]}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setSelectedTheme(theme.id);
-      }}
-    >
-      <Text style={styles.buttonEmoji}>{theme.emoji}</Text>
-      <Text style={[styles.buttonText, { color: theme.textColor, fontFamily: fredoka }]}>
-        {theme.label}
-      </Text>
-    </TouchableOpacity>
-  );
-
   return (
-    <Animated.View style={[styles.container, { opacity }]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerText, { fontFamily: fredoka }]}>Kies een thema</Text>
-        <View style={styles.backButton} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.sectionLabel, { fontFamily: nunito }]}>Gratis</Text>
-        <View style={styles.lijst}>
-          {FREE_THEMES.map(renderButton)}
-        </View>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLijn} />
-          <Text style={[styles.dividerTekst, { fontFamily: nunito }]}>Premium</Text>
-          <View style={styles.dividerLijn} />
-        </View>
-
-        <View style={styles.lijst}>
-          {PREMIUM_THEMES.map(renderButton)}
-        </View>
-
-        <View style={{ height: 32 }} />
-      </ScrollView>
-    </Animated.View>
+    <View style={styles.container}>
+      {content}
+      {transitionState.zichtbaar && (
+        <ScreenTransitionLayer
+          progress={transitionProgress}
+          color={transitionState.kleur}
+          fromRect={transitionState.vanRect}
+          toRect={transitionState.naarRect}
+        />
+      )}
+    </View>
   );
 }
 

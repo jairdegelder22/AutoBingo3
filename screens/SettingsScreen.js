@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, View, Switch, TouchableOpacity, Animated } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, Switch, TouchableOpacity } from 'react-native';
 import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import { useFonts as useNunito, Nunito_700Bold, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
 import * as Haptics from 'expo-haptics';
@@ -11,10 +11,7 @@ export default function SettingsScreen({ onBack }) {
   const [sound, setSound] = useState(true);
   const [vibration, setVibration] = useState(true);
 
-  const opacity = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     AsyncStorage.multiGet(['sound', 'vibration']).then(pairs => {
       const map = Object.fromEntries(pairs.map(([k, v]) => [k, v !== null ? v === 'true' : true]));
       setSound(map.sound);
@@ -39,7 +36,7 @@ export default function SettingsScreen({ onBack }) {
   const nunitoSB = nunitoLoaded  ? 'Nunito_600SemiBold'    : undefined;
 
   return (
-    <Animated.View style={[styles.container, { opacity }]}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backText}>←</Text>
@@ -82,7 +79,7 @@ export default function SettingsScreen({ onBack }) {
           <Text style={[styles.premiumButtonText, { fontFamily: fredoka }]}>Koop Premium  👑</Text>
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity,
   Image, Dimensions, Animated,
@@ -19,10 +19,7 @@ export default function ColorSelectScreen({ playerCount, onDone, onBack }) {
     Array.from({ length: playerCount }, (_, i) => i % ALLE_KLEUREN.length)
   );
 
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-  }, []);
+  const klaarButtonRef = useRef(null);
 
   function wijzigKleur(speler, richting) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -46,7 +43,7 @@ export default function ColorSelectScreen({ playerCount, onDone, onBack }) {
   const rijHoogte = BESCHIKBAAR / playerCount;
 
   return (
-    <Animated.View style={[styles.container, { opacity }]}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backText}>←</Text>
@@ -89,17 +86,19 @@ export default function ColorSelectScreen({ playerCount, onDone, onBack }) {
 
       <View style={styles.footer}>
         <TouchableOpacity
+          ref={klaarButtonRef}
+          collapsable={false}
           style={styles.klaarKnop}
-          onPress={() => {
+          onPressIn={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onDone(indices.map(i => ALLE_KLEUREN[i]));
+            onDone(klaarButtonRef, indices.map(i => ALLE_KLEUREN[i]));
           }}
           activeOpacity={0.82}
         >
           <Text style={[styles.klaarTekst, { fontFamily: fredoka }]}>Klaar</Text>
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

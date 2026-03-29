@@ -190,8 +190,12 @@ const THEME_ICONS = {
   ],
 };
 
+export function getThemeIcons(theme) {
+  return THEME_ICONS[theme] ?? THEME_ICONS.snelweg;
+}
+
 export function getRandomIcons(theme, count = 16) {
-  const pool = THEME_ICONS[theme] ?? THEME_ICONS.snelweg;
+  const pool = getThemeIcons(theme);
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   // Herhaal als de pool kleiner is dan het gevraagde aantal
   const result = [];
