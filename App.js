@@ -123,11 +123,11 @@ const styles = StyleSheet.create({
     height: H * 0.42,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 52,
+    paddingTop: 24,
   },
   logo: {
-    width: W * 0.95,
-    height: H * 0.33,
+    width: W * 1.2,
+    height: H * 0.42,
   },
   knoppen: {
     position: 'absolute',
