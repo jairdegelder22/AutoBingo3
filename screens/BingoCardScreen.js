@@ -1,20 +1,30 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { useState, useRef } from 'react';
+import {
+  StyleSheet, Text, View, TouchableOpacity,
+  Image, Dimensions, Animated,
+} from 'react-native';
+import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
+import * as Haptics from 'expo-haptics';
 import { getRandomIcons } from './themeIcons';
 import { PLAYER_IMAGES, PLAYER_HEX } from '../assets/images/players/playerImages';
 
-const CELL_COLORS = ['#2E8B3F', '#6EB5FF', '#F5C400', '#FF6B6B'];
 const SIZE = 4;
-
 const { width } = Dimensions.get('window');
 const PADDING = 12;
 const GAP = 8;
 const CELL_SIZE = (width - PADDING * 2 - GAP * (SIZE - 1)) / SIZE;
 const GRID_HEIGHT = SIZE * CELL_SIZE + (SIZE - 1) * GAP + PADDING * 2;
 
+const CELL_COLORS = ['#2E8B3F', '#6EB5FF', '#F5C400', '#D93B2B'];
+
 const THEME_LABELS = {
   snelweg: 'Snelweg', stad: 'Stad', platteland: 'Platteland', vakantie: 'Vakantie',
   winter: 'Winter', dieren: 'Dieren & Natuur', voertuigen: 'Voertuigen', verkeersborden: 'Verkeersborden',
+};
+
+const THEME_COLORS = {
+  snelweg: '#D93B2B', stad: '#1A5EA8', platteland: '#2E8B3F', vakantie: '#E8622A',
+  winter: '#6EB5FF', dieren: '#2E8B3F', voertuigen: '#2D2B55', verkeersborden: '#D93B2B',
 };
 
 function randomColors() {
@@ -43,8 +53,41 @@ function cellCenter(index) {
   };
 }
 
+// ─── Cel met bounce animatie ─────────────────────────────────────────────────
+function BingoCell({ color, checked, icon, onPress }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  function handlePress() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.15, duration: 120, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 10, stiffness: 200 }),
+    ]).start();
+    onPress();
+  }
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={[
+          styles.cell,
+          checked
+            ? { backgroundColor: '#F5C400', borderColor: '#D4A800' }
+            : { backgroundColor: '#FFFDF7', borderColor: '#D4C4A0' },
+        ]}
+        onPress={handlePress}
+        activeOpacity={1}
+      >
+        <Image source={icon} style={styles.cellIcon} resizeMode="contain" />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// ─── Scherm ──────────────────────────────────────────────────────────────────
 export default function BingoCardScreen({ theme, playerCount, playerColors, onBack }) {
-  const [icons] = useState(() => getRandomIcons(theme));
+  const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
+  const [icons]  = useState(() => getRandomIcons(theme));
   const [colors] = useState(randomColors);
   const [activePlayer, setActivePlayer] = useState(0);
   const [playerChecked, setPlayerChecked] = useState(() =>
@@ -54,6 +97,8 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, onBa
 
   const checked = playerChecked[activePlayer];
   const winLine = playerWinLines[activePlayer];
+  const headerKleur = THEME_COLORS[theme] ?? '#D93B2B';
+  const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
 
   function handlePress(index) {
     if (winLine) return;
@@ -75,16 +120,16 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, onBa
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const length = Math.sqrt(dx * dx + dy * dy);
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    const midX = (a.x + b.x) / 2;
-    const midY = (a.y + b.y) / 2;
+    const angle  = Math.atan2(dy, dx) * (180 / Math.PI);
+    const midX   = (a.x + b.x) / 2;
+    const midY   = (a.y + b.y) / 2;
     lineOverlay = (
       <View
         pointerEvents="none"
         style={[styles.line, {
           width: length,
           left: midX - length / 2,
-          top: midY - 4,
+          top:  midY - 4,
           transform: [{ rotate: `${angle}deg` }],
         }]}
       />
@@ -93,25 +138,28 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, onBa
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: headerKleur }]}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerText}>{THEME_LABELS[theme] ?? theme}</Text>
+        <Text style={[styles.headerText, { fontFamily: fredoka }]}>
+          {THEME_LABELS[theme] ?? theme}
+        </Text>
         <View style={styles.backButton} />
       </View>
 
+      {/* Spelersbar */}
       {playerCount > 1 && (
         <View style={styles.playerBar}>
           {Array.from({ length: playerCount }, (_, i) => {
             const kleur = playerColors?.[i] ?? 'groen';
             const actief = i === activePlayer;
-            const hex = PLAYER_HEX[kleur];
             return (
               <TouchableOpacity
                 key={i}
                 onPress={() => setActivePlayer(i)}
-                style={[styles.playerButton, actief && { borderBottomColor: hex, borderBottomWidth: 3 }]}
+                style={[styles.playerButton, actief && { borderBottomColor: PLAYER_HEX[kleur], borderBottomWidth: 3 }]}
                 activeOpacity={0.7}
               >
                 <Image
@@ -125,44 +173,42 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, onBa
         </View>
       )}
 
+      {/* Grid */}
       <View style={styles.body}>
         <View style={styles.gridWrapper}>
           {colors.map((color, i) => (
-            <TouchableOpacity
+            <BingoCell
               key={i}
-              style={[
-                styles.cell,
-                checked[i]
-                  ? { backgroundColor: color + '80', borderWidth: 4, borderColor: color }
-                  : { backgroundColor: color },
-              ]}
+              color={color}
+              checked={checked[i]}
+              icon={icons[i]}
               onPress={() => handlePress(i)}
-              activeOpacity={0.8}
-            >
-              <Image source={icons[i]} style={styles.cellIcon} resizeMode="contain" />
-            </TouchableOpacity>
+            />
           ))}
           {lineOverlay}
         </View>
 
-        {winLine && <Text style={styles.bingoText}>BINGO</Text>}
+        {winLine && (
+          <Text style={[styles.bingoText, { fontFamily: fredoka }]}>BINGO!</Text>
+        )}
       </View>
     </View>
   );
 }
 
+// ─── Stijlen ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: '#FFFFFF' },
-  header:       { backgroundColor: '#D93B2B', paddingTop: 60, paddingBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  headerText:   { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF' },
-  backButton:   { width: 40 },
-  backText:     { fontSize: 24, color: '#FFFFFF', fontWeight: 'bold' },
+  container:  { flex: 1, backgroundColor: '#EBF4E8' },
+  header:     { paddingTop: 60, paddingBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 },
+  headerText: { fontSize: 24, color: '#FFFDF7', letterSpacing: 0.5 },
+  backButton: { width: 40 },
+  backText:   { fontSize: 24, color: '#FFFDF7', fontWeight: 'bold' },
 
   playerBar: {
     flexDirection: 'row',
-    backgroundColor: '#F5F5F5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    backgroundColor: '#FFFDF7',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#E8D5B0',
   },
   playerButton: {
     flex: 1,
@@ -178,9 +224,21 @@ const styles = StyleSheet.create({
   },
 
   body:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  gridWrapper: { width, height: GRID_HEIGHT, flexDirection: 'row', flexWrap: 'wrap', padding: PADDING, gap: GAP },
-  cell:        { width: CELL_SIZE, height: CELL_SIZE, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  cellIcon:    { width: CELL_SIZE * 0.9, height: CELL_SIZE * 0.9 },
-  line:        { position: 'absolute', height: 8, borderRadius: 4, backgroundColor: '#00CC00' },
-  bingoText:   { marginTop: 24, fontSize: 60, fontWeight: 'bold', color: '#00CC00' },
+  gridWrapper: { width, height: GRID_HEIGHT, flexDirection: 'row', flexWrap: 'wrap', padding: PADDING, gap: GAP, position: 'relative' },
+
+  cell: {
+    width: CELL_SIZE,
+    height: CELL_SIZE,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellIcon: {
+    width: CELL_SIZE * 0.65,
+    height: CELL_SIZE * 0.65,
+  },
+
+  line:      { position: 'absolute', height: 8, borderRadius: 4, backgroundColor: '#2E8B3F' },
+  bingoText: { marginTop: 24, fontSize: 60, color: '#2E8B3F', letterSpacing: 1 },
 });

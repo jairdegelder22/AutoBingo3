@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image } from 'react-native';
+import { useState, useRef, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Image, Animated } from 'react-native';
+import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
+import * as Haptics from 'expo-haptics';
 import ColorSelectScreen from './ColorSelectScreen';
 import ThemeSelectScreen from './ThemeSelectScreen';
 import { PLAYER_IMAGES } from '../assets/images/players/playerImages';
@@ -11,9 +13,22 @@ const OPTIONS = [
   { count: 4, label: '4 spelers' },
 ];
 
+const PREVIEW = [
+  ['groen'],
+  ['rood', 'blauw'],
+  ['rood', 'blauw', 'geel'],
+  ['rood', 'blauw', 'geel', 'groen'],
+];
+
 export default function PlayerSelectScreen({ onSelect, onBack }) {
+  const [fredokaLoaded] = useFredoka({ FredokaOne_400Regular });
   const [playerCount, setPlayerCount] = useState(null);
   const [playerColors, setPlayerColors] = useState(null);
+
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+  }, []);
 
   if (playerCount !== null && playerColors !== null) {
     return (
@@ -35,37 +50,35 @@ export default function PlayerSelectScreen({ onSelect, onBack }) {
       />
     );
   }
-  // Vaste preview-kleuren per kaart
-  const PREVIEW = [
-    ['groen'],
-    ['rood', 'blauw'],
-    ['rood', 'blauw', 'geel'],
-    ['rood', 'blauw', 'geel', 'groen'],
-  ];
+
+  const fredoka = fredokaLoaded ? 'FredokaOne_400Regular' : undefined;
 
   const renderCard = (option) => (
-    <TouchableOpacity key={option.count} style={styles.card} onPress={() => setPlayerCount(option.count)}>
+    <TouchableOpacity
+      key={option.count}
+      style={styles.card}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setPlayerCount(option.count);
+      }}
+      activeOpacity={0.82}
+    >
       <View style={styles.iconBox}>
         {PREVIEW[option.count - 1].map((kleur, i) => (
-          <Image
-            key={i}
-            source={PLAYER_IMAGES[kleur]}
-            style={styles.icon}
-            resizeMode="contain"
-          />
+          <Image key={i} source={PLAYER_IMAGES[kleur]} style={styles.icon} resizeMode="contain" />
         ))}
       </View>
-      <Text style={styles.label}>{option.label}</Text>
+      <Text style={[styles.label, { fontFamily: fredoka }]}>{option.label}</Text>
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerText}>Aantal spelers kiezen</Text>
+        <Text style={[styles.headerText, { fontFamily: fredoka }]}>Aantal spelers</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -74,62 +87,61 @@ export default function PlayerSelectScreen({ onSelect, onBack }) {
           {OPTIONS.map(renderCard)}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#EBF4E8',
   },
   header: {
-    backgroundColor: '#F5C400',
+    backgroundColor: '#1A5EA8',
     paddingTop: 60,
     paddingBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
   },
   headerText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 22,
+    color: '#FFFDF7',
+    letterSpacing: 0.5,
   },
-  backButton: {
-    width: 40,
-  },
+  backButton: { width: 40 },
   backText: {
     fontSize: 24,
-    color: '#FFFFFF',
+    color: '#FFFDF7',
     fontWeight: 'bold',
   },
   body: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 24,
+    paddingTop: 24,
     justifyContent: 'center',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
     justifyContent: 'center',
   },
   card: {
     width: '46%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF7',
     borderRadius: 20,
     paddingVertical: 24,
     paddingHorizontal: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: '#E8D5B0',
+    shadowColor: '#2D2B55',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
   },
   iconBox: {
     flexDirection: 'row',
@@ -145,8 +157,8 @@ const styles = StyleSheet.create({
     height: 48,
   },
   label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
+    fontSize: 18,
+    color: '#2D2B55',
+    letterSpacing: 0.5,
   },
 });

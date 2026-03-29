@@ -40,7 +40,7 @@ Onderkant en rechterkant zijn donkerder. Dit geldt voor knoppen, kaarten én ico
 
 | Naam         | Hex       | Gebruik                                      |
 |--------------|-----------|----------------------------------------------|
-| Crème        | `#F5EDD8` | Achtergrondkleur — de "karton" basiskleur     |
+| Crème        | `#EBF4E8` | Achtergrondkleur — de "karton" basiskleur     |
 | Rood         | `#D93B2B` | Primaire accentkleur, CTA knoppen             |
 | Blauw        | `#1A5EA8` | Cobalt blauw — vensters, secundaire elementen |
 | Geel         | `#F5C400` | Golden yellow — accenten, wielen, highlights  |
@@ -50,7 +50,7 @@ Onderkant en rechterkant zijn donkerder. Dit geldt voor knoppen, kaarten én ico
 | Lichtblauw   | `#6EB5FF` | Zachte highlights, lichte achtergronden       |
 
 **Gebruik nooit** pure zwart (#000000) of pure wit (#FFFFFF) als oppervlakten.
-Gebruik `#2D2B55` voor donkere tekst en `#F5EDD8` of `#FFFDF7` voor lichte vlakken.
+Gebruik `#2D2B55` voor donkere tekst en `#EBF4E8` of `#FFFDF7` voor lichte vlakken.
 
 ---
 
@@ -184,7 +184,7 @@ resizeMode: 'contain'
 // Het icoon heeft zelf al transparante achtergrond
 
 // Icoon in lijsten/selectie schermen:
-// Lichte crème achtergrond (#F5EDD8) als "kaartje"
+// Lichte crème achtergrond (#EBF4E8) als "kaartje"
 // borderRadius: 16px
 // padding: 12px rondom icoon
 ```
