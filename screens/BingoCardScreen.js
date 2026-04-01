@@ -7,25 +7,26 @@ import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one'
 import * as Haptics from 'expo-haptics';
 import { getRandomIcons } from './themeIcons';
 import { PLAYER_IMAGES, PLAYER_HEX } from '../assets/images/players/playerImages';
+import { getPlayerThemes } from './gameFlowConfig';
 
 const SIZE = 4;
-const { width } = Dimensions.get('window');
-const PADDING = 12;
+const { width, height } = Dimensions.get('window');
+const OUTER_PADDING = 12;
+const PADDING = 10;
 const GAP = 8;
-const CELL_SIZE = (width - PADDING * 2 - GAP * (SIZE - 1)) / SIZE;
+const TOP_CONTROLS_HEIGHT = 72;
+const SECTION_GAP = 12;
+const SECTION_LABEL_HEIGHT = 30;
+const AVAILABLE_BOARD_WIDTH = width - OUTER_PADDING * 2 - PADDING * 2 - GAP * (SIZE - 1);
+const AVAILABLE_BOARD_HEIGHT = ((height - TOP_CONTROLS_HEIGHT - SECTION_GAP - OUTER_PADDING * 2) / 2)
+  - SECTION_LABEL_HEIGHT
+  - PADDING * 2
+  - GAP * (SIZE - 1);
+const CELL_SIZE = Math.floor(Math.min(
+  AVAILABLE_BOARD_WIDTH / SIZE,
+  AVAILABLE_BOARD_HEIGHT / SIZE,
+));
 const GRID_HEIGHT = SIZE * CELL_SIZE + (SIZE - 1) * GAP + PADDING * 2;
-
-const CELL_COLORS = ['#2E8B3F', '#6EB5FF', '#F5C400', '#D93B2B'];
-
-const THEME_LABELS = {
-  snelweg: 'Snelweg', stad: 'Stad', platteland: 'Platteland', vakantie: 'Vakantie',
-  winter: 'Winter', dieren: 'Dieren & Natuur', voertuigen: 'Voertuigen', verkeersborden: 'Verkeersborden',
-};
-
-const THEME_COLORS = {
-  snelweg: '#D93B2B', stad: '#1A5EA8', platteland: '#2E8B3F', vakantie: '#E8622A',
-  winter: '#6EB5FF', dieren: '#2E8B3F', voertuigen: '#2D2B55', verkeersborden: '#D93B2B',
-};
 
 function darkenHex(hex, factor = 0.82) {
   const clean = hex.replace('#', '');
@@ -38,11 +39,6 @@ function darkenHex(hex, factor = 0.82) {
   );
 
   return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
-}
-
-function randomColors() {
-  return Array.from({ length: SIZE * SIZE }, (_, i) => CELL_COLORS[i % CELL_COLORS.length])
-    .sort(() => Math.random() - 0.5);
 }
 
 function getCompletedLines(checked, rules) {
@@ -120,130 +116,168 @@ function BingoCell({ checked, checkedColor, icon, onPress }) {
 }
 
 // ─── Scherm ──────────────────────────────────────────────────────────────────
-export default function BingoCardScreen({ theme, playerCount, playerColors, rules, onBack }) {
-  const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
-  const actieveRegels = rules ?? {
-    sharedCards: true,
-    winMode: 'one_line',
-    allowDiagonal: true,
+function getRulesFromProps({
+  rules,
+  wincondition,
+  diagonaal,
+  kaartOpzet,
+}) {
+  if (rules) return rules;
+
+  const winModeMap = {
+    '1rij': 'one_line',
+    '2rijen': 'two_lines',
+    'heel-blok': 'full_card',
   };
-  const [sharedIcons] = useState(() => getRandomIcons(theme));
-  const [sharedColors] = useState(randomColors);
+
+  return {
+    sharedCards: kaartOpzet === 'zelfde',
+    winMode: winModeMap[wincondition] ?? 'one_line',
+    allowDiagonal: diagonaal ?? true,
+  };
+}
+
+export default function BingoCardScreen({
+  theme,
+  thema,
+  playerCount,
+  playerColors,
+  playerNames,
+  playerThemes,
+  spelers,
+  rules,
+  wincondition,
+  diagonaal,
+  aantalSpelersOpDitApparaat,
+  kaartOpzet,
+  onBack,
+}) {
+  const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
+  const resolvedTheme = thema ?? theme ?? 'snelweg';
+  const resolvedPlayers = spelers?.length
+    ? spelers
+    : Array.from({ length: aantalSpelersOpDitApparaat ?? playerCount ?? 1 }, (_, index) => ({
+        naam: playerNames?.[index] ?? `Speler ${index + 1}`,
+        skin: playerColors?.[index] ?? 'groen',
+      }));
+  const resolvedPlayerCount = resolvedPlayers.length || aantalSpelersOpDitApparaat || playerCount || 1;
+  const resolvedPlayerColors = resolvedPlayers.map((player, index) => player.skin ?? playerColors?.[index] ?? 'groen');
+  const resolvedPlayerNames = resolvedPlayers.map((player, index) => player.naam || playerNames?.[index] || `Speler ${index + 1}`);
+  const derivedThemes = playerThemes?.length
+    ? playerThemes
+    : kaartOpzet === 'ander-thema'
+      ? getPlayerThemes(resolvedTheme, resolvedPlayerCount)
+      : Array.from({ length: resolvedPlayerCount }, () => resolvedTheme);
+  const actieveRegels = getRulesFromProps({
+    rules,
+    wincondition,
+    diagonaal,
+    kaartOpzet,
+  });
+  const [sharedIcons] = useState(() => getRandomIcons(resolvedTheme));
   const [playerIcons] = useState(() =>
-    actieveRegels.sharedCards
-      ? Array.from({ length: playerCount }, () => sharedIcons)
-      : Array.from({ length: playerCount }, () => getRandomIcons(theme))
+    kaartOpzet === 'ander-thema'
+      ? derivedThemes.map((playerTheme) => getRandomIcons(playerTheme))
+      : actieveRegels.sharedCards
+      ? Array.from({ length: resolvedPlayerCount }, () => sharedIcons)
+      : Array.from({ length: resolvedPlayerCount }, () => getRandomIcons(resolvedTheme))
   );
-  const [playerCellColors] = useState(() =>
-    actieveRegels.sharedCards
-      ? Array.from({ length: playerCount }, () => sharedColors)
-      : Array.from({ length: playerCount }, randomColors)
-  );
-  const [activePlayer, setActivePlayer] = useState(0);
   const [playerChecked, setPlayerChecked] = useState(() =>
-    Array.from({ length: playerCount }, () => Array(SIZE * SIZE).fill(false))
+    Array.from({ length: resolvedPlayerCount }, () => Array(SIZE * SIZE).fill(false))
   );
-  const [playerWinLines, setPlayerWinLines] = useState(Array(playerCount).fill(null));
-
-  const checked = playerChecked[activePlayer];
-  const icons = playerIcons[activePlayer];
-  const colors = playerCellColors[activePlayer];
-  const winLine = playerWinLines[activePlayer];
-  const headerKleur = THEME_COLORS[theme] ?? '#D93B2B';
+  const [playerWinLines, setPlayerWinLines] = useState(Array(resolvedPlayerCount).fill(null));
   const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
-  const activePlayerColor = PLAYER_HEX[playerColors?.[activePlayer] ?? 'groen'] ?? '#2E8B3F';
 
-  function handlePress(index) {
+  function handlePress(playerIndex, index) {
+    const winLine = playerWinLines[playerIndex];
     if (winLine) return;
-    const next = playerChecked.map((c, p) => p === activePlayer ? [...c] : c);
-    next[activePlayer][index] = !next[activePlayer][index];
+    const next = playerChecked.map((cells, currentIndex) =>
+      currentIndex === playerIndex ? [...cells] : cells
+    );
+    next[playerIndex][index] = !next[playerIndex][index];
     setPlayerChecked(next);
-    const win = findBingo(next[activePlayer], actieveRegels);
+    const win = findBingo(next[playerIndex], actieveRegels);
     if (win) {
       const nextWins = [...playerWinLines];
-      nextWins[activePlayer] = win;
+      nextWins[playerIndex] = win;
       setPlayerWinLines(nextWins);
     }
   }
 
-  let lineOverlay = null;
-  if (Array.isArray(winLine)) {
-    const a = cellCenter(winLine[0]);
-    const b = cellCenter(winLine[1]);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length = Math.sqrt(dx * dx + dy * dy);
-    const angle  = Math.atan2(dy, dx) * (180 / Math.PI);
-    const midX   = (a.x + b.x) / 2;
-    const midY   = (a.y + b.y) / 2;
-    lineOverlay = (
-      <View
-        pointerEvents="none"
-        style={[styles.line, {
-          width: length,
-          left: midX - length / 2,
-          top:  midY - 4,
-          transform: [{ rotate: `${angle}deg` }],
-        }]}
-      />
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: headerKleur }]}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+      <View style={styles.topControls}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack} hitSlop={12}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerText, { fontFamily: fredoka }]}>
-          {THEME_LABELS[theme] ?? theme}
-        </Text>
-        <View style={styles.backButton} />
       </View>
 
-      {/* Spelersbar */}
-      {playerCount > 1 && (
-        <View style={styles.playerBar}>
-          {Array.from({ length: playerCount }, (_, i) => {
-            const kleur = playerColors?.[i] ?? 'groen';
-            const actief = i === activePlayer;
-            return (
-              <TouchableOpacity
-                key={i}
-                onPress={() => setActivePlayer(i)}
-                style={[styles.playerButton, actief && { borderBottomColor: PLAYER_HEX[kleur], borderBottomWidth: 3 }]}
-                activeOpacity={0.7}
-              >
+      <View style={styles.cardsColumn}>
+        {Array.from({ length: resolvedPlayerCount }, (_, playerIndex) => {
+          const kleur = resolvedPlayerColors[playerIndex] ?? 'groen';
+          const checked = playerChecked[playerIndex];
+          const icons = playerIcons[playerIndex];
+          const winLine = playerWinLines[playerIndex];
+          const checkedColor = PLAYER_HEX[kleur] ?? '#2E8B3F';
+
+          let lineOverlay = null;
+          if (Array.isArray(winLine)) {
+            const a = cellCenter(winLine[0]);
+            const b = cellCenter(winLine[1]);
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            const midX = (a.x + b.x) / 2;
+            const midY = (a.y + b.y) / 2;
+            lineOverlay = (
+              <View
+                pointerEvents="none"
+                style={[styles.line, {
+                  width: length,
+                  left: midX - length / 2,
+                  top: midY - 4,
+                  backgroundColor: checkedColor,
+                  transform: [{ rotate: `${angle}deg` }],
+                }]}
+              />
+            );
+          }
+
+          return (
+            <View key={playerIndex} style={styles.playerSection}>
+              <View style={styles.playerLabelRow}>
                 <Image
                   source={PLAYER_IMAGES[kleur]}
-                  style={[styles.playerImg, { opacity: actief ? 1 : 0.3 }]}
+                  style={styles.playerImg}
                   resizeMode="contain"
                 />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+                <Text style={[styles.playerLabel, { fontFamily: fredoka }]}>
+                  {resolvedPlayerNames[playerIndex] || `Speler ${playerIndex + 1}`}
+                </Text>
+              </View>
 
-      {/* Grid */}
-      <View style={styles.body}>
-        <View style={styles.gridWrapper}>
-          {colors.map((color, i) => (
-            <BingoCell
-              key={i}
-              checked={checked[i]}
-              checkedColor={activePlayerColor}
-              icon={icons[i]}
-              onPress={() => handlePress(i)}
-            />
-          ))}
-          {lineOverlay}
-        </View>
+              <View style={styles.gridWrapper}>
+                {icons.map((icon, iconIndex) => (
+                  <BingoCell
+                    key={iconIndex}
+                    checked={checked[iconIndex]}
+                    checkedColor={checkedColor}
+                    icon={icon}
+                    onPress={() => handlePress(playerIndex, iconIndex)}
+                  />
+                ))}
+                {lineOverlay}
+              </View>
 
-        {winLine && (
-          <Text style={[styles.bingoText, { fontFamily: fredoka }]}>BINGO!</Text>
-        )}
+              {winLine && (
+                <Text style={[styles.bingoText, { color: checkedColor, fontFamily: fredoka }]}>
+                  BINGO!
+                </Text>
+              )}
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -252,32 +286,61 @@ export default function BingoCardScreen({ theme, playerCount, playerColors, rule
 // ─── Stijlen ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container:  { flex: 1, backgroundColor: '#EBF4E8' },
-  header:     { paddingTop: 60, paddingBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 },
-  headerText: { fontSize: 24, color: '#FFFDF7', letterSpacing: 0.5 },
-  backButton: { width: 40 },
-  backText:   { fontSize: 24, color: '#FFFDF7', fontWeight: 'bold' },
-
-  playerBar: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFDF7',
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#E8D5B0',
+  topControls: {
+    paddingTop: 56,
+    paddingHorizontal: 16,
+    height: TOP_CONTROLS_HEIGHT,
+    justifyContent: 'center',
   },
-  playerButton: {
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFDF7',
+    borderWidth: 1.5,
+    borderColor: '#D4C4A0',
+  },
+  backText:   { fontSize: 24, color: '#2D2B55', fontWeight: 'bold' },
+
+  cardsColumn: {
+    flex: 1,
+    paddingHorizontal: OUTER_PADDING,
+    paddingBottom: OUTER_PADDING,
+    gap: SECTION_GAP,
+  },
+  playerSection: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
+  },
+  playerLabelRow: {
+    height: SECTION_LABEL_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
   playerImg: {
-    width: 52,
-    height: 52,
+    width: 30,
+    height: 30,
+  },
+  playerLabel: {
+    fontSize: 20,
+    color: '#2D2B55',
+    letterSpacing: 0.4,
   },
 
-  body:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  gridWrapper: { width, height: GRID_HEIGHT, flexDirection: 'row', flexWrap: 'wrap', padding: PADDING, gap: GAP, position: 'relative' },
+  gridWrapper: {
+    width: SIZE * CELL_SIZE + (SIZE - 1) * GAP + PADDING * 2,
+    height: GRID_HEIGHT,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: PADDING,
+    gap: GAP,
+    position: 'relative',
+  },
 
   cell: {
     width: CELL_SIZE,
@@ -292,6 +355,6 @@ const styles = StyleSheet.create({
     height: CELL_SIZE * 0.82,
   },
 
-  line:      { position: 'absolute', height: 8, borderRadius: 4, backgroundColor: '#2E8B3F' },
-  bingoText: { marginTop: 24, fontSize: 60, color: '#2E8B3F', letterSpacing: 1 },
+  line:      { position: 'absolute', height: 8, borderRadius: 4 },
+  bingoText: { marginTop: 8, fontSize: 32, letterSpacing: 1 },
 });
