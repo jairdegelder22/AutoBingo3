@@ -15,6 +15,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import BingoCardScreen from './screens/BingoCardScreen';
 import ButtonTestScreen from './src/screens/ButtonTestScreen';
 import ThemeCarouselTestScreen from './src/screens/ThemeCarouselTestScreen';
+import SingleDeviceSetupTestScreen from './src/screens/SingleDeviceSetupTestScreen';
 import { getPlayerThemes } from './screens/gameFlowConfig';
 
 const SCREEN_COMPONENTS = {
@@ -31,6 +32,7 @@ const SCREEN_COMPONENTS = {
   Instellingen: SettingsScreen,
   ButtonTest: ButtonTestScreen,
   ThemeCarouselTest: ThemeCarouselTestScreen,
+  SingleDeviceSetupTest: SingleDeviceSetupTestScreen,
   Spel: GameScreen,
 };
 

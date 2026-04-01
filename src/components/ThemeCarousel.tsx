@@ -55,6 +55,7 @@ export default function ThemeCarousel<ItemT>({
   const resolvedItemWidth = itemWidth ?? Math.min(screenWidth * 0.68, 300);
   const snapInterval = resolvedItemWidth + itemSpacing;
   const sideInset = Math.max(0, (screenWidth - resolvedItemWidth) / 2);
+  const horizontalInset = Math.max(0, sideInset - itemSpacing / 2);
   const scrollX = useRef(new Animated.Value(0)).current;
   const listRef = useRef<Animated.FlatList<ItemT>>(null);
   const baseCount = items.length;
@@ -207,7 +208,7 @@ export default function ThemeCarousel<ItemT>({
   };
 
   return (
-    <View style={containerStyle}>
+    <View style={[styles.container, containerStyle]}>
       <AnimatedFlatList
         {...flatListProps}
         ref={listRef}
@@ -221,14 +222,16 @@ export default function ThemeCarousel<ItemT>({
         onMomentumScrollEnd={handleMomentumEnd}
         onScroll={handleScroll}
         renderItem={renderItem}
+        removeClippedSubviews={false}
         scrollEventThrottle={16}
         showsHorizontalScrollIndicator={false}
         snapToAlignment="start"
         snapToInterval={snapInterval}
+        style={styles.list}
         contentContainerStyle={[
           styles.contentContainer,
           {
-            paddingHorizontal: sideInset,
+            paddingHorizontal: horizontalInset,
           },
         ]}
       />
@@ -237,6 +240,13 @@ export default function ThemeCarousel<ItemT>({
 }
 
 const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+  },
+  list: {
+    width: '100%',
+    overflow: 'visible',
+  },
   contentContainer: {
     alignItems: 'center',
   },

@@ -15,6 +15,11 @@ export default function ApparaatKeuzeScreen({ navigation }) {
         subtitle="Tot 6 spelers, online of offline"
         onPress={() => navigation.navigate('MultiplayerKeuze')}
       />
+      <OptionButton
+        label="1 apparaat nieuw (test)"
+        subtitle="Nieuwe setup met thema-carousel en instellingen-sheet"
+        onPress={() => navigation.navigate('SingleDeviceSetupTest')}
+      />
       <View />
     </ScreenLayout>
   );
