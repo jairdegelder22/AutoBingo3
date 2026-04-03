@@ -7,18 +7,13 @@ export default function ApparaatKeuzeScreen({ navigation }) {
       <BackButton onPress={navigation.goBack} />
       <OptionButton
         label="Dit apparaat"
-        subtitle="1 of 2 spelers op hetzelfde scherm"
-        onPress={() => navigation.navigate('SoloSetup')}
+        subtitle="1 of 2 spelers op hetzelfde scherm met de nieuwe setup"
+        onPress={() => navigation.navigate('SingleDeviceSetupTest')}
       />
       <OptionButton
         label="Meerdere apparaten"
         subtitle="Tot 6 spelers, online of offline"
         onPress={() => navigation.navigate('MultiplayerKeuze')}
-      />
-      <OptionButton
-        label="1 apparaat nieuw (test)"
-        subtitle="Nieuwe setup met thema-carousel en instellingen-sheet"
-        onPress={() => navigation.navigate('SingleDeviceSetupTest')}
       />
       <View />
     </ScreenLayout>

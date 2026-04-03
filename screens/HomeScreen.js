@@ -48,7 +48,6 @@ export default function HomeScreen({ navigation }) {
           <PrimaryButton label="Spelen" onPress={() => navigation.navigate('ApparaatKeuze')} />
           <PrimaryButton label="Instellingen" onPress={() => navigation.navigate('Instellingen')} />
           <PrimaryButton label="Button test" onPress={() => navigation.navigate('ButtonTest')} />
-          <PrimaryButton label="Carousel test" onPress={() => navigation.navigate('ThemeCarouselTest')} />
         </View>
       </View>
     </ImageBackground>

@@ -12,6 +12,7 @@ import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-font
 import { useFonts as useNunito, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import * as Haptics from 'expo-haptics';
 import { PLAYER_IMAGES, ALLE_KLEUREN } from '../assets/images/players/playerImages';
+import { THEMES } from './themeCatalog';
 
 const PLAYER_SILHOUETTE = require('../assets/images/players/player-silhouette.png');
 const COLOR_SELECTOR_ICON = require('../assets/images/players/color-selector.png');
@@ -21,16 +22,7 @@ const TARGET_TOP = 44;
 const COMPACT_PANEL_PADDING_X = 16;
 const COMPACT_PANEL_PADDING_Y = 14;
 
-const THEMAS = [
-  { id: 'snelweg', label: 'Snelweg', bg: '#D93B2B', textColor: '#FFFDF7' },
-  { id: 'stad', label: 'Stad', bg: '#1A5EA8', textColor: '#FFFDF7' },
-  { id: 'platteland', label: 'Platteland', bg: '#2E8B3F', textColor: '#FFFDF7' },
-  { id: 'vakantie', label: 'Vakantie', bg: '#E8622A', textColor: '#FFFDF7' },
-  { id: 'winter', label: 'Winter', bg: '#6EB5FF', textColor: '#2D2B55' },
-  { id: 'dieren', label: 'Dieren & Natuur', bg: '#4AA057', textColor: '#FFFDF7' },
-  { id: 'voertuigen', label: 'Voertuigen', bg: '#2D2B55', textColor: '#F5C400' },
-  { id: 'verkeersborden', label: 'Verkeersborden', bg: '#FFFDF7', textColor: '#2D2B55', border: '#D93B2B' },
-];
+const THEMAS = THEMES;
 
 function getExpandedCarSize(playerCount) {
   if (playerCount === 1) return { width: 150, height: 118 };

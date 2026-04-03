@@ -15,23 +15,10 @@ import {
   preloadBingoAssets,
   preloadColorSelectAssets,
 } from '../utils/preloadAssets';
+import { FREE_THEMES, PREMIUM_THEMES } from './themeCatalog';
 
 const { width: W } = Dimensions.get('window');
 const BUTTON_W = W - 48;
-
-const FREE_THEMES = [
-  { id: 'snelweg',    label: 'Snelweg',        emoji: '🛣️',  bg: '#D93B2B', textColor: '#FFFDF7' },
-  { id: 'stad',       label: 'Stad',            emoji: '🏙️',  bg: '#1A5EA8', textColor: '#FFFDF7' },
-  { id: 'platteland', label: 'Platteland',      emoji: '🌾',  bg: '#2E8B3F', textColor: '#FFFDF7' },
-  { id: 'vakantie',   label: 'Vakantie',        emoji: '🌴',  bg: '#E8622A', textColor: '#FFFDF7' },
-];
-
-const PREMIUM_THEMES = [
-  { id: 'winter',         label: 'Winter',          emoji: '❄️',  bg: '#6EB5FF', textColor: '#2D2B55' },
-  { id: 'dieren',         label: 'Dieren & Natuur',  emoji: '🦎', bg: '#2E8B3F', textColor: '#FFFDF7' },
-  { id: 'voertuigen',     label: 'Voertuigen',       emoji: '🚗', bg: '#2D2B55', textColor: '#F5C400' },
-  { id: 'verkeersborden', label: 'Verkeersborden',   emoji: '⚠️', bg: '#FFFDF7', textColor: '#2D2B55', border: '#D93B2B' },
-];
 
 export default function ThemeSelectScreen({ playerCount, playerColors, onBack }) {
   const [fredokaLoaded] = useFredoka({ FredokaOne_400Regular });

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Image,
+  ImageBackground,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -15,14 +16,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import ThemeCarousel from '../components/ThemeCarousel';
 import GlossyButton from '../components/GlossyButton';
 import { PLAYER_IMAGES } from '../../assets/images/players/playerImages';
+import { getThemeCardImage } from '../../assets/images/theme-cards/themeCardImages';
 import { createGameConfig, WINCONDITION_OPTIONS } from '../../screens/gameFlowConfig';
+import { THEMES } from '../../screens/themeCatalog';
 
-const THEME_CARDS = [
-  { id: 'snelweg', title: 'Snelweg', surface: '#2b7898', border: '#123d51' },
-  { id: 'stad', title: 'Stad', surface: '#d28b2f', border: '#7a4700' },
-  { id: 'natuur', title: 'Natuur', surface: '#4f9c65', border: '#1f5d36' },
-  { id: 'vakantie', title: 'Vakantie', surface: '#d06b42', border: '#7e3518' },
-];
+const THEME_CARDS = THEMES.map((theme) => ({
+  id: theme.id,
+  title: theme.label,
+  surface: theme.cardSurface,
+  border: theme.cardBorder,
+  premium: theme.premium,
+}));
 
 export default function SingleDeviceSetupTestScreen({ navigation }) {
   const { height: screenHeight } = useWindowDimensions();
@@ -39,7 +43,10 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const selectedTheme = THEME_CARDS[selectedThemeIndex] ?? THEME_CARDS[0];
 
-  const canStart = useMemo(() => Boolean(selectedTheme?.id && playerCount), [playerCount, selectedTheme?.id]);
+  const canStart = useMemo(
+    () => Boolean(selectedTheme?.id && playerCount && !selectedTheme?.premium),
+    [playerCount, selectedTheme?.id, selectedTheme?.premium]
+  );
 
   function animateSettings(open) {
     setSettingsOpen(open);
@@ -235,12 +242,38 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
 }
 
 function ThemeCard({ item }) {
+  const themeImage = getThemeCardImage(item.id);
+
   return (
     <View style={[styles.carouselCardShell, { shadowColor: item.border }]}>
       <View style={[styles.carouselCardOutline, { backgroundColor: item.border }]}>
-        <View style={[styles.carouselCardBody, { backgroundColor: item.surface }]}>
-          <Text style={styles.carouselCardTitle}>{item.title}</Text>
-        </View>
+        {themeImage ? (
+          <ImageBackground
+            source={themeImage}
+            resizeMode="cover"
+            imageStyle={styles.carouselCardImage}
+            style={styles.carouselCardBody}
+          >
+            <View style={styles.carouselCardOverlay} />
+            {item.premium ? (
+              <View style={styles.carouselCardPremiumBadge}>
+                <Text style={styles.carouselCardPremiumText}>Locked</Text>
+              </View>
+            ) : null}
+            <View style={styles.carouselCardLabelWrap}>
+              <Text style={[styles.carouselCardTitle, item.id === 'winter' && styles.carouselCardTitleDark]}>{item.title}</Text>
+            </View>
+          </ImageBackground>
+        ) : (
+          <View style={[styles.carouselCardBody, { backgroundColor: item.surface }]}>
+            {item.premium ? (
+              <View style={styles.carouselCardPremiumBadge}>
+                <Text style={styles.carouselCardPremiumText}>Locked</Text>
+              </View>
+            ) : null}
+            <Text style={[styles.carouselCardTitle, item.id === 'winter' && styles.carouselCardTitleDark]}>{item.title}</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -490,12 +523,47 @@ const styles = StyleSheet.create({
     width: 214,
     height: 250,
     borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  carouselCardImage: {
+    borderRadius: 23,
+  },
+  carouselCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8, 24, 38, 0.18)',
+  },
+  carouselCardPremiumBadge: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'rgba(12, 25, 35, 0.78)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    zIndex: 2,
+  },
+  carouselCardPremiumText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  carouselCardLabelWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(10, 28, 42, 0.28)',
   },
   carouselCardTitle: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 26,
     color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.28)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  carouselCardTitleDark: {
+    color: '#223549',
+    textShadowColor: 'rgba(255, 255, 255, 0.24)',
   },
 });

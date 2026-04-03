@@ -1,12 +1,10 @@
-export const THEME_OPTIONS = [
-  { id: 'snelweg', label: 'Snelweg', premium: false },
-  { id: 'stad', label: 'Stad', premium: false },
-  { id: 'natuur', label: 'Natuur', premium: false },
-  { id: 'vakantie', label: 'Vakantie', premium: false },
-  { id: 'voertuigen', label: 'Voertuigen', premium: true },
-  { id: 'platteland', label: 'Platteland', premium: true },
-  { id: 'verkeersborden', label: 'Verkeersborden', premium: true },
-];
+import { THEMES } from './themeCatalog';
+
+export const THEME_OPTIONS = THEMES.map(({ id, label, premium }) => ({
+  id,
+  label,
+  premium,
+}));
 
 export const PLAYABLE_THEME_IDS = THEME_OPTIONS.filter((theme) => !theme.premium).map((theme) => theme.id);
 

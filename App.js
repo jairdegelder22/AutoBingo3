@@ -14,7 +14,6 @@ import WaitingScreen from './screens/WaitingScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import BingoCardScreen from './screens/BingoCardScreen';
 import ButtonTestScreen from './src/screens/ButtonTestScreen';
-import ThemeCarouselTestScreen from './src/screens/ThemeCarouselTestScreen';
 import SingleDeviceSetupTestScreen from './src/screens/SingleDeviceSetupTestScreen';
 import { getPlayerThemes } from './screens/gameFlowConfig';
 
@@ -31,7 +30,6 @@ const SCREEN_COMPONENTS = {
   Wachten: WaitingScreen,
   Instellingen: SettingsScreen,
   ButtonTest: ButtonTestScreen,
-  ThemeCarouselTest: ThemeCarouselTestScreen,
   SingleDeviceSetupTest: SingleDeviceSetupTestScreen,
   Spel: GameScreen,
 };
@@ -75,6 +73,7 @@ export default function App() {
 
 function GameScreen({ navigation, route }) {
   const config = route.params?.config ?? {};
+  const replayAt = route.params?.replayAt ?? 'initial-game';
   const spelers = config.spelers?.length
     ? config.spelers
     : Array.from({ length: config.aantalSpelersOpDitApparaat ?? 1 }, (_, index) => ({
@@ -85,6 +84,7 @@ function GameScreen({ navigation, route }) {
 
   return (
     <BingoCardScreen
+      key={replayAt}
       thema={config.thema}
       wincondition={config.wincondition}
       diagonaal={config.diagonaal}
@@ -99,6 +99,8 @@ function GameScreen({ navigation, route }) {
           : undefined
       }
       onBack={navigation.goBack}
+      onMenu={() => navigation.reset('Home')}
+      onReplay={() => navigation.replace('Spel', { config, replayAt: Date.now() })}
     />
   );
 }

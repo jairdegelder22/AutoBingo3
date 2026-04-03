@@ -1,12 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity,
-  Image, Dimensions, Animated,
+  Modal, StyleSheet, Text, View, TouchableOpacity,
+  Image, ImageBackground, Dimensions,
 } from 'react-native';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import * as Haptics from 'expo-haptics';
 import { getRandomIcons } from './themeIcons';
-import { PLAYER_IMAGES, PLAYER_HEX } from '../assets/images/players/playerImages';
+import { PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getPlayerThemes } from './gameFlowConfig';
 
 const SIZE = 4;
@@ -14,12 +14,10 @@ const { width, height } = Dimensions.get('window');
 const OUTER_PADDING = 12;
 const PADDING = 10;
 const GAP = 8;
-const TOP_CONTROLS_HEIGHT = 72;
+const TOP_CONTROLS_HEIGHT = 12;
 const SECTION_GAP = 12;
-const SECTION_LABEL_HEIGHT = 30;
 const AVAILABLE_BOARD_WIDTH = width - OUTER_PADDING * 2 - PADDING * 2 - GAP * (SIZE - 1);
 const AVAILABLE_BOARD_HEIGHT = ((height - TOP_CONTROLS_HEIGHT - SECTION_GAP - OUTER_PADDING * 2) / 2)
-  - SECTION_LABEL_HEIGHT
   - PADDING * 2
   - GAP * (SIZE - 1);
 const CELL_SIZE = Math.floor(Math.min(
@@ -39,6 +37,37 @@ function darkenHex(hex, factor = 0.82) {
   );
 
   return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function mixHex(hex, targetHex = '#ffffff', amount = 0.7) {
+  const normalize = (value) => {
+    const clean = value.replace('#', '');
+    return clean.length === 3
+      ? clean.split('').map((char) => char + char).join('')
+      : clean;
+  };
+
+  const source = normalize(hex);
+  const target = normalize(targetHex);
+
+  const channels = [0, 2, 4].map((index) => {
+    const sourceValue = parseInt(source.slice(index, index + 2), 16);
+    const targetValue = parseInt(target.slice(index, index + 2), 16);
+    return Math.round(sourceValue + (targetValue - sourceValue) * amount);
+  });
+
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function withAlpha(hex, alpha = 0.18) {
+  const clean = hex.replace('#', '');
+  const value = clean.length === 3
+    ? clean.split('').map((char) => char + char).join('')
+    : clean;
+  const alphaChannel = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `#${value}${alphaChannel}`;
 }
 
 function getCompletedLines(checked, rules) {
@@ -85,33 +114,40 @@ function cellCenter(index) {
 }
 
 // ─── Cel met bounce animatie ─────────────────────────────────────────────────
-function BingoCell({ checked, checkedColor, icon, onPress }) {
-  const scale = useRef(new Animated.Value(1)).current;
-
+function BingoCell({ checked, checkedColor, icon, onPress, cellSize }) {
   function handlePress() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Animated.sequence([
-      Animated.timing(scale, { toValue: 1.15, duration: 120, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 10, stiffness: 200 }),
-    ]).start();
     onPress();
   }
 
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
+    <TouchableOpacity
+      style={[
+        styles.cell,
+        {
+          width: cellSize,
+          height: cellSize,
+          borderRadius: Math.max(10, Math.round(cellSize * 0.18)),
+        },
+        checked
+          ? { backgroundColor: checkedColor, borderColor: darkenHex(checkedColor) }
+          : { backgroundColor: '#FFFDF7', borderColor: withAlpha(darkenHex(checkedColor, 0.88), 0.34) },
+      ]}
+      onPress={handlePress}
+      activeOpacity={0.82}
+    >
+      <Image
+        source={icon}
         style={[
-          styles.cell,
-          checked
-            ? { backgroundColor: checkedColor, borderColor: darkenHex(checkedColor) }
-            : { backgroundColor: '#FFFDF7', borderColor: '#D4C4A0' },
+          styles.cellIcon,
+          {
+            width: cellSize * 0.82,
+            height: cellSize * 0.82,
+          },
         ]}
-        onPress={handlePress}
-        activeOpacity={1}
-      >
-        <Image source={icon} style={styles.cellIcon} resizeMode="contain" />
-      </TouchableOpacity>
-    </Animated.View>
+        resizeMode="contain"
+      />
+    </TouchableOpacity>
   );
 }
 
@@ -151,6 +187,8 @@ export default function BingoCardScreen({
   aantalSpelersOpDitApparaat,
   kaartOpzet,
   onBack,
+  onMenu,
+  onReplay,
 }) {
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
   const resolvedTheme = thema ?? theme ?? 'snelweg';
@@ -162,7 +200,6 @@ export default function BingoCardScreen({
       }));
   const resolvedPlayerCount = resolvedPlayers.length || aantalSpelersOpDitApparaat || playerCount || 1;
   const resolvedPlayerColors = resolvedPlayers.map((player, index) => player.skin ?? playerColors?.[index] ?? 'groen');
-  const resolvedPlayerNames = resolvedPlayers.map((player, index) => player.naam || playerNames?.[index] || `Speler ${index + 1}`);
   const derivedThemes = playerThemes?.length
     ? playerThemes
     : kaartOpzet === 'ander-thema'
@@ -186,7 +223,14 @@ export default function BingoCardScreen({
     Array.from({ length: resolvedPlayerCount }, () => Array(SIZE * SIZE).fill(false))
   );
   const [playerWinLines, setPlayerWinLines] = useState(Array(resolvedPlayerCount).fill(null));
+  const [winnerColor, setWinnerColor] = useState(null);
+  const [winnerIndex, setWinnerIndex] = useState(null);
   const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
+  const compactTwoPlayerLayout = resolvedPlayerCount >= 2;
+  const resolvedCellSize = compactTwoPlayerLayout ? Math.floor(CELL_SIZE * 0.94) : CELL_SIZE;
+  const resolvedGap = compactTwoPlayerLayout ? 6 : GAP;
+  const resolvedPadding = compactTwoPlayerLayout ? 8 : PADDING;
+  const resolvedGridSize = SIZE * resolvedCellSize + (SIZE - 1) * resolvedGap + resolvedPadding * 2;
 
   function handlePress(playerIndex, index) {
     const winLine = playerWinLines[playerIndex];
@@ -201,160 +245,375 @@ export default function BingoCardScreen({
       const nextWins = [...playerWinLines];
       nextWins[playerIndex] = win;
       setPlayerWinLines(nextWins);
+      setWinnerColor(resolvedPlayerColors[playerIndex] ?? 'groen');
+      setWinnerIndex(playerIndex);
     }
   }
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.topControls}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} hitSlop={12}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
+  function renderBoard(playerIndex) {
+    const kleur = resolvedPlayerColors[playerIndex] ?? 'groen';
+    const checked = playerChecked[playerIndex];
+    const icons = playerIcons[playerIndex];
+    const winLine = playerWinLines[playerIndex];
+    const checkedColor = PLAYER_HEX[kleur] ?? '#2E8B3F';
+    const boardFill = withAlpha(mixHex(checkedColor, '#ffffff', 0.86), 0.72);
+    const boardBorder = checkedColor;
+
+    let lineOverlay = null;
+    if (Array.isArray(winLine)) {
+      const a = {
+        x: resolvedPadding + (winLine[0] % SIZE) * (resolvedCellSize + resolvedGap) + resolvedCellSize / 2,
+        y: resolvedPadding + Math.floor(winLine[0] / SIZE) * (resolvedCellSize + resolvedGap) + resolvedCellSize / 2,
+      };
+      const b = {
+        x: resolvedPadding + (winLine[1] % SIZE) * (resolvedCellSize + resolvedGap) + resolvedCellSize / 2,
+        y: resolvedPadding + Math.floor(winLine[1] / SIZE) * (resolvedCellSize + resolvedGap) + resolvedCellSize / 2,
+      };
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      lineOverlay = (
+        <View
+          pointerEvents="none"
+          style={[styles.line, {
+            width: length,
+            left: midX - length / 2,
+            top: midY - 4,
+            backgroundColor: checkedColor,
+            transform: [{ rotate: `${angle}deg` }],
+          }]}
+        />
+      );
+    }
+
+    return (
+      <View
+        key={playerIndex}
+        style={[
+          styles.playerSection,
+          compactTwoPlayerLayout && styles.playerSectionCompact,
+        ]}
+      >
+        <View style={styles.boardShell}>
+          <View
+            style={[
+              styles.gridShell,
+              {
+                backgroundColor: boardFill,
+                borderColor: boardBorder,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.gridWrapper,
+                {
+                  width: resolvedGridSize,
+                  height: resolvedGridSize,
+                  padding: resolvedPadding,
+                  gap: resolvedGap,
+                  backgroundColor: withAlpha(mixHex(checkedColor, '#ffffff', 0.84), 0.16),
+                },
+              ]}
+            >
+              {icons.map((icon, iconIndex) => (
+                <BingoCell
+                  key={iconIndex}
+                  checked={checked[iconIndex]}
+                  checkedColor={checkedColor}
+                  icon={icon}
+                  cellSize={resolvedCellSize}
+                  onPress={() => handlePress(playerIndex, iconIndex)}
+                />
+              ))}
+              {lineOverlay}
+            </View>
+          </View>
+        </View>
+
+        {winLine && (
+          <Text style={[styles.bingoText, { color: checkedColor, fontFamily: fredoka }]}>
+            BINGO!
+          </Text>
+        )}
       </View>
+    );
+  }
+
+  return (
+    <ImageBackground
+      source={require('../assets/images/backgrounds/bingo-original-background.png')}
+      resizeMode="cover"
+      style={styles.container}
+    >
+      <View style={styles.backgroundWash} />
+      <Modal
+        visible={Boolean(winnerColor)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setWinnerColor(null);
+          setWinnerIndex(null);
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text
+              style={[
+                styles.modalTitle,
+                {
+                  fontFamily: fredoka,
+                  color: PLAYER_HEX[winnerColor] ?? '#2D2B55',
+                },
+              ]}
+            >
+              BINGO
+            </Text>
+            <Image
+              source={PLAYER_IMAGES[winnerColor] ?? PLAYER_IMAGES.groen}
+              style={[
+                styles.winnerCarImage,
+                winnerIndex === 0 && styles.winnerCarImageMirrored,
+              ]}
+              resizeMode="contain"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.iconActionButton, styles.homeActionButton]}
+                onPress={() => {
+                  setWinnerColor(null);
+                  setWinnerIndex(null);
+                  onMenu?.();
+                }}
+              >
+                <Text style={styles.iconActionSymbol}>⌂</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconActionButton, styles.replayActionButton]}
+                onPress={() => {
+                  setWinnerColor(null);
+                  setWinnerIndex(null);
+                  onReplay?.();
+                }}
+              >
+                <Text style={styles.iconActionSymbol}>↻</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <View style={styles.topControls} />
 
       <View style={styles.cardsColumn}>
-        {Array.from({ length: resolvedPlayerCount }, (_, playerIndex) => {
-          const kleur = resolvedPlayerColors[playerIndex] ?? 'groen';
-          const checked = playerChecked[playerIndex];
-          const icons = playerIcons[playerIndex];
-          const winLine = playerWinLines[playerIndex];
-          const checkedColor = PLAYER_HEX[kleur] ?? '#2E8B3F';
-
-          let lineOverlay = null;
-          if (Array.isArray(winLine)) {
-            const a = cellCenter(winLine[0]);
-            const b = cellCenter(winLine[1]);
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
-            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-            const midX = (a.x + b.x) / 2;
-            const midY = (a.y + b.y) / 2;
-            lineOverlay = (
-              <View
-                pointerEvents="none"
-                style={[styles.line, {
-                  width: length,
-                  left: midX - length / 2,
-                  top: midY - 4,
-                  backgroundColor: checkedColor,
-                  transform: [{ rotate: `${angle}deg` }],
-                }]}
+        {compactTwoPlayerLayout ? (
+          <View style={styles.twoPlayerStack}>
+            {renderBoard(0)}
+            <View style={styles.middleControlRow}>
+              <Image
+                source={PLAYER_IMAGES[resolvedPlayerColors[0]] ?? PLAYER_IMAGES.groen}
+                style={[styles.middlePlayerCar, styles.middlePlayerCarMirrored]}
+                resizeMode="contain"
               />
-            );
-          }
-
-          return (
-            <View key={playerIndex} style={styles.playerSection}>
-              <View style={styles.playerLabelRow}>
-                <Image
-                  source={PLAYER_IMAGES[kleur]}
-                  style={styles.playerImg}
-                  resizeMode="contain"
-                />
-                <Text style={[styles.playerLabel, { fontFamily: fredoka }]}>
-                  {resolvedPlayerNames[playerIndex] || `Speler ${playerIndex + 1}`}
-                </Text>
-              </View>
-
-              <View style={styles.gridWrapper}>
-                {icons.map((icon, iconIndex) => (
-                  <BingoCell
-                    key={iconIndex}
-                    checked={checked[iconIndex]}
-                    checkedColor={checkedColor}
-                    icon={icon}
-                    onPress={() => handlePress(playerIndex, iconIndex)}
-                  />
-                ))}
-                {lineOverlay}
-              </View>
-
-              {winLine && (
-                <Text style={[styles.bingoText, { color: checkedColor, fontFamily: fredoka }]}>
-                  BINGO!
-                </Text>
-              )}
+              <TouchableOpacity style={styles.middleHomeButton} onPress={() => onMenu?.()}>
+                <Text style={[styles.middleHomeText, { fontFamily: fredoka }]}>HOME</Text>
+              </TouchableOpacity>
+              <Image
+                source={PLAYER_IMAGES[resolvedPlayerColors[1]] ?? PLAYER_IMAGES.blauw}
+                style={styles.middlePlayerCar}
+                resizeMode="contain"
+              />
             </View>
-          );
-        })}
+            {renderBoard(1)}
+          </View>
+        ) : (
+          <View style={styles.singlePlayerStack}>
+            {Array.from({ length: resolvedPlayerCount }, (_, playerIndex) => renderBoard(playerIndex))}
+            <View style={styles.singleHomeRow}>
+              <TouchableOpacity style={styles.middleHomeButton} onPress={() => onMenu?.()}>
+                <Text style={[styles.middleHomeText, { fontFamily: fredoka }]}>HOME</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 // ─── Stijlen ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container:  { flex: 1, backgroundColor: '#EBF4E8' },
+  backgroundWash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 250, 242, 0.28)',
+  },
   topControls: {
-    paddingTop: 56,
-    paddingHorizontal: 16,
-    height: TOP_CONTROLS_HEIGHT,
-    justifyContent: 'center',
+    height: TOP_CONTROLS_HEIGHT + 18,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFDF7',
-    borderWidth: 1.5,
-    borderColor: '#D4C4A0',
-  },
-  backText:   { fontSize: 24, color: '#2D2B55', fontWeight: 'bold' },
 
   cardsColumn: {
     flex: 1,
     paddingHorizontal: OUTER_PADDING,
     paddingBottom: OUTER_PADDING,
-    gap: SECTION_GAP,
+    paddingTop: 8,
+    justifyContent: 'center',
+  },
+  twoPlayerStack: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  singlePlayerStack: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   playerSection: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playerLabelRow: {
-    height: SECTION_LABEL_HEIGHT,
+  playerSectionCompact: {
+    justifyContent: 'center',
+    marginBottom: -6,
+  },
+  boardShell: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 2,
+  },
+  middleControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
+    justifyContent: 'center',
+    gap: 18,
+    minHeight: 52,
+    marginTop: -8,
+    marginBottom: -12,
   },
-  playerImg: {
-    width: 30,
-    height: 30,
+  singleHomeRow: {
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  playerLabel: {
-    fontSize: 20,
-    color: '#2D2B55',
+  middlePlayerCar: {
+    width: 104,
+    height: 76,
+    marginTop: 10,
+  },
+  middlePlayerCarMirrored: {
+    transform: [{ scaleX: -1 }],
+  },
+  middleHomeButton: {
+    minWidth: 86,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#3f6d8d',
+    borderWidth: 2,
+    borderColor: '#1e3749',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  middleHomeText: {
+    fontSize: 16,
+    color: '#ffffff',
     letterSpacing: 0.4,
   },
-
+  gridShell: {
+    borderWidth: 4,
+    borderRadius: 24,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 5,
+  },
   gridWrapper: {
-    width: SIZE * CELL_SIZE + (SIZE - 1) * GAP + PADDING * 2,
-    height: GRID_HEIGHT,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: PADDING,
-    gap: GAP,
     position: 'relative',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
 
   cell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cellIcon: {
-    width: CELL_SIZE * 0.82,
-    height: CELL_SIZE * 0.82,
-  },
+  cellIcon: {},
 
   line:      { position: 'absolute', height: 8, borderRadius: 4 },
   bingoText: { marginTop: 8, fontSize: 32, letterSpacing: 1 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(20, 35, 46, 0.34)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFFDF7',
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 30,
+    color: '#2D2B55',
+    marginBottom: 18,
+  },
+  winnerCarImage: {
+    width: 360,
+    height: 260,
+    marginBottom: 18,
+  },
+  winnerCarImageMirrored: {
+    transform: [{ scaleX: -1 }],
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 28,
+    marginTop: 6,
+  },
+  iconActionButton: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+  },
+  homeActionButton: {
+    backgroundColor: '#d91f16',
+    borderColor: '#0f2b3c',
+  },
+  replayActionButton: {
+    backgroundColor: '#15c255',
+    borderColor: '#0f2b3c',
+  },
+  iconActionSymbol: {
+    fontSize: 48,
+    lineHeight: 50,
+    color: '#000000',
+    fontWeight: '700',
+  },
 });
