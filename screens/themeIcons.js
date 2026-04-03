@@ -194,9 +194,30 @@ export function getThemeIcons(theme) {
   return THEME_ICONS[theme] ?? THEME_ICONS.snelweg;
 }
 
-export function getRandomIcons(theme, count = 16) {
+function createSeededRandom(seed = 0) {
+  let state = (seed >>> 0) || 1;
+
+  return function seededRandom() {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function shuffleWithSeed(items, seed) {
+  const next = [...items];
+  const random = createSeededRandom(seed);
+
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+
+  return next;
+}
+
+export function getRandomIcons(theme, count = 16, seed = 0) {
   const pool = getThemeIcons(theme);
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const shuffled = shuffleWithSeed(pool, seed);
   // Herhaal als de pool kleiner is dan het gevraagde aantal
   const result = [];
   while (result.length < count) {

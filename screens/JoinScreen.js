@@ -1,19 +1,48 @@
 import { useMemo, useState } from 'react';
 import { BackButton, InlineNote, PrimaryButton, ScreenLayout, TextField } from './flowComponents';
-import { createPlaceholderJoinConfig, normalizeLobbyCode } from './gameFlowConfig';
+import { createGameConfig, DEFAULT_ZICHTBAARHEID } from './gameFlowConfig';
+import { decodeLobbyCode, formatLobbyCodeForDisplay, normalizeLobbyCode } from '../src/utils/lobbyCode';
+import { getLobbySnapshot } from '../src/services/liveLobbyService';
 
 export default function JoinScreen({ navigation }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const normalizedCode = useMemo(() => normalizeLobbyCode(code), [code]);
 
-  function handleJoin() {
-    if (normalizedCode.length !== 4) {
-      setError('Voer een geldige code van 4 letters in.');
+  async function handleJoin() {
+    if (normalizedCode.length !== 7) {
+      setError('Voer een geldige code van 7 tekens in.');
       return;
     }
 
-    const config = createPlaceholderJoinConfig(normalizedCode);
+    const decoded = decodeLobbyCode(normalizedCode);
+    if (!decoded) {
+      setError('Deze code is ongeldig of beschadigd.');
+      return;
+    }
+
+    const syncType = decoded.syncType === 'live' ? 'live' : 'geen';
+    const liveLobby = syncType === 'live' ? await getLobbySnapshot(normalizedCode) : null;
+    if (syncType === 'live' && !liveLobby) {
+      setError('Deze live lobby is niet gevonden of niet meer beschikbaar.');
+      return;
+    }
+
+    const config = createGameConfig({
+      thema: liveLobby?.config?.thema ?? decoded.thema,
+      modus: liveLobby?.config?.modus ?? decoded.gameMode,
+      syncType,
+      lobbyCode: normalizedCode,
+      seed: liveLobby?.config?.seed ?? decoded.seed,
+      salt: liveLobby?.config?.salt ?? decoded.salt,
+      wincondition: liveLobby?.config?.wincondition ?? '1rij',
+      diagonaal: typeof liveLobby?.config?.diagonaal === 'boolean' ? liveLobby.config.diagonaal : true,
+      kaartOpzet: liveLobby?.config?.kaartOpzet ?? 'zelfde',
+      zichtbaarheid: decoded.syncType === 'live'
+        ? { ...DEFAULT_ZICHTBAARHEID }
+        : { eigenVoortgang: false, andermansVoortgang: false },
+    });
+
     setError('');
     navigation.navigate('SpelerSetup', { config });
   }
@@ -26,14 +55,14 @@ export default function JoinScreen({ navigation }) {
       <BackButton onPress={navigation.goBack} />
       <TextField
         label="Lobby-code"
-        value={normalizedCode}
+        value={formatLobbyCodeForDisplay(normalizedCode)}
         onChangeText={(value) => {
           setError('');
-          setCode(normalizeLobbyCode(value));
+          setCode(value);
         }}
-        placeholder="WOLF"
+        placeholder="BG·47·KW"
         autoCapitalize="characters"
-        maxLength={4}
+        maxLength={9}
       />
       {error ? <InlineNote>{error}</InlineNote> : null}
     </ScreenLayout>

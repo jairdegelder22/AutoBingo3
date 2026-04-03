@@ -6,7 +6,7 @@ export default function MultiplayerKeuzeScreen({ navigation }) {
       <BackButton onPress={navigation.goBack} />
       <OptionButton
         label="Host — Maak een spel aan"
-        onPress={() => navigation.navigate('SyncKeuze')}
+        onPress={() => navigation.navigate('HostSetup')}
       />
       <OptionButton
         label="Join — Voer een code in"

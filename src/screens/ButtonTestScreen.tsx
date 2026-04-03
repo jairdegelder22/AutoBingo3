@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import GlossyButton from '../components/GlossyButton';
+import ArcadeScoopButton from '../components/ArcadeScoopButton';
 
 type ButtonTestScreenProps = {
   navigation?: {
@@ -39,6 +40,16 @@ export default function ButtonTestScreen({ navigation }: ButtonTestScreenProps) 
           <Text style={styles.sectionTitle}>Disabled</Text>
           <GlossyButton label="Niet beschikbaar" variant="blue" disabled onPress={() => {}} />
           <GlossyButton label="Nog niet klaar" variant="yellow" disabled onPress={() => {}} />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Speelse boogvorm</Text>
+          <Text style={styles.sectionNote}>
+            Test met rechtere zijkanten, ronde bovenhoeken en een ingesneden boog aan de onderkant.
+          </Text>
+          <ArcadeScoopButton label="Play" variant="sky" size="large" onPress={() => {}} />
+          <ArcadeScoopButton label="Start spel" variant="gold" size="normal" onPress={() => {}} />
+          <ArcadeScoopButton label="Live sync" variant="coral" size="normal" onPress={() => {}} />
         </View>
 
         {navigation?.goBack ? (
@@ -94,6 +105,11 @@ const styles = StyleSheet.create({
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 20,
     color: '#f4fbff',
+  },
+  sectionNote: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#9fc1d8',
   },
   backWrap: {
     marginTop: 4,

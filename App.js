@@ -86,6 +86,9 @@ function GameScreen({ navigation, route }) {
     <BingoCardScreen
       key={replayAt}
       thema={config.thema}
+      seed={config.seed}
+      lobbyCode={config.lobbyCode}
+      liveLobbyPlayers={config.liveLobbyPlayers}
       wincondition={config.wincondition}
       diagonaal={config.diagonaal}
       aantalSpelersOpDitApparaat={config.aantalSpelersOpDitApparaat ?? spelers.length}

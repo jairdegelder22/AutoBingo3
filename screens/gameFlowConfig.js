@@ -41,6 +41,8 @@ export function createGameConfig(overrides = {}) {
     modus: 'solo',
     syncType: 'geen',
     lobbyCode: '',
+    seed: 0,
+    salt: 0,
     aantalSpelersOpDitApparaat: 1,
     zichtbaarheid: { ...DEFAULT_ZICHTBAARHEID },
     spelers: [],

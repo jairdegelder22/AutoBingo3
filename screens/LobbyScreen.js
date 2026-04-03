@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text, View } from 'react-native';
 import { BackButton, OptionButton, PrimaryButton, ScreenLayout, Section, TextField } from './flowComponents';
 import { PLAYER_SETUP_STORAGE_KEY, SKIN_OPTIONS, createPlayer } from './gameFlowConfig';
+import { formatLobbyCodeForDisplay } from '../src/utils/lobbyCode';
+import { ensureLobby, startLobby, subscribeToLobby, upsertPlayers } from '../src/services/liveLobbyService';
 
 function SkinOptions({ selectedSkin, onSelect }) {
   return (
@@ -21,6 +23,7 @@ function SkinOptions({ selectedSkin, onSelect }) {
 
 export default function LobbyScreen({ navigation, route }) {
   const [host, setHost] = useState(createPlayer({ skin: 'rood' }));
+  const [liveLobby, setLiveLobby] = useState(null);
   const config = route.params?.config;
 
   useEffect(() => {
@@ -40,15 +43,58 @@ export default function LobbyScreen({ navigation, route }) {
     });
   }, []);
 
-  const deelnemers = useMemo(() => (
-    config?.syncType === 'live'
-      ? [
-          { naam: host.naam || 'Host', skin: host.skin },
-          { naam: 'Emma', skin: 'blauw' },
-          { naam: 'Lars', skin: 'groen' },
-        ]
-      : []
-  ), [config?.syncType, host.naam, host.skin]);
+  useEffect(() => {
+    if (config?.syncType !== 'live' || !config?.lobbyCode) {
+      return undefined;
+    }
+
+    void ensureLobby({
+      code: config.lobbyCode,
+      config,
+      hostPlayer: {
+        ...host,
+        playerId: host.playerId,
+        naam: host.naam.trim() || 'Host',
+        role: 'host',
+      },
+    });
+
+    return undefined;
+  }, [config?.lobbyCode, config?.syncType, host.playerId]);
+
+  useEffect(() => {
+    if (config?.syncType !== 'live' || !config?.lobbyCode) {
+      return undefined;
+    }
+
+    void upsertPlayers(config.lobbyCode, [{
+      ...host,
+      playerId: host.playerId,
+      naam: host.naam.trim() || 'Host',
+      role: 'host',
+    }]);
+
+    return undefined;
+  }, [config?.lobbyCode, config?.syncType, host]);
+
+  useEffect(() => {
+    if (config?.syncType !== 'live' || !config?.lobbyCode) {
+      return undefined;
+    }
+
+    const unsubscribe = subscribeToLobby(config.lobbyCode, setLiveLobby);
+    return unsubscribe;
+  }, [config?.lobbyCode, config?.syncType]);
+
+  const deelnemers = useMemo(() => {
+    if (config?.syncType !== 'live') {
+      return [];
+    }
+
+    return liveLobby?.players?.length ? liveLobby.players : [
+      { naam: host.naam || 'Host', skin: host.skin, playerId: host.playerId, role: 'host' },
+    ];
+  }, [config?.syncType, host, liveLobby]);
 
   async function handleStart() {
     const spelers = [
@@ -63,11 +109,17 @@ export default function LobbyScreen({ navigation, route }) {
       JSON.stringify({ spelers })
     );
 
+    if (config?.syncType === 'live') {
+      await upsertPlayers(config.lobbyCode, spelers.map((player) => ({ ...player, role: 'host' })));
+      await startLobby(config.lobbyCode);
+    }
+
     navigation.navigate('Spel', {
       config: {
         ...config,
         aantalSpelersOpDitApparaat: 1,
         spelers,
+        liveLobbyPlayers: liveLobby?.players ?? spelers,
       },
     });
   }
@@ -82,11 +134,22 @@ export default function LobbyScreen({ navigation, route }) {
       <Section title="Lobby-code">
         <View style={{ padding: 16, borderWidth: 1, borderColor: '#B8AF9B', borderRadius: 12, backgroundColor: '#FFFFFF' }}>
           <Text style={{ fontSize: 34, fontWeight: '700', color: '#111827', textAlign: 'center' }}>
-            {config?.lobbyCode ?? 'WOLF'}
+            {formatLobbyCodeForDisplay(config?.lobbyCode ?? '') || 'BG·47·KW'}
           </Text>
           <Text style={{ marginTop: 8, color: '#4B5563', textAlign: 'center' }}>
             Geef deze code aan de andere spelers
           </Text>
+        </View>
+      </Section>
+
+      <Section title="Debug config">
+        <View style={{ padding: 16, borderWidth: 1, borderColor: '#D7DEE6', borderRadius: 12, backgroundColor: '#F8FBFD', gap: 6 }}>
+          <Text style={{ color: '#334155' }}>Code: {config?.lobbyCode ?? '-'}</Text>
+          <Text style={{ color: '#334155' }}>Thema: {config?.thema ?? '-'}</Text>
+          <Text style={{ color: '#334155' }}>Mode: {config?.modus ?? '-'}</Text>
+          <Text style={{ color: '#334155' }}>Sync: {config?.syncType ?? '-'}</Text>
+          <Text style={{ color: '#334155' }}>Seed: {String(config?.seed ?? '-')}</Text>
+          <Text style={{ color: '#334155' }}>Salt: {String(config?.salt ?? '-')}</Text>
         </View>
       </Section>
 
@@ -95,7 +158,7 @@ export default function LobbyScreen({ navigation, route }) {
           <OptionButton
             key={`${deelnemer.naam}-${index}`}
             label={deelnemer.naam}
-            subtitle={`Skin: ${deelnemer.skin}`}
+            subtitle={`Skin: ${deelnemer.skin}${deelnemer.role === 'host' ? ' • host' : ''}`}
             disabled
           />
         )) : (

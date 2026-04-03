@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal, StyleSheet, Text, View, TouchableOpacity,
   Image, ImageBackground, Dimensions,
@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { getRandomIcons } from './themeIcons';
 import { PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getPlayerThemes } from './gameFlowConfig';
+import { getBoardState, setBoardCell, subscribeToBoardState } from '../src/services/liveLobbyService';
 
 const SIZE = 4;
 const { width, height } = Dimensions.get('window');
@@ -176,6 +177,11 @@ function getRulesFromProps({
 export default function BingoCardScreen({
   theme,
   thema,
+  seed,
+  syncType,
+  modus,
+  lobbyCode,
+  liveLobbyPlayers,
   playerCount,
   playerColors,
   playerNames,
@@ -192,35 +198,85 @@ export default function BingoCardScreen({
 }) {
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
   const resolvedTheme = thema ?? theme ?? 'snelweg';
-  const resolvedPlayers = spelers?.length
-    ? spelers
-    : Array.from({ length: aantalSpelersOpDitApparaat ?? playerCount ?? 1 }, (_, index) => ({
-        naam: playerNames?.[index] ?? `Speler ${index + 1}`,
-        skin: playerColors?.[index] ?? 'groen',
-      }));
+  const resolvedPlayers = useMemo(
+    () => (
+      spelers?.length
+        ? spelers
+        : Array.from({ length: aantalSpelersOpDitApparaat ?? playerCount ?? 1 }, (_, index) => ({
+            naam: playerNames?.[index] ?? `Speler ${index + 1}`,
+            skin: playerColors?.[index] ?? 'groen',
+          }))
+    ),
+    [aantalSpelersOpDitApparaat, playerColors, playerCount, playerNames, spelers]
+  );
   const resolvedPlayerCount = resolvedPlayers.length || aantalSpelersOpDitApparaat || playerCount || 1;
-  const resolvedPlayerColors = resolvedPlayers.map((player, index) => player.skin ?? playerColors?.[index] ?? 'groen');
-  const derivedThemes = playerThemes?.length
-    ? playerThemes
-    : kaartOpzet === 'ander-thema'
-      ? getPlayerThemes(resolvedTheme, resolvedPlayerCount)
-      : Array.from({ length: resolvedPlayerCount }, () => resolvedTheme);
-  const actieveRegels = getRulesFromProps({
-    rules,
-    wincondition,
-    diagonaal,
-    kaartOpzet,
-  });
-  const [sharedIcons] = useState(() => getRandomIcons(resolvedTheme));
+  const resolvedPlayerColors = useMemo(
+    () => resolvedPlayers.map((player, index) => player.skin ?? playerColors?.[index] ?? 'groen'),
+    [playerColors, resolvedPlayers]
+  );
+  const derivedThemes = useMemo(
+    () => (
+      playerThemes?.length
+        ? playerThemes
+        : kaartOpzet === 'ander-thema'
+          ? getPlayerThemes(resolvedTheme, resolvedPlayerCount)
+          : Array.from({ length: resolvedPlayerCount }, () => resolvedTheme)
+    ),
+    [kaartOpzet, playerThemes, resolvedPlayerCount, resolvedTheme]
+  );
+  const actieveRegels = useMemo(
+    () => getRulesFromProps({
+      rules,
+      wincondition,
+      diagonaal,
+      kaartOpzet,
+    }),
+    [rules, wincondition, diagonaal, kaartOpzet]
+  );
+  const resolvedSeed = Number.isFinite(seed) ? seed : 0;
+  const liveSyncEnabled = syncType === 'live' && Boolean(lobbyCode);
+  const boardKeys = useMemo(
+    () => resolvedPlayers.map((player, index) => {
+      if (modus === 'collectief' || modus === 'claim') {
+        return 'shared:0';
+      }
+
+      return player.playerId ?? `local:${index}`;
+    }),
+    [modus, resolvedPlayers]
+  );
+  const allKnownPlayers = useMemo(
+    () => {
+      const playerMap = new Map();
+
+      [...(liveLobbyPlayers ?? []), ...resolvedPlayers].forEach((player, index) => {
+        const playerId = player?.playerId ?? `local:${index}`;
+        if (!playerMap.has(playerId)) {
+          playerMap.set(playerId, {
+            playerId,
+            skin: player?.skin ?? 'groen',
+            naam: player?.naam ?? `Speler ${index + 1}`,
+          });
+        }
+      });
+
+      return playerMap;
+    },
+    [liveLobbyPlayers, resolvedPlayers]
+  );
+  const [sharedIcons] = useState(() => getRandomIcons(resolvedTheme, SIZE * SIZE, resolvedSeed));
   const [playerIcons] = useState(() =>
     kaartOpzet === 'ander-thema'
-      ? derivedThemes.map((playerTheme) => getRandomIcons(playerTheme))
+      ? derivedThemes.map((playerTheme, index) => getRandomIcons(playerTheme, SIZE * SIZE, resolvedSeed + index))
       : actieveRegels.sharedCards
       ? Array.from({ length: resolvedPlayerCount }, () => sharedIcons)
-      : Array.from({ length: resolvedPlayerCount }, () => getRandomIcons(resolvedTheme))
+      : Array.from({ length: resolvedPlayerCount }, (_, index) => getRandomIcons(resolvedTheme, SIZE * SIZE, resolvedSeed + index))
   );
   const [playerChecked, setPlayerChecked] = useState(() =>
     Array.from({ length: resolvedPlayerCount }, () => Array(SIZE * SIZE).fill(false))
+  );
+  const [playerClaimOwners, setPlayerClaimOwners] = useState(() =>
+    Array.from({ length: resolvedPlayerCount }, () => Array(SIZE * SIZE).fill(null))
   );
   const [playerWinLines, setPlayerWinLines] = useState(Array(resolvedPlayerCount).fill(null));
   const [winnerColor, setWinnerColor] = useState(null);
@@ -232,27 +288,89 @@ export default function BingoCardScreen({
   const resolvedPadding = compactTwoPlayerLayout ? 8 : PADDING;
   const resolvedGridSize = SIZE * resolvedCellSize + (SIZE - 1) * resolvedGap + resolvedPadding * 2;
 
-  function handlePress(playerIndex, index) {
-    const winLine = playerWinLines[playerIndex];
-    if (winLine) return;
+  function applyLiveBoardState(boardState) {
+    setPlayerChecked((current) => current.map((cells, index) => {
+      const entries = boardState[boardKeys[index]];
+      if (!entries) {
+        return cells;
+      }
+
+      return entries.map((entry) => Boolean(entry?.checked));
+    }));
+
+    setPlayerClaimOwners((current) => current.map((owners, index) => {
+      const entries = boardState[boardKeys[index]];
+      if (!entries) {
+        return owners;
+      }
+
+      return entries.map((entry) => entry?.playerId ?? null);
+    }));
+  }
+
+  useEffect(() => {
+    if (!liveSyncEnabled) {
+      return undefined;
+    }
+
+    void getBoardState(lobbyCode).then((boardState) => {
+      applyLiveBoardState(boardState);
+    });
+
+    return subscribeToBoardState(lobbyCode, (boardState) => {
+      applyLiveBoardState(boardState);
+    });
+  }, [boardKeys, liveSyncEnabled, lobbyCode]);
+
+  useEffect(() => {
+    const nextWins = playerChecked.map((checked) => findBingo(checked, actieveRegels));
+    setPlayerWinLines(nextWins);
+
+    const firstWinnerIndex = nextWins.findIndex(Boolean);
+    if (firstWinnerIndex >= 0) {
+      setWinnerColor(resolvedPlayerColors[firstWinnerIndex] ?? 'groen');
+      setWinnerIndex(firstWinnerIndex);
+      return;
+    }
+
+    setWinnerColor(null);
+    setWinnerIndex(null);
+  }, [actieveRegels, playerChecked, resolvedPlayerColors]);
+
+  async function handlePress(playerIndex, index) {
+    if (playerWinLines[playerIndex]) return;
     const next = playerChecked.map((cells, currentIndex) =>
       currentIndex === playerIndex ? [...cells] : cells
     );
     next[playerIndex][index] = !next[playerIndex][index];
     setPlayerChecked(next);
-    const win = findBingo(next[playerIndex], actieveRegels);
-    if (win) {
-      const nextWins = [...playerWinLines];
-      nextWins[playerIndex] = win;
-      setPlayerWinLines(nextWins);
-      setWinnerColor(resolvedPlayerColors[playerIndex] ?? 'groen');
-      setWinnerIndex(playerIndex);
+    setPlayerClaimOwners((current) => current.map((owners, currentIndex) => {
+      if (currentIndex !== playerIndex) {
+        return owners;
+      }
+
+      const nextOwners = [...owners];
+      nextOwners[index] = next[playerIndex][index]
+        ? (resolvedPlayers[playerIndex]?.playerId ?? null)
+        : null;
+      return nextOwners;
+    }));
+
+    if (liveSyncEnabled) {
+      await setBoardCell({
+        code: lobbyCode,
+        boardKey: boardKeys[playerIndex],
+        cellIndex: index,
+        checked: next[playerIndex][index],
+        playerId: resolvedPlayers[playerIndex]?.playerId,
+      });
     }
   }
 
   function renderBoard(playerIndex) {
     const kleur = resolvedPlayerColors[playerIndex] ?? 'groen';
     const checked = playerChecked[playerIndex];
+    const claimOwners = playerClaimOwners[playerIndex];
     const icons = playerIcons[playerIndex];
     const winLine = playerWinLines[playerIndex];
     const checkedColor = PLAYER_HEX[kleur] ?? '#2E8B3F';
@@ -320,14 +438,24 @@ export default function BingoCardScreen({
               ]}
             >
               {icons.map((icon, iconIndex) => (
+                (() => {
+                  const ownerPlayerId = claimOwners?.[iconIndex];
+                  const ownerSkin = ownerPlayerId ? allKnownPlayers.get(ownerPlayerId)?.skin : null;
+                  const cellCheckedColor = modus === 'claim' && ownerSkin
+                    ? (PLAYER_HEX[ownerSkin] ?? checkedColor)
+                    : checkedColor;
+
+                  return (
                 <BingoCell
                   key={iconIndex}
                   checked={checked[iconIndex]}
-                  checkedColor={checkedColor}
+                  checkedColor={cellCheckedColor}
                   icon={icon}
                   cellSize={resolvedCellSize}
                   onPress={() => handlePress(playerIndex, iconIndex)}
                 />
+                  );
+                })()
               ))}
               {lineOverlay}
             </View>

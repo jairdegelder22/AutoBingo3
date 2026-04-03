@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BackButton, InlineNote, OptionButton, PrimaryButton, ScreenLayout, Section, TextField } from './flowComponents';
 import { buildPlayerArray, PLAYER_SETUP_STORAGE_KEY, SKIN_OPTIONS } from './gameFlowConfig';
+import { joinLobby } from '../src/services/liveLobbyService';
 
 function SkinPicker({ selectedSkin, onSelect }) {
   return (
@@ -63,6 +64,18 @@ export default function PlayerSetupScreen({ navigation, route }) {
       JSON.stringify({ spelers: geselecteerdeSpelers })
     );
 
+    if (baseConfig?.syncType === 'live') {
+      await joinLobby({
+        code: baseConfig.lobbyCode,
+        config: {
+          ...baseConfig,
+          aantalSpelersOpDitApparaat: aantalSpelers,
+          spelers: geselecteerdeSpelers,
+        },
+        players: geselecteerdeSpelers.map((player) => ({ ...player, role: 'guest' })),
+      });
+    }
+
     navigation.navigate('Wachten', {
       config: {
         ...baseConfig,
@@ -102,6 +115,17 @@ export default function PlayerSetupScreen({ navigation, route }) {
         />
       </Section>
 
+      <Section title="Debug config">
+        <InlineNote>
+          Code: {baseConfig?.lobbyCode ?? '-'}{'\n'}
+          Thema: {baseConfig?.thema ?? '-'}{'\n'}
+          Mode: {baseConfig?.modus ?? '-'}{'\n'}
+          Sync: {baseConfig?.syncType ?? '-'}{'\n'}
+          Seed: {String(baseConfig?.seed ?? '-')}{'\n'}
+          Salt: {String(baseConfig?.salt ?? '-')}
+        </InlineNote>
+      </Section>
+
       {aantalSpelers === 2 ? (
         <>
           <TextField
@@ -115,7 +139,7 @@ export default function PlayerSetupScreen({ navigation, route }) {
       ) : null}
 
       <InlineNote>
-        Deze flow gebruikt nu placeholder-data voor lobby-sync en startsignalen.
+        Live sync gebruikt de lobby-code voor dezelfde spelinhoud en synchroniseert live deelnemers en voortgang.
       </InlineNote>
     </ScreenLayout>
   );
