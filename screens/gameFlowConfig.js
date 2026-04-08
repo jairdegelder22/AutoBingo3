@@ -14,7 +14,18 @@ export const WINCONDITION_OPTIONS = [
   { id: 'heel-blok', label: 'Heel blok' },
 ];
 
-export const SKIN_OPTIONS = ['rood', 'blauw', 'groen', 'geel', 'paars', 'oranje'];
+export const SKIN_OPTIONS = [
+  'rood',
+  'blauw',
+  'groen',
+  'geel',
+  'oranje',
+  'paars',
+  'roze',
+  'lichtblauw',
+  'zwart',
+  'wit',
+];
 
 export const DEFAULT_ZICHTBAARHEID = {
   eigenVoortgang: true,

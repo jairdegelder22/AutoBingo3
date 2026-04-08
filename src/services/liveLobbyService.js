@@ -275,6 +275,8 @@ export async function startLobby(code) {
 export function subscribeToLobby(code, listener) {
   let isActive = true;
   let channel = null;
+  let pollInterval = null;
+  let retryTimeout = null;
 
   async function publishSnapshot() {
     const snapshot = await getLobbySnapshot(code);
@@ -291,10 +293,18 @@ export function subscribeToLobby(code, listener) {
 
     if (!lobbyRow) {
       listener(null);
+      retryTimeout = setTimeout(() => {
+        if (isActive) {
+          void setup();
+        }
+      }, 750);
       return;
     }
 
     await publishSnapshot();
+    pollInterval = setInterval(() => {
+      void publishSnapshot();
+    }, 1500);
 
     channel = supabase
       .channel(`lobby:${code}:${Math.random().toString(36).slice(2, 8)}`)
@@ -315,6 +325,12 @@ export function subscribeToLobby(code, listener) {
 
   return () => {
     isActive = false;
+    if (pollInterval) {
+      clearInterval(pollInterval);
+    }
+    if (retryTimeout) {
+      clearTimeout(retryTimeout);
+    }
     if (channel) {
       supabase.removeChannel(channel);
     }

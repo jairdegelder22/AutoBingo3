@@ -9,7 +9,7 @@ export function ScreenLayout({ title, children, footer, scroll = true }) {
         style={styles.content}
         contentContainerStyle={scroll ? styles.scrollContent : undefined}
       >
-        <Text style={styles.title}>{title}</Text>
+        {title ? <Text style={styles.title}>{title}</Text> : null}
         {children}
       </ContentWrapper>
       {footer ? <View style={styles.footer}>{footer}</View> : null}

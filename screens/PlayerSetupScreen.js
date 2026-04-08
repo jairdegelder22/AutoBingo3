@@ -115,17 +115,6 @@ export default function PlayerSetupScreen({ navigation, route }) {
         />
       </Section>
 
-      <Section title="Debug config">
-        <InlineNote>
-          Code: {baseConfig?.lobbyCode ?? '-'}{'\n'}
-          Thema: {baseConfig?.thema ?? '-'}{'\n'}
-          Mode: {baseConfig?.modus ?? '-'}{'\n'}
-          Sync: {baseConfig?.syncType ?? '-'}{'\n'}
-          Seed: {String(baseConfig?.seed ?? '-')}{'\n'}
-          Salt: {String(baseConfig?.salt ?? '-')}
-        </InlineNote>
-      </Section>
-
       {aantalSpelers === 2 ? (
         <>
           <TextField

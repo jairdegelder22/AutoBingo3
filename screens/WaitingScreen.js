@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { PrimaryButton, ScreenLayout, Section } from './flowComponents';
 import { getLobbySnapshot, subscribeToLobby } from '../src/services/liveLobbyService';
+import LobbyCodePlate from './LobbyCodePlate';
 
 export default function WaitingScreen({ navigation, route }) {
   const config = route.params?.config;
@@ -85,7 +86,7 @@ export default function WaitingScreen({ navigation, route }) {
       {config?.syncType === 'live' ? (
         <Section title="Lobby status">
           <View style={{ padding: 16, borderWidth: 1, borderColor: '#B8AF9B', borderRadius: 12, backgroundColor: '#FFFFFF', gap: 8 }}>
-            <Text style={{ color: '#111827' }}>Code: {config?.lobbyCode ?? '-'}</Text>
+            <LobbyCodePlate code={config?.lobbyCode} />
             <Text style={{ color: '#111827' }}>Status: {liveLobby?.started ? 'gestart' : 'wachten op host'}</Text>
             <Text style={{ color: '#111827' }}>Spelers in lobby: {String(andereDeelnemers.length)}</Text>
           </View>
