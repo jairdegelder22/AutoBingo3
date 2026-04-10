@@ -14,8 +14,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const BOARD_SIZE = 16;
 
 function normalizePlayer(player, fallbackRole = 'guest') {
+  const normalizedName = typeof player?.naam === 'string' ? player.naam.trim() : '';
+
   return {
-    naam: player?.naam?.trim() || (fallbackRole === 'host' ? 'Host' : 'Speler'),
+    naam: normalizedName,
     skin: player?.skin || 'rood',
     playerId: player?.playerId || `${fallbackRole}-${Math.random().toString(36).slice(2, 8)}`,
     role: player?.role || fallbackRole,
@@ -203,6 +205,30 @@ export async function upsertPlayers(code, players) {
 
   if (error) {
     console.warn('upsertPlayers error', error.message);
+    return null;
+  }
+
+  return getLobbySnapshot(code);
+}
+
+export async function removePlayers(code, playerIds = []) {
+  if (!playerIds.length) {
+    return getLobbySnapshot(code);
+  }
+
+  const lobbyRow = await fetchLobbyRowByCode(code);
+  if (!lobbyRow) {
+    return null;
+  }
+
+  const { error } = await supabase
+    .from('lobby_players')
+    .delete()
+    .eq('lobby_id', lobbyRow.id)
+    .in('player_id', playerIds);
+
+  if (error) {
+    console.warn('removePlayers error', error.message);
     return null;
   }
 

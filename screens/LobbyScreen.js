@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
+  Dimensions,
   Easing,
   Image,
   Modal,
@@ -12,7 +13,11 @@ import {
   View,
 } from 'react-native';
 import { BackButton, InlineNote, ScreenLayout } from './flowComponents';
-import { PLAYER_SETUP_STORAGE_KEY, SKIN_OPTIONS, createPlayer } from './gameFlowConfig';
+import {
+  PLAYER_SETUP_STORAGE_KEY,
+  SKIN_OPTIONS,
+  createPlayer,
+} from './gameFlowConfig';
 import { ensureLobby, startLobby, subscribeToLobby, upsertPlayers } from '../src/services/liveLobbyService';
 import LobbyCodePlate from './LobbyCodePlate';
 import { PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
@@ -48,14 +53,20 @@ function PlayerGrid({ players }) {
             index < slots.length - 2 ? styles.gridCellWithBottomBorder : null,
           ]}
         >
-          {player ? (
-            <View style={styles.gridPlayer}>
-              <PlayerAvatar skin={player.skin} size={52} />
-              <Text numberOfLines={1} style={styles.gridPlayerName}>
-                {player.naam || (player.role === 'host' ? 'Host' : 'Speler')}
-              </Text>
-            </View>
-          ) : null}
+	          {player ? (
+	            <View style={styles.gridPlayer}>
+	              <PlayerAvatar skin={player.skin} size={52} />
+	              <Text
+	                numberOfLines={1}
+	                style={[
+	                  styles.gridPlayerName,
+	                  !player.naam ? styles.gridPlayerNamePlaceholder : null,
+	                ]}
+	              >
+	                {player.naam || 'naam'}
+	              </Text>
+	            </View>
+	          ) : null}
         </View>
       ))}
     </View>
@@ -158,35 +169,40 @@ export default function LobbyScreen({ navigation, route }) {
   const [host, setHost] = useState(createPlayer({ skin: 'rood' }));
   const [liveLobby, setLiveLobby] = useState(null);
   const [nameInput, setNameInput] = useState('');
+  const [storageLoaded, setStorageLoaded] = useState(false);
   const [skinPickerMounted, setSkinPickerMounted] = useState(false);
   const [heroTop, setHeroTop] = useState(234);
+  const [transitionSourceLeft, setTransitionSourceLeft] = useState(0);
   const [transitionSkin, setTransitionSkin] = useState('rood');
   const config = route.params?.config;
   const heroOpacity = useRef(new Animated.Value(1)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const carouselOpacity = useRef(new Animated.Value(0)).current;
   const transitionOpacity = useRef(new Animated.Value(0)).current;
-  const transitionScale = useRef(new Animated.Value(1)).current;
+  const transitionTranslateX = useRef(new Animated.Value(0)).current;
   const heroCarRef = useRef(null);
   const LOBBY_CAR_SIZE = 188;
   const CAROUSEL_CAR_SIZE = 224;
-  const OPEN_SCALE = CAROUSEL_CAR_SIZE / LOBBY_CAR_SIZE;
 
   useEffect(() => {
     AsyncStorage.getItem(PLAYER_SETUP_STORAGE_KEY).then((storedValue) => {
-      if (!storedValue) return;
+      let storedSkin = null;
 
-      try {
-        const parsed = JSON.parse(storedValue);
-        setHost((current) => ({
-          ...current,
-          naam: parsed.spelers?.[0]?.naam ?? current.naam,
-          skin: parsed.spelers?.[0]?.skin ?? current.skin,
-        }));
-        setNameInput(parsed.spelers?.[0]?.naam ?? '');
-      } catch (_error) {
-        // Negeer corrupte placeholder-data.
+      if (storedValue) {
+        try {
+          const parsed = JSON.parse(storedValue);
+          storedSkin = parsed.spelers?.[0]?.skin ?? null;
+        } catch (_error) {
+          // Negeer corrupte placeholder-data.
+        }
       }
+
+      setHost((current) => ({
+        ...current,
+        skin: storedSkin ?? current.skin,
+      }));
+      setNameInput('');
+      setStorageLoaded(true);
     });
   }, []);
 
@@ -195,7 +211,7 @@ export default function LobbyScreen({ navigation, route }) {
   }, [host.naam]);
 
   useEffect(() => {
-    if (config?.syncType !== 'live' || !config?.lobbyCode) {
+    if (config?.syncType !== 'live' || !config?.lobbyCode || !storageLoaded) {
       return undefined;
     }
 
@@ -205,13 +221,13 @@ export default function LobbyScreen({ navigation, route }) {
       hostPlayer: {
         ...host,
         playerId: host.playerId,
-        naam: normalizeName(host.naam) || 'Host',
+        naam: normalizeName(host.naam),
         role: 'host',
       },
     });
 
     return undefined;
-  }, [config?.lobbyCode, config?.syncType, host.playerId]);
+  }, [config?.lobbyCode, config?.syncType, host.playerId, storageLoaded]);
 
   useEffect(() => {
     if (config?.syncType !== 'live' || !config?.lobbyCode) {
@@ -229,18 +245,17 @@ export default function LobbyScreen({ navigation, route }) {
 
   const naamFout = useMemo(() => {
     const normalized = normalizeName(nameInput);
-    if (!normalized) {
-      return 'Voer eerst een naam in.';
-    }
     if (normalized.length > MAX_PLAYER_NAME_LENGTH) {
       return `Naam mag maximaal ${MAX_PLAYER_NAME_LENGTH} tekens zijn.`;
     }
 
-    const duplicate = andereSpelers.some(
-      (player) => normalizeName(player.naam).toLowerCase() === normalized.toLowerCase()
-    );
-    if (duplicate) {
-      return 'Deze naam is al in gebruik in de lobby.';
+    if (normalized) {
+      const duplicate = andereSpelers.some(
+        (player) => normalizeName(player.naam).toLowerCase() === normalized.toLowerCase()
+      );
+      if (duplicate) {
+        return 'Deze naam is al in gebruik in de lobby.';
+      }
     }
 
     return '';
@@ -251,7 +266,7 @@ export default function LobbyScreen({ navigation, route }) {
     return duplicate ? 'Deze autokleur is al gekozen door een andere speler.' : '';
   }, [andereSpelers, host.skin]);
 
-  const canSyncHost = !naamFout && !kleurFout;
+  const canStartHost = !naamFout && !kleurFout;
 
   useEffect(() => {
     const normalizedName = normalizeName(nameInput);
@@ -261,7 +276,7 @@ export default function LobbyScreen({ navigation, route }) {
   }, [nameInput]);
 
   useEffect(() => {
-    if (config?.syncType !== 'live' || !config?.lobbyCode || !canSyncHost) {
+    if (config?.syncType !== 'live' || !config?.lobbyCode || naamFout || kleurFout) {
       return undefined;
     }
 
@@ -269,7 +284,7 @@ export default function LobbyScreen({ navigation, route }) {
       void upsertPlayers(config.lobbyCode, [{
         ...host,
         playerId: host.playerId,
-        naam: normalizeName(host.naam) || 'Host',
+        naam: normalizeName(host.naam),
         role: 'host',
       }]);
 
@@ -278,19 +293,19 @@ export default function LobbyScreen({ navigation, route }) {
         JSON.stringify({
           spelers: [{
             ...host,
-            naam: normalizeName(host.naam) || 'Host',
+            naam: normalizeName(host.naam),
           }],
         })
       );
     }, 180);
 
     return () => clearTimeout(timeout);
-  }, [canSyncHost, config?.lobbyCode, config?.syncType, host]);
+  }, [config?.lobbyCode, config?.syncType, host, kleurFout, naamFout]);
 
   const deelnemers = useMemo(() => {
     if (config?.syncType !== 'live') {
       return [{
-        naam: normalizeName(host.naam) || 'Host',
+        naam: normalizeName(host.naam),
         skin: host.skin,
         playerId: host.playerId,
         role: 'host',
@@ -298,19 +313,19 @@ export default function LobbyScreen({ navigation, route }) {
     }
 
     return liveLobby?.players?.length ? liveLobby.players : [
-      { naam: normalizeName(host.naam) || 'Host', skin: host.skin, playerId: host.playerId, role: 'host' },
+      { naam: normalizeName(host.naam), skin: host.skin, playerId: host.playerId, role: 'host' },
     ];
   }, [config?.syncType, host, liveLobby?.players]);
 
   async function handleStart() {
-    if (!canSyncHost) {
+    if (!canStartHost) {
       return;
     }
 
     const spelers = [
       {
         ...host,
-        naam: normalizeName(host.naam) || 'Host',
+        naam: normalizeName(host.naam),
       },
     ];
 
@@ -335,22 +350,21 @@ export default function LobbyScreen({ navigation, route }) {
   }
 
   function animatePickerOpen() {
-    heroCarRef.current?.measureInWindow?.((_x, y) => {
+    heroCarRef.current?.measureInWindow?.((x, y, width, height) => {
+      const measuredWidth = width || LOBBY_CAR_SIZE;
+      const sourceLeft = x + (measuredWidth - LOBBY_CAR_SIZE) / 2;
+      const destinationLeft = (Dimensions.get('window').width - LOBBY_CAR_SIZE) / 2;
+
       setHeroTop(y);
+      setTransitionSourceLeft(sourceLeft);
       setTransitionSkin(host.skin);
       setSkinPickerMounted(true);
       carouselOpacity.setValue(0);
       transitionOpacity.setValue(1);
-      transitionScale.setValue(1);
+      transitionTranslateX.setValue(0);
 
       requestAnimationFrame(() => {
         Animated.parallel([
-          Animated.timing(heroOpacity, {
-            toValue: 0,
-            duration: 120,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
           Animated.timing(overlayOpacity, {
             toValue: 1,
             duration: 220,
@@ -363,33 +377,14 @@ export default function LobbyScreen({ navigation, route }) {
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
-          Animated.timing(transitionOpacity, {
-            toValue: 1,
-            duration: 120,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(transitionScale, {
-            toValue: OPEN_SCALE,
+          Animated.timing(transitionTranslateX, {
+            toValue: destinationLeft - sourceLeft,
             duration: 260,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
         ]).start(() => {
-          Animated.parallel([
-            Animated.timing(carouselOpacity, {
-              toValue: 1,
-              duration: 120,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.timing(transitionOpacity, {
-              toValue: 0,
-              duration: 90,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start();
+          transitionOpacity.setValue(0);
         });
       });
     });
@@ -398,8 +393,8 @@ export default function LobbyScreen({ navigation, route }) {
   function animatePickerClose(nextSkin) {
     const resolvedSkin = nextSkin ?? transitionSkin;
     setTransitionSkin(resolvedSkin);
-    transitionScale.setValue(OPEN_SCALE);
     transitionOpacity.setValue(1);
+    transitionTranslateX.stopAnimation();
 
     Animated.parallel([
       Animated.timing(carouselOpacity, {
@@ -408,8 +403,8 @@ export default function LobbyScreen({ navigation, route }) {
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
-      Animated.timing(transitionScale, {
-        toValue: 1,
+      Animated.timing(transitionTranslateX, {
+        toValue: 0,
         duration: 240,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
@@ -428,14 +423,8 @@ export default function LobbyScreen({ navigation, route }) {
         }),
         Animated.timing(transitionOpacity, {
           toValue: 0,
-          duration: 110,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(heroOpacity, {
-          toValue: 1,
-          duration: 140,
-          easing: Easing.out(Easing.quad),
+          duration: 0,
+          easing: Easing.linear,
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -451,8 +440,8 @@ export default function LobbyScreen({ navigation, route }) {
         scroll={false}
         footer={(
           <Pressable
-            style={[styles.startButton, !canSyncHost && styles.startButtonDisabled]}
-            disabled={!canSyncHost}
+            style={[styles.startButton, !canStartHost && styles.startButtonDisabled]}
+            disabled={!canStartHost}
             onPress={handleStart}
           >
             <Text style={styles.startButtonText}>Start spel</Text>
@@ -475,7 +464,7 @@ export default function LobbyScreen({ navigation, route }) {
                 style={styles.nameInput}
                 value={nameInput}
                 onChangeText={(value) => setNameInput(value.slice(0, MAX_PLAYER_NAME_LENGTH))}
-                placeholder="Jouw naam"
+                placeholder="naam"
                 maxLength={MAX_PLAYER_NAME_LENGTH}
                 autoCapitalize="words"
               />
@@ -486,7 +475,7 @@ export default function LobbyScreen({ navigation, route }) {
                 style={[
                   styles.heroCarWrap,
                   {
-                    opacity: heroOpacity,
+                    opacity: skinPickerMounted ? 0 : heroOpacity,
                   },
                 ]}
                 pointerEvents={skinPickerMounted ? 'none' : 'auto'}
@@ -522,8 +511,11 @@ export default function LobbyScreen({ navigation, route }) {
             styles.transitionCar,
             {
               top: heroTop,
+              left: transitionSourceLeft,
               opacity: transitionOpacity,
-              transform: [{ scale: transitionScale }],
+              transform: [
+                { translateX: transitionTranslateX },
+              ],
             },
           ]}
         >
@@ -619,6 +611,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#111111',
   },
+  gridPlayerNamePlaceholder: {
+    opacity: 0.4,
+  },
   startButton: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -692,9 +687,7 @@ const styles = StyleSheet.create({
   },
   transitionCar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
   },
 });

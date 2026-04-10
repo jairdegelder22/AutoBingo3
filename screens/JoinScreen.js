@@ -44,7 +44,7 @@ export default function JoinScreen({ navigation }) {
     });
 
     setError('');
-    navigation.navigate('SpelerSetup', { config });
+    navigation.navigate('Wachten', { config });
   }
 
   return (

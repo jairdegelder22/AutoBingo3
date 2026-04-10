@@ -195,7 +195,7 @@ export function getThemeIcons(theme) {
 }
 
 function createSeededRandom(seed = 0) {
-  let state = (seed >>> 0) || 1;
+  let state = seed >>> 0;
 
   return function seededRandom() {
     state = (state * 1664525 + 1013904223) >>> 0;

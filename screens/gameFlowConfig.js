@@ -33,6 +33,7 @@ export const DEFAULT_ZICHTBAARHEID = {
 };
 
 export const PLAYER_SETUP_STORAGE_KEY = 'autobingo:last-player-setup';
+export const PREFERRED_PLAYER_NAME_STORAGE_KEY = 'autobingo:preferred-player-name';
 
 export function createPlayer(overrides = {}) {
   return {
@@ -52,13 +53,21 @@ export function createGameConfig(overrides = {}) {
     modus: 'solo',
     syncType: 'geen',
     lobbyCode: '',
-    seed: 0,
-    salt: 0,
+    seed: createRandomSeed(),
+    salt: createRandomSalt(),
     aantalSpelersOpDitApparaat: 1,
     zichtbaarheid: { ...DEFAULT_ZICHTBAARHEID },
     spelers: [],
     ...overrides,
   };
+}
+
+export function createRandomSeed() {
+  return Math.floor(Math.random() * 2 ** 16);
+}
+
+export function createRandomSalt() {
+  return Math.floor(Math.random() * 2 ** 6);
 }
 
 export function buildPlayerArray(count, defaults = []) {

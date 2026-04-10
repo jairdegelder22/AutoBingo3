@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
+import { Asset } from 'expo-asset';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import HomeScreen from './screens/HomeScreen';
 import ApparaatKeuzeScreen from './screens/ApparaatKeuzeScreen';
 import SoloSetupScreen from './screens/SoloSetupScreen';
@@ -15,7 +17,8 @@ import SettingsScreen from './screens/SettingsScreen';
 import BingoCardScreen from './screens/BingoCardScreen';
 import ButtonTestScreen from './src/screens/ButtonTestScreen';
 import SingleDeviceSetupTestScreen from './src/screens/SingleDeviceSetupTestScreen';
-import { getPlayerThemes } from './screens/gameFlowConfig';
+import { createRandomSalt, createRandomSeed, getPlayerThemes } from './screens/gameFlowConfig';
+import { PLAYER_IMAGES } from './assets/images/players/playerImages';
 
 const SCREEN_COMPONENTS = {
   Home: HomeScreen,
@@ -36,9 +39,36 @@ const SCREEN_COMPONENTS = {
 
 export default function App() {
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [stack, setStack] = useState([{ name: 'Home', params: {} }]);
   const currentRoute = stack[stack.length - 1];
   const CurrentScreen = SCREEN_COMPONENTS[currentRoute.name] ?? HomeScreen;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function preloadAppAssets() {
+      try {
+        await Asset.loadAsync([
+          ...Object.values(PLAYER_IMAGES),
+          require('./assets/images/players/player-silhouette.png'),
+          require('./assets/images/backgrounds/bingo-original-background.png'),
+        ]);
+      } catch (_error) {
+        // Laat de app gewoon door als een preload faalt.
+      } finally {
+        if (!cancelled) {
+          setAssetsLoaded(true);
+        }
+      }
+    }
+
+    void preloadAppAssets();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const navigation = useMemo(() => ({
     canGoBack: stack.length > 1,
@@ -59,8 +89,13 @@ export default function App() {
     },
   }), [stack.length]);
 
-  if (!fontsLoaded) {
-    return null;
+  if (!fontsLoaded || !assetsLoaded) {
+    return (
+      <View style={styles.bootScreen}>
+        <ActivityIndicator size="large" color="#155E75" />
+        <Text style={styles.bootText}>AutoBingo start op...</Text>
+      </View>
+    );
   }
 
   return (
@@ -70,6 +105,21 @@ export default function App() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  bootScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F4F1E8',
+    gap: 18,
+  },
+  bootText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#143A52',
+  },
+});
 
 function GameScreen({ navigation, route }) {
   const config = route.params?.config ?? {};
@@ -103,7 +153,14 @@ function GameScreen({ navigation, route }) {
       }
       onBack={navigation.goBack}
       onMenu={() => navigation.reset('Home')}
-      onReplay={() => navigation.replace('Spel', { config, replayAt: Date.now() })}
+      onReplay={() => navigation.replace('Spel', {
+        config: {
+          ...config,
+          seed: createRandomSeed(),
+          salt: createRandomSalt(),
+        },
+        replayAt: Date.now(),
+      })}
     />
   );
 }

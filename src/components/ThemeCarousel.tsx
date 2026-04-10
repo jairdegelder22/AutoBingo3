@@ -59,18 +59,36 @@ export default function ThemeCarousel<ItemT>({
   const scrollX = useRef(new Animated.Value(0)).current;
   const listRef = useRef<Animated.FlatList<ItemT>>(null);
   const baseCount = items.length;
-  const loopedItems = useMemo(
+  const loopedItems = useMemo<ItemT[]>(
     () => (baseCount > 1 ? Array.from({ length: LOOP_SETS }, () => items).flat() : items),
     [baseCount, items]
   );
   const initialIndex = baseCount > 1 ? baseCount : 0;
   const currentAbsoluteIndexRef = useRef(initialIndex);
   const currentLogicalIndexRef = useRef(0);
+  const hasAppliedInitialOffsetRef = useRef(false);
 
   useEffect(() => {
     currentAbsoluteIndexRef.current = initialIndex;
     currentLogicalIndexRef.current = 0;
+    hasAppliedInitialOffsetRef.current = false;
+    scrollX.setValue(initialIndex * snapInterval);
   }, [initialIndex]);
+
+  const ensureInitialOffset = () => {
+    if (hasAppliedInitialOffsetRef.current || baseCount === 0) {
+      return;
+    }
+
+    const initialOffset = initialIndex * snapInterval;
+    listRef.current?.scrollToOffset({
+      offset: initialOffset,
+      animated: false,
+    });
+    scrollX.setValue(initialOffset);
+    updateFocusedIndex(initialIndex, false);
+    hasAppliedInitialOffsetRef.current = true;
+  };
 
   const getItemLayout = useMemo(
     () => (_data: ArrayLike<ItemT> | null | undefined, index: number) => ({
@@ -218,9 +236,13 @@ export default function ThemeCarousel<ItemT>({
         decelerationRate="fast"
         getItemLayout={getItemLayout}
         initialScrollIndex={initialIndex}
-        keyExtractor={(item, index) => `${keyExtractor(item, baseCount > 0 ? index % baseCount : index)}-${index}`}
+        keyExtractor={(item, index) => `${keyExtractor(item as ItemT, baseCount > 0 ? index % baseCount : index)}-${index}`}
+        onLayout={ensureInitialOffset}
         onMomentumScrollEnd={handleMomentumEnd}
         onScroll={handleScroll}
+        onScrollToIndexFailed={() => {
+          requestAnimationFrame(ensureInitialOffset);
+        }}
         renderItem={renderItem}
         removeClippedSubviews={false}
         scrollEventThrottle={16}
@@ -228,6 +250,7 @@ export default function ThemeCarousel<ItemT>({
         snapToAlignment="start"
         snapToInterval={snapInterval}
         style={styles.list}
+        onContentSizeChange={ensureInitialOffset}
         contentContainerStyle={[
           styles.contentContainer,
           {
