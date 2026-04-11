@@ -43,6 +43,7 @@ function mapLobbyRowToSnapshot(lobbyRow, playerRows = []) {
       kaartOpzet: lobbyRow.card_layout ?? 'zelfde',
     },
     started: lobbyRow.status === 'started',
+    startedAt: lobbyRow.started_at,
     players: playerRows.map((row) => ({
       naam: row.name,
       skin: row.skin,
@@ -298,6 +299,43 @@ export async function startLobby(code) {
   return getLobbySnapshot(code);
 }
 
+export async function restartLobbyGame(code, config = {}) {
+  const lobbyRow = await fetchLobbyRowByCode(code);
+  if (!lobbyRow) {
+    return null;
+  }
+
+  const startedAt = new Date().toISOString();
+  const updatePayload = {
+    seed: config?.seed ?? lobbyRow.seed,
+    salt: config?.salt ?? lobbyRow.salt,
+    status: 'started',
+    started_at: startedAt,
+  };
+
+  const { error: lobbyError } = await supabase
+    .from('lobbies')
+    .update(updatePayload)
+    .eq('id', lobbyRow.id);
+
+  if (lobbyError) {
+    console.warn('restartLobbyGame update error', lobbyError.message);
+    return null;
+  }
+
+  const { error: boardError } = await supabase
+    .from('lobby_board_cells')
+    .delete()
+    .eq('lobby_id', lobbyRow.id);
+
+  if (boardError) {
+    console.warn('restartLobbyGame board delete error', boardError.message);
+    return null;
+  }
+
+  return getLobbySnapshot(code);
+}
+
 export function subscribeToLobby(code, listener) {
   let isActive = true;
   let channel = null;
@@ -377,10 +415,10 @@ function emptyBoardState() {
   return {};
 }
 
-function rowsToBoardState(rows = []) {
+function rowsToBoardState(rows = [], boardSize = BOARD_SIZE) {
   return rows.reduce((accumulator, row) => {
     if (!accumulator[row.board_key]) {
-      accumulator[row.board_key] = Array.from({ length: BOARD_SIZE }, () => ({
+      accumulator[row.board_key] = Array.from({ length: boardSize }, () => ({
         checked: false,
         playerId: null,
       }));
@@ -394,7 +432,7 @@ function rowsToBoardState(rows = []) {
   }, emptyBoardState());
 }
 
-export async function getBoardState(code) {
+export async function getBoardState(code, boardSize = BOARD_SIZE) {
   const lobbyRow = await fetchLobbyRowByCode(code);
   if (!lobbyRow) {
     return emptyBoardState();
@@ -410,10 +448,29 @@ export async function getBoardState(code) {
     return emptyBoardState();
   }
 
-  return rowsToBoardState(data ?? []);
+  return rowsToBoardState(data ?? [], boardSize);
 }
 
-export async function setBoardCell({ code, boardKey, cellIndex, checked, playerId }) {
+export async function clearBoardState(code) {
+  const lobbyRow = await fetchLobbyRowByCode(code);
+  if (!lobbyRow) {
+    return emptyBoardState();
+  }
+
+  const { error } = await supabase
+    .from('lobby_board_cells')
+    .delete()
+    .eq('lobby_id', lobbyRow.id);
+
+  if (error) {
+    console.warn('clearBoardState error', error.message);
+    return null;
+  }
+
+  return emptyBoardState();
+}
+
+export async function setBoardCell({ code, boardKey, cellIndex, checked, playerId, boardSize = BOARD_SIZE }) {
   const lobbyRow = await fetchLobbyRowByCode(code);
   if (!lobbyRow) {
     return null;
@@ -434,15 +491,15 @@ export async function setBoardCell({ code, boardKey, cellIndex, checked, playerI
     return null;
   }
 
-  return getBoardState(code);
+  return getBoardState(code, boardSize);
 }
 
-export function subscribeToBoardState(code, listener) {
+export function subscribeToBoardState(code, listener, boardSize = BOARD_SIZE) {
   let isActive = true;
   let channel = null;
 
   async function publishBoardState() {
-    const boardState = await getBoardState(code);
+    const boardState = await getBoardState(code, boardSize);
     if (isActive) {
       listener(boardState);
     }

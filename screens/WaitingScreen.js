@@ -308,6 +308,8 @@ function PlayerEditor({
 
 export default function WaitingScreen({ navigation, route }) {
   const config = route.params?.config;
+  const isClaimLiveMode = config?.syncType === 'live' && config?.modus === 'claim';
+  const maxLocalPlayers = isClaimLiveMode ? 1 : MAX_LOCAL_PLAYERS;
   const { width: screenWidth } = useWindowDimensions();
   const [liveLobby, setLiveLobby] = useState(null);
   const [spelers, setSpelers] = useState(() => {
@@ -316,7 +318,7 @@ export default function WaitingScreen({ navigation, route }) {
       : [createPlayer({ skin: 'rood' })];
 
     return initialPlayers
-      .slice(0, MAX_LOCAL_PLAYERS)
+      .slice(0, maxLocalPlayers)
       .map((player, index) => normalizeLocalPlayer(player, index === 0 ? 'rood' : 'blauw'));
   });
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState(null);
@@ -365,6 +367,14 @@ export default function WaitingScreen({ navigation, route }) {
       useNativeDriver: true,
     }).start();
   }, [playerLayoutProgress, spelers.length]);
+
+  useEffect(() => {
+    if (spelers.length <= maxLocalPlayers) {
+      return;
+    }
+
+    setSpelers((current) => current.slice(0, maxLocalPlayers));
+  }, [maxLocalPlayers, spelers.length]);
 
   const localPlayerIds = useMemo(
     () => spelers.map((player) => player.playerId),
@@ -446,6 +456,7 @@ export default function WaitingScreen({ navigation, route }) {
       config: {
         ...config,
         ...liveLobby.config,
+        startedAt: liveLobby.startedAt ?? null,
         aantalSpelersOpDitApparaat: spelers.length,
         spelers: spelers.map((player) => ({
           ...player,
@@ -489,7 +500,7 @@ export default function WaitingScreen({ navigation, route }) {
   }
 
   function handleAddPlayer() {
-    if (spelers.length >= MAX_LOCAL_PLAYERS) {
+    if (spelers.length >= maxLocalPlayers) {
       return;
     }
 
@@ -696,7 +707,7 @@ export default function WaitingScreen({ navigation, route }) {
 	                  },
 	                ]}
               >
-                <AddPlayerButton visible={spelers.length < 2} onPress={handleAddPlayer} />
+                <AddPlayerButton visible={spelers.length < maxLocalPlayers} onPress={handleAddPlayer} />
               </Animated.View>
 
               {spelers[1] ? (

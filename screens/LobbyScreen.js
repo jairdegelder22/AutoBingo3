@@ -301,6 +301,9 @@ function PlayerEditor({
 }
 
 export default function LobbyScreen({ navigation, route }) {
+  const config = route.params?.config;
+  const isClaimLiveMode = config?.syncType === 'live' && config?.modus === 'claim';
+  const maxLocalPlayers = isClaimLiveMode ? 1 : MAX_LOCAL_PLAYERS;
   const { width: screenWidth } = useWindowDimensions();
   const [liveLobby, setLiveLobby] = useState(null);
   const [spelers, setSpelers] = useState(() => [normalizeLocalPlayer(createPlayer({ skin: 'rood' }), 'rood')]);
@@ -312,7 +315,6 @@ export default function LobbyScreen({ navigation, route }) {
   const [transitionSourceLeft, setTransitionSourceLeft] = useState(0);
   const [transitionSkin, setTransitionSkin] = useState('rood');
   const [transitionCarSize, setTransitionCarSize] = useState(STAGE_SINGLE_CAR_SIZE);
-  const config = route.params?.config;
   const playerLayoutProgress = useState(() => new Animated.Value(spelers.length >= 2 ? 1 : 0))[0];
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const carouselOpacity = useRef(new Animated.Value(0)).current;
@@ -355,6 +357,14 @@ export default function LobbyScreen({ navigation, route }) {
       useNativeDriver: true,
     }).start();
   }, [playerLayoutProgress, spelers.length]);
+
+  useEffect(() => {
+    if (spelers.length <= maxLocalPlayers) {
+      return;
+    }
+
+    setSpelers((current) => current.slice(0, maxLocalPlayers));
+  }, [maxLocalPlayers, spelers.length]);
 
   useEffect(() => {
     if (config?.syncType !== 'live' || !config?.lobbyCode || !storageLoaded) {
@@ -490,7 +500,7 @@ export default function LobbyScreen({ navigation, route }) {
   }
 
   function handleAddPlayer() {
-    if (spelers.length >= MAX_LOCAL_PLAYERS) {
+    if (spelers.length >= maxLocalPlayers) {
       return;
     }
 
@@ -540,12 +550,13 @@ export default function LobbyScreen({ navigation, route }) {
       JSON.stringify({ spelers: normalizedPlayers })
     );
 
+    let startedLobby = null;
     if (config?.syncType === 'live') {
       await upsertPlayers(
         config.lobbyCode,
         normalizedPlayers.map((player, index) => ({ ...player, role: index === 0 ? 'host' : 'guest' }))
       );
-      await startLobby(config.lobbyCode);
+      startedLobby = await startLobby(config.lobbyCode);
     }
 
     navigation.navigate('Spel', {
@@ -553,7 +564,8 @@ export default function LobbyScreen({ navigation, route }) {
         ...config,
         aantalSpelersOpDitApparaat: normalizedPlayers.length,
         spelers: normalizedPlayers,
-        liveLobbyPlayers: liveLobby?.players ?? normalizedPlayers,
+        liveLobbyPlayers: startedLobby?.players ?? liveLobby?.players ?? normalizedPlayers,
+        startedAt: startedLobby?.startedAt ?? null,
       },
     });
   }
@@ -739,7 +751,7 @@ export default function LobbyScreen({ navigation, route }) {
                   },
                 ]}
               >
-                <AddPlayerButton visible={spelers.length < 2} onPress={handleAddPlayer} />
+                <AddPlayerButton visible={spelers.length < maxLocalPlayers} onPress={handleAddPlayer} />
               </Animated.View>
 
               {spelers[1] ? (

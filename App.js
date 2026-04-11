@@ -19,6 +19,7 @@ import ButtonTestScreen from './src/screens/ButtonTestScreen';
 import SingleDeviceSetupTestScreen from './src/screens/SingleDeviceSetupTestScreen';
 import { createRandomSalt, createRandomSeed, getPlayerThemes } from './screens/gameFlowConfig';
 import { PLAYER_IMAGES } from './assets/images/players/playerImages';
+import { clearBoardState, restartLobbyGame, subscribeToLobby } from './src/services/liveLobbyService';
 
 const SCREEN_COMPONENTS = {
   Home: HomeScreen,
@@ -124,6 +125,7 @@ const styles = StyleSheet.create({
 function GameScreen({ navigation, route }) {
   const config = route.params?.config ?? {};
   const replayAt = route.params?.replayAt ?? 'initial-game';
+  const [liveLobby, setLiveLobby] = useState(null);
   const spelers = config.spelers?.length
     ? config.spelers
     : Array.from({ length: config.aantalSpelersOpDitApparaat ?? 1 }, (_, index) => ({
@@ -131,6 +133,53 @@ function GameScreen({ navigation, route }) {
         skin: index === 0 ? 'rood' : 'blauw',
         playerId: `placeholder-${index + 1}`,
       }));
+  const localPlayerIds = useMemo(
+    () => spelers.map((player) => player.playerId).filter(Boolean),
+    [spelers]
+  );
+  const canReplayLive = useMemo(
+    () => (
+      config.syncType === 'live'
+        ? (liveLobby?.players ?? config.liveLobbyPlayers ?? []).some((player) => (
+            localPlayerIds.includes(player.playerId) && player.role === 'host'
+          ))
+        : true
+    ),
+    [config.liveLobbyPlayers, config.syncType, liveLobby?.players, localPlayerIds]
+  );
+
+  useEffect(() => {
+    if (config.syncType !== 'live' || !config.lobbyCode) {
+      return undefined;
+    }
+
+    return subscribeToLobby(config.lobbyCode, setLiveLobby);
+  }, [config.lobbyCode, config.syncType]);
+
+  useEffect(() => {
+    if (config.syncType !== 'live' || !liveLobby?.started) {
+      return;
+    }
+
+    const nextSeed = liveLobby.config?.seed;
+    const nextSalt = liveLobby.config?.salt;
+    const nextStartedAt = liveLobby.startedAt ?? null;
+    const currentStartedAt = config.startedAt ?? null;
+
+    if (nextSeed === config.seed && nextSalt === config.salt && nextStartedAt === currentStartedAt) {
+      return;
+    }
+
+    navigation.replace('Spel', {
+      config: {
+        ...config,
+        ...liveLobby.config,
+        startedAt: nextStartedAt,
+        liveLobbyPlayers: liveLobby.players,
+      },
+      replayAt: Date.now(),
+    });
+  }, [config, liveLobby, navigation]);
 
   return (
     <BingoCardScreen
@@ -146,6 +195,7 @@ function GameScreen({ navigation, route }) {
       modus={config.modus}
       syncType={config.syncType}
       spelers={spelers}
+      canReplay={canReplayLive}
       playerThemes={
         config.kaartOpzet === 'ander-thema'
           ? getPlayerThemes(config.thema, config.aantalSpelersOpDitApparaat ?? spelers.length)
@@ -153,14 +203,28 @@ function GameScreen({ navigation, route }) {
       }
       onBack={navigation.goBack}
       onMenu={() => navigation.reset('Home')}
-      onReplay={() => navigation.replace('Spel', {
-        config: {
-          ...config,
-          seed: createRandomSeed(),
-          salt: createRandomSalt(),
-        },
-        replayAt: Date.now(),
-      })}
+      onReplay={async () => {
+        if (config.syncType === 'live' && config.lobbyCode) {
+          if (!canReplayLive) {
+            return;
+          }
+
+          await restartLobbyGame(config.lobbyCode, {
+            seed: createRandomSeed(),
+            salt: createRandomSalt(),
+          });
+          return;
+        }
+
+        navigation.replace('Spel', {
+          config: {
+            ...config,
+            seed: createRandomSeed(),
+            salt: createRandomSalt(),
+          },
+          replayAt: Date.now(),
+        });
+      }}
     />
   );
 }
