@@ -28,15 +28,18 @@ import LobbyCodePlate from './LobbyCodePlate';
 import { PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import ThemeCarousel from '../src/components/ThemeCarousel';
 import RemovePlayerIcon from '../src/components/RemovePlayerIcon';
+import { getPlayerSurfaceColors } from '../src/utils/playerColorStyles';
 
 const MAX_PLAYER_NAME_LENGTH = 12;
 const MAX_LOCAL_PLAYERS = 2;
 const PLAYER_SILHOUETTE_IMAGE = require('../assets/images/players/player-silhouette.png');
 const SCREEN_HORIZONTAL_PADDING = 20;
-const LOBBY_CAR_SIZE = 188;
+const STAGE_SINGLE_CAR_SIZE = 188;
+const STAGE_MULTI_CAR_SIZE = 188;
 const CAROUSEL_CAR_SIZE = 224;
 const COMPACT_INPUT_BASE_WIDTH = 108;
 const COMPACT_INPUT_MAX_WIDTH = 148;
+const HERO_CAR_Y_OFFSET = -2;
 
 function normalizeName(value = '') {
   return value.trim().replace(/\s+/g, ' ');
@@ -56,6 +59,28 @@ function getCompactNameInputWidth(name = '') {
   return Math.min(COMPACT_INPUT_MAX_WIDTH, COMPACT_INPUT_BASE_WIDTH + Math.max(0, visibleCharacters - 4) * 10);
 }
 
+function resolveUniqueLocalPlayers(players = [], remotePlayers = []) {
+  const reservedSkins = new Set(remotePlayers.map((player) => player.skin));
+  let changed = false;
+
+  const nextPlayers = players.map((player) => {
+    if (!reservedSkins.has(player.skin)) {
+      reservedSkins.add(player.skin);
+      return player;
+    }
+
+    const fallbackSkin = SKIN_OPTIONS.find((skin) => !reservedSkins.has(skin)) ?? player.skin;
+    reservedSkins.add(fallbackSkin);
+    if (fallbackSkin !== player.skin) {
+      changed = true;
+      return { ...player, skin: fallbackSkin };
+    }
+    return player;
+  });
+
+  return changed ? nextPlayers : players;
+}
+
 function PlayerAvatar({ skin = 'rood', size = 72, style }) {
   return (
     <Image
@@ -71,31 +96,37 @@ function PlayerGrid({ players, localPlayerIds = [] }) {
 
   return (
     <View style={styles.grid}>
-      {slots.map((player, index) => (
-        <View
-          key={player?.playerId ?? `slot-${index}`}
-          style={[
-            styles.gridCell,
-            index % 2 === 0 ? styles.gridCellLeft : null,
-            index < slots.length - 2 ? styles.gridCellWithBottomBorder : null,
-          ]}
-        >
-          {player ? (
-            <View style={styles.gridPlayer}>
-              <PlayerAvatar skin={player.skin} size={42} />
-	              <Text
-	                numberOfLines={1}
-	                style={[
-	                  styles.gridPlayerName,
-	                  !player.naam ? styles.gridPlayerNamePlaceholder : null,
-	                ]}
-	              >
-	                {player.naam || 'naam'}
-	              </Text>
-	            </View>
-	          ) : null}
-        </View>
-      ))}
+      {slots.map((player, index) => {
+        const playerColors = player ? getPlayerSurfaceColors(player.skin) : null;
+
+        return (
+          <View
+            key={player?.playerId ?? `slot-${index}`}
+            style={[
+              styles.gridCell,
+              playerColors ? { backgroundColor: playerColors.tint } : null,
+              index % 2 === 0 ? styles.gridCellLeft : null,
+              index < slots.length - 2 ? styles.gridCellWithBottomBorder : null,
+            ]}
+          >
+            {player ? (
+              <View style={styles.gridPlayer}>
+                <PlayerAvatar skin={player.skin} size={42} />
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.gridPlayerName,
+                    playerColors ? { color: playerColors.text } : null,
+                    !player.naam ? styles.gridPlayerNamePlaceholder : null,
+                  ]}
+                >
+                  {player.naam || 'naam'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -210,7 +241,9 @@ function SkinCarouselModal({
 function PlayerEditor({
   player,
   compact = false,
-  hideCar = false,
+  carSize = STAGE_SINGLE_CAR_SIZE,
+  carOpacity,
+  disableCar = false,
   hideRemove = false,
   nameWidth,
   onChangeName,
@@ -218,6 +251,8 @@ function PlayerEditor({
   onRemove,
   carRef,
 }) {
+  const playerColors = getPlayerSurfaceColors(player.skin);
+
   return (
     <View style={[styles.playerEditor, compact && styles.playerEditorCompact]}>
       <View
@@ -228,24 +263,35 @@ function PlayerEditor({
         ]}
       >
         <TextInput
-          style={[styles.nameInput, compact && styles.nameInputCompact]}
+          style={[
+            styles.nameInput,
+            compact && styles.nameInputCompact,
+            {
+              backgroundColor: playerColors.strongTint,
+              borderColor: playerColors.border,
+              color: playerColors.text,
+            },
+          ]}
           value={player.naam}
           onChangeText={(value) => onChangeName(value.slice(0, MAX_PLAYER_NAME_LENGTH))}
           placeholder="naam"
+          placeholderTextColor={playerColors.placeholderText}
           maxLength={MAX_PLAYER_NAME_LENGTH}
           autoCapitalize="words"
         />
       </View>
 
-      <View ref={carRef} collapsable={false}>
-        <Pressable
-          style={[styles.heroCarButton, hideCar && styles.heroCarButtonHidden]}
-          onPress={onOpenSkinPicker}
-          disabled={hideCar}
-        >
-          <PlayerAvatar skin={player.skin} size={compact ? 158 : LOBBY_CAR_SIZE} />
-        </Pressable>
-      </View>
+      <Animated.View style={carOpacity !== undefined ? { opacity: carOpacity } : null}>
+        <View ref={carRef} collapsable={false}>
+          <Pressable
+            style={styles.heroCarButton}
+            onPress={onOpenSkinPicker}
+            disabled={disableCar}
+          >
+            <PlayerAvatar skin={player.skin} size={carSize} />
+          </Pressable>
+        </View>
+      </Animated.View>
 
       {compact && onRemove ? (
         <Pressable
@@ -266,7 +312,7 @@ export default function WaitingScreen({ navigation, route }) {
   const [liveLobby, setLiveLobby] = useState(null);
   const [spelers, setSpelers] = useState(() => {
     const initialPlayers = Array.isArray(config?.spelers) && config.spelers.length
-      ? config.spelers
+      ? config.spelers.slice(0, 1)
       : [createPlayer({ skin: 'rood' })];
 
     return initialPlayers
@@ -278,12 +324,16 @@ export default function WaitingScreen({ navigation, route }) {
   const [heroTop, setHeroTop] = useState(234);
   const [transitionSourceLeft, setTransitionSourceLeft] = useState(0);
   const [transitionSkin, setTransitionSkin] = useState('rood');
-  const [transitionCarSize, setTransitionCarSize] = useState(LOBBY_CAR_SIZE);
+  const [transitionCarSize, setTransitionCarSize] = useState(STAGE_SINGLE_CAR_SIZE);
   const playerLayoutProgress = useState(() => new Animated.Value(spelers.length >= 2 ? 1 : 0))[0];
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const carouselOpacity = useRef(new Animated.Value(0)).current;
   const transitionOpacity = useRef(new Animated.Value(0)).current;
   const transitionTranslateX = useRef(new Animated.Value(0)).current;
+  const carOpacityValues = useRef([
+    new Animated.Value(1),
+    new Animated.Value(1),
+  ]).current;
   const carRefs = useRef([]);
 
   useEffect(() => {
@@ -325,6 +375,10 @@ export default function WaitingScreen({ navigation, route }) {
     () => (liveLobby?.players ?? []).filter((player) => !localPlayerIds.includes(player.playerId)),
     [liveLobby?.players, localPlayerIds]
   );
+
+  useEffect(() => {
+    setSpelers((current) => resolveUniqueLocalPlayers(current, remotePlayers));
+  }, [remotePlayers]);
 
   const validationError = useMemo(() => {
     const seenNames = new Set();
@@ -411,6 +465,7 @@ export default function WaitingScreen({ navigation, route }) {
   }, [config?.syncType, liveLobby?.players, spelers]);
 
   const selectedPlayer = selectedPlayerIndex === null ? null : spelers[selectedPlayerIndex];
+  const stageCarSize = spelers.length >= 2 ? STAGE_MULTI_CAR_SIZE : STAGE_SINGLE_CAR_SIZE;
   const takenSkins = useMemo(
     () => [
       ...remotePlayers.map((player) => player.skin),
@@ -438,7 +493,11 @@ export default function WaitingScreen({ navigation, route }) {
       return;
     }
 
-    const preferredSkins = SKIN_OPTIONS.filter((skin) => !spelers.some((player) => player.skin === skin));
+    const usedSkins = new Set([
+      ...remotePlayers.map((player) => player.skin),
+      ...spelers.map((player) => player.skin),
+    ]);
+    const preferredSkins = SKIN_OPTIONS.filter((skin) => !usedSkins.has(skin));
     const fallbackSkin = preferredSkins[0] ?? 'blauw';
 
     setSpelers((current) => [
@@ -486,18 +545,20 @@ export default function WaitingScreen({ navigation, route }) {
 
   function animatePickerOpen(index) {
     const targetRef = carRefs.current[index];
-    targetRef?.measureInWindow?.((x, y, width, height) => {
-      const sourceSize = index === 0 && spelers.length < 2 ? LOBBY_CAR_SIZE : 158;
+    targetRef?.measureInWindow?.((x, y, width) => {
+      const sourceSize = stageCarSize;
       const measuredWidth = width || sourceSize;
       const sourceLeft = x + (measuredWidth - sourceSize) / 2;
       const destinationLeft = (screenWidth - sourceSize) / 2;
 
-      setHeroTop(y);
+      setHeroTop(y + HERO_CAR_Y_OFFSET);
       setTransitionSourceLeft(sourceLeft);
       setTransitionSkin(spelers[index]?.skin ?? 'rood');
       setTransitionCarSize(sourceSize);
       setSelectedPlayerIndex(index);
       setSkinPickerMounted(true);
+      carOpacityValues[index]?.stopAnimation();
+      carOpacityValues[index]?.setValue(0);
       overlayOpacity.setValue(0);
       carouselOpacity.setValue(0);
       transitionOpacity.setValue(1);
@@ -517,15 +578,19 @@ export default function WaitingScreen({ navigation, route }) {
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
+          Animated.timing(transitionOpacity, {
+            toValue: 0,
+            duration: 140,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
           Animated.timing(transitionTranslateX, {
             toValue: destinationLeft - sourceLeft,
             duration: 260,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
-        ]).start(() => {
-          transitionOpacity.setValue(0);
-        });
+        ]).start();
       });
     });
   }
@@ -541,6 +606,7 @@ export default function WaitingScreen({ navigation, route }) {
 
     if (nextSkin) {
       setTransitionSkin(nextSkin);
+      updateSpeler(closingPlayerIndex, { skin: nextSkin });
     }
 
     Animated.parallel([
@@ -563,9 +629,8 @@ export default function WaitingScreen({ navigation, route }) {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      if (nextSkin && closingPlayerIndex !== null) {
-        updateSpeler(closingPlayerIndex, { skin: nextSkin });
-      }
+      transitionOpacity.setValue(0);
+      carOpacityValues[closingPlayerIndex]?.setValue(1);
       setSelectedPlayerIndex(null);
       setSkinPickerMounted(false);
     });
@@ -602,7 +667,9 @@ export default function WaitingScreen({ navigation, route }) {
               <PlayerEditor
                 player={spelers[0]}
                 compact={spelers.length >= 2}
-                hideCar={skinPickerMounted && selectedPlayerIndex === 0}
+                carSize={stageCarSize}
+                carOpacity={carOpacityValues[0]}
+                disableCar={skinPickerMounted && selectedPlayerIndex === 0}
                 nameWidth={getCompactNameInputWidth(spelers[0]?.naam)}
                 carRef={(node) => {
                   carRefs.current[0] = node;
@@ -649,7 +716,9 @@ export default function WaitingScreen({ navigation, route }) {
                     key={spelers[1].playerId}
                     player={spelers[1]}
                     compact
-                    hideCar={skinPickerMounted && selectedPlayerIndex === 1}
+                    carSize={stageCarSize}
+                    carOpacity={carOpacityValues[1]}
+                    disableCar={skinPickerMounted && selectedPlayerIndex === 1}
                     hideRemove={skinPickerMounted && selectedPlayerIndex === 1}
                     nameWidth={getCompactNameInputWidth(spelers[1]?.naam)}
                     carRef={(node) => {
@@ -719,7 +788,7 @@ export default function WaitingScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   topBar: {
-    paddingTop: 40,
+    paddingTop: 72,
     paddingHorizontal: 20,
     paddingBottom: 8,
   },
@@ -763,8 +832,7 @@ const styles = StyleSheet.create({
   },
   nameInputWrap: {
     width: 172,
-    backgroundColor: '#FFFDFC',
-    borderRadius: 4,
+    borderRadius: 16,
     shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -775,6 +843,8 @@ const styles = StyleSheet.create({
     minWidth: COMPACT_INPUT_BASE_WIDTH,
   },
   nameInput: {
+    borderWidth: 1.5,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
     textAlign: 'center',
@@ -824,6 +894,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#111111',
     backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     overflow: 'hidden',
     marginTop: 2,
   },

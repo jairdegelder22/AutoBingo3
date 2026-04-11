@@ -19,6 +19,7 @@ type ThemeCarouselProps<ItemT> = {
   renderCard: (info: { item: ItemT; index: number; isFocused: boolean }) => React.ReactNode;
   itemWidth?: number;
   itemSpacing?: number;
+  focusedIndex?: number;
   onSnapToItem?: (index: number) => void;
   containerStyle?: StyleProp<ViewStyle>;
   flatListProps?: Omit<
@@ -47,6 +48,7 @@ export default function ThemeCarousel<ItemT>({
   renderCard,
   itemWidth,
   itemSpacing = 18,
+  focusedIndex,
   onSnapToItem,
   containerStyle,
   flatListProps,
@@ -67,6 +69,7 @@ export default function ThemeCarousel<ItemT>({
   const currentAbsoluteIndexRef = useRef(initialIndex);
   const currentLogicalIndexRef = useRef(0);
   const hasAppliedInitialOffsetRef = useRef(false);
+  const lastFocusedIndexRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     currentAbsoluteIndexRef.current = initialIndex;
@@ -74,6 +77,35 @@ export default function ThemeCarousel<ItemT>({
     hasAppliedInitialOffsetRef.current = false;
     scrollX.setValue(initialIndex * snapInterval);
   }, [initialIndex]);
+
+  useEffect(() => {
+    if (focusedIndex === undefined || baseCount === 0) {
+      lastFocusedIndexRef.current = focusedIndex;
+      return;
+    }
+
+    if (lastFocusedIndexRef.current === focusedIndex) {
+      return;
+    }
+    lastFocusedIndexRef.current = focusedIndex;
+
+    const boundedIndex = Math.max(0, Math.min(focusedIndex, baseCount - 1));
+    const targetAbsoluteIndex = baseCount > 1
+      ? [boundedIndex, boundedIndex + baseCount, boundedIndex + baseCount * 2].reduce((closestIndex, candidateIndex) => {
+          const closestDistance = Math.abs(closestIndex - currentAbsoluteIndexRef.current);
+          const candidateDistance = Math.abs(candidateIndex - currentAbsoluteIndexRef.current);
+          return candidateDistance < closestDistance ? candidateIndex : closestIndex;
+        }, boundedIndex + baseCount)
+      : boundedIndex;
+    const targetOffset = targetAbsoluteIndex * snapInterval;
+
+    listRef.current?.scrollToOffset({
+      offset: targetOffset,
+      animated: true,
+    });
+    scrollX.setValue(targetOffset);
+    updateFocusedIndex(targetAbsoluteIndex, false);
+  }, [baseCount, focusedIndex, snapInterval, scrollX]);
 
   const ensureInitialOffset = () => {
     if (hasAppliedInitialOffsetRef.current || baseCount === 0) {

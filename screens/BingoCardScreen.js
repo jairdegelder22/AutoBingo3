@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal, StyleSheet, Text, View, TouchableOpacity,
+  Animated, Easing, Modal, StyleSheet, Text, View, TouchableOpacity,
   Image, ImageBackground, Dimensions,
 } from 'react-native';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
@@ -114,41 +114,238 @@ function cellCenter(index) {
   };
 }
 
-// ─── Cel met bounce animatie ─────────────────────────────────────────────────
-function BingoCell({ checked, checkedColor, icon, onPress, cellSize }) {
-  function handlePress() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onPress();
+function SparkBurst({ progress, color, cellSize, visible }) {
+  const sparkCount = 12;
+  const radius = cellSize * 0.22;
+  const sparkLength = Math.max(10, cellSize * 0.16);
+  const center = cellSize / 2;
+
+  if (!visible) {
+    return null;
   }
 
   return (
-    <TouchableOpacity
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {Array.from({ length: sparkCount }, (_, index) => {
+        const angle = (360 / sparkCount) * index;
+        const translateY = progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -(radius + sparkLength * 0.2)],
+        });
+        const opacity = progress.interpolate({
+          inputRange: [0, 0.12, 0.68, 1],
+          outputRange: [0, 1, 0.92, 0],
+        });
+        const scaleY = progress.interpolate({
+          inputRange: [0, 0.15, 1],
+          outputRange: [0.3, 1.15, 0.12],
+        });
+
+        return (
+          <Animated.View
+            key={`spark-${index}`}
+            style={[
+              styles.spark,
+              {
+                left: center - 1,
+                top: center - sparkLength,
+                height: sparkLength,
+                backgroundColor: color,
+                opacity,
+                transform: [
+                  { rotate: `${angle}deg` },
+                  { translateY },
+                  { scaleY },
+                ],
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+function CellFlash({ progress, color, cellSize, visible }) {
+  if (!visible) {
+    return null;
+  }
+
+  const inset = Math.max(4, cellSize * 0.08);
+  const opacity = progress.interpolate({
+    inputRange: [0, 0.14, 0.55, 1],
+    outputRange: [0, 0.38, 0.16, 0],
+  });
+  const scale = progress.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0.82, 1.06, 1.18],
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
       style={[
-        styles.cell,
+        styles.cellFlash,
         {
-          width: cellSize,
-          height: cellSize,
-          borderRadius: Math.max(10, Math.round(cellSize * 0.18)),
+          top: inset,
+          right: inset,
+          bottom: inset,
+          left: inset,
+          borderColor: color,
+          opacity,
+          transform: [{ scale }],
         },
-        checked
-          ? { backgroundColor: checkedColor, borderColor: darkenHex(checkedColor) }
-          : { backgroundColor: '#FFFDF7', borderColor: withAlpha(darkenHex(checkedColor, 0.88), 0.34) },
       ]}
-      onPress={handlePress}
-      activeOpacity={0.82}
+    />
+  );
+}
+
+function BingoCell({ checked, checkedColor, icon, onPress, cellSize }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+  const sparkProgress = useRef(new Animated.Value(0)).current;
+  const [sparksVisible, setSparksVisible] = useState(false);
+  const previousChecked = useRef(checked);
+  const activeTouchIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!previousChecked.current && checked) {
+      setSparksVisible(true);
+      scale.setValue(1);
+      rotate.setValue(0);
+      sparkProgress.setValue(0);
+
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(scale, {
+            toValue: 1.12,
+            duration: 120,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(scale, {
+            toValue: 1,
+            friction: 5,
+            tension: 120,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(rotate, {
+            toValue: 1,
+            duration: 90,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(rotate, {
+            toValue: -1,
+            duration: 110,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(rotate, {
+            toValue: 0.65,
+            duration: 95,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(rotate, {
+            toValue: 0,
+            duration: 90,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(sparkProgress, {
+          toValue: 1,
+          duration: 520,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setSparksVisible(false);
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+
+    previousChecked.current = checked;
+  }, [checked, rotate, scale, sparkProgress]);
+
+  const rotateDeg = rotate.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-7deg', '0deg', '7deg'],
+  });
+  const sparkColor = mixHex(checkedColor, '#ffffff', 0.28);
+  const flashColor = mixHex(checkedColor, '#ffffff', 0.45);
+
+  function handleTouchStart(event) {
+    event.nativeEvent.changedTouches.forEach((touch) => {
+      const touchId = touch.identifier ?? `${touch.pageX}-${touch.pageY}`;
+      if (activeTouchIdsRef.current.has(touchId)) {
+        return;
+      }
+
+      activeTouchIdsRef.current.add(touchId);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      onPress();
+    });
+  }
+
+  function handleTouchEnd(event) {
+    event.nativeEvent.changedTouches.forEach((touch) => {
+      const touchId = touch.identifier ?? `${touch.pageX}-${touch.pageY}`;
+      activeTouchIdsRef.current.delete(touchId);
+    });
+  }
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ scale }, { rotate: rotateDeg }],
+      }}
     >
-      <Image
-        source={icon}
+      <View
         style={[
-          styles.cellIcon,
+          styles.cell,
           {
-            width: cellSize * 0.82,
-            height: cellSize * 0.82,
+            width: cellSize,
+            height: cellSize,
+            borderRadius: Math.max(10, Math.round(cellSize * 0.18)),
           },
+          checked
+            ? { backgroundColor: checkedColor, borderColor: darkenHex(checkedColor) }
+            : { backgroundColor: '#FFFDF7', borderColor: withAlpha(darkenHex(checkedColor, 0.88), 0.34) },
         ]}
-        resizeMode="contain"
-      />
-    </TouchableOpacity>
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
+        <Image
+          source={icon}
+          style={[
+            styles.cellIcon,
+            {
+              width: cellSize * 0.82,
+              height: cellSize * 0.82,
+            },
+          ]}
+          resizeMode="contain"
+        />
+        <CellFlash
+          progress={sparkProgress}
+          color={flashColor}
+          cellSize={cellSize}
+          visible={sparksVisible}
+        />
+        <SparkBurst
+          progress={sparkProgress}
+          color={sparkColor}
+          cellSize={cellSize}
+          visible={sparksVisible}
+        />
+      </View>
+    </Animated.View>
   );
 }
 
@@ -281,6 +478,7 @@ export default function BingoCardScreen({
   const [playerWinLines, setPlayerWinLines] = useState(Array(resolvedPlayerCount).fill(null));
   const [winnerColor, setWinnerColor] = useState(null);
   const [winnerIndex, setWinnerIndex] = useState(null);
+  const playerCheckedRef = useRef(playerChecked);
   const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
   const compactTwoPlayerLayout = resolvedPlayerCount >= 2;
   const resolvedCellSize = compactTwoPlayerLayout ? Math.floor(CELL_SIZE * 0.94) : CELL_SIZE;
@@ -323,6 +521,10 @@ export default function BingoCardScreen({
   }, [boardKeys, liveSyncEnabled, lobbyCode]);
 
   useEffect(() => {
+    playerCheckedRef.current = playerChecked;
+  }, [playerChecked]);
+
+  useEffect(() => {
     const nextWins = playerChecked.map((checked) => findBingo(checked, actieveRegels));
     setPlayerWinLines(nextWins);
 
@@ -339,18 +541,25 @@ export default function BingoCardScreen({
 
   async function handlePress(playerIndex, index) {
     if (playerWinLines[playerIndex]) return;
-    const next = playerChecked.map((cells, currentIndex) =>
-      currentIndex === playerIndex ? [...cells] : cells
-    );
-    next[playerIndex][index] = !next[playerIndex][index];
-    setPlayerChecked(next);
+
+    const nextCheckedValue = !Boolean(playerCheckedRef.current?.[playerIndex]?.[index]);
+
+    setPlayerChecked((current) => {
+      const next = current.map((cells, currentIndex) =>
+        currentIndex === playerIndex ? [...cells] : cells
+      );
+      next[playerIndex][index] = nextCheckedValue;
+      playerCheckedRef.current = next;
+      return next;
+    });
+
     setPlayerClaimOwners((current) => current.map((owners, currentIndex) => {
       if (currentIndex !== playerIndex) {
         return owners;
       }
 
       const nextOwners = [...owners];
-      nextOwners[index] = next[playerIndex][index]
+      nextOwners[index] = nextCheckedValue
         ? (resolvedPlayers[playerIndex]?.playerId ?? null)
         : null;
       return nextOwners;
@@ -361,7 +570,7 @@ export default function BingoCardScreen({
         code: lobbyCode,
         boardKey: boardKeys[playerIndex],
         cellIndex: index,
-        checked: next[playerIndex][index],
+        checked: nextCheckedValue,
         playerId: resolvedPlayers[playerIndex]?.playerId,
       });
     }
@@ -451,8 +660,10 @@ export default function BingoCardScreen({
                   checked={checked[iconIndex]}
                   checkedColor={cellCheckedColor}
                   icon={icon}
+                  onPress={() => {
+                    void handlePress(playerIndex, iconIndex);
+                  }}
                   cellSize={resolvedCellSize}
-                  onPress={() => handlePress(playerIndex, iconIndex)}
                 />
                   );
                 })()
@@ -677,6 +888,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  spark: {
+    position: 'absolute',
+    width: 3,
+    borderRadius: 999,
+  },
+  cellFlash: {
+    position: 'absolute',
+    borderWidth: 3,
+    borderRadius: 999,
   },
   cellIcon: {},
 

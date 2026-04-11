@@ -61,12 +61,15 @@ const GAME_MODE_CARDS = [
     border: '#cb8a19',
   },
 ];
+const CLASSIC_MODE_INDEX = GAME_MODE_CARDS.findIndex((mode) => mode.id === 'klassiek');
+const ROADMAP_MODE_INDEX = GAME_MODE_CARDS.findIndex((mode) => mode.id === 'wegenkaart');
 
 export default function HostSetupScreen({ navigation }) {
   const { height: screenHeight } = useWindowDimensions();
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
   const [liveSyncEnabled, setLiveSyncEnabled] = useState(true);
   const [selectedGameModeIndex, setSelectedGameModeIndex] = useState(0);
+  const [gameModeCarouselTargetIndex, setGameModeCarouselTargetIndex] = useState();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wincondition, setWincondition] = useState('1rij');
   const [diagonaal, setDiagonaal] = useState(true);
@@ -120,7 +123,13 @@ export default function HostSetupScreen({ navigation }) {
 
   function toggleLiveSync() {
     void Haptics.selectionAsync();
-    setLiveSyncEnabled((current) => !current);
+    setLiveSyncEnabled((current) => {
+      const nextEnabled = !current;
+      const nextIndex = nextEnabled ? CLASSIC_MODE_INDEX : ROADMAP_MODE_INDEX;
+      setSelectedGameModeIndex(nextIndex);
+      setGameModeCarouselTargetIndex(nextIndex);
+      return nextEnabled;
+    });
   }
 
   function handleGenerateCode() {
@@ -188,8 +197,6 @@ export default function HostSetupScreen({ navigation }) {
               />
             </View>
 
-            <View style={styles.separator} />
-
             <View style={styles.liveSyncWrap}>
               <Pressable onPress={toggleLiveSync} style={styles.liveSyncToggleStack}>
                 <View style={[styles.toggleShell, liveSyncEnabled && styles.toggleShellActive]}>
@@ -204,8 +211,12 @@ export default function HostSetupScreen({ navigation }) {
                 items={GAME_MODE_CARDS}
                 itemSpacing={10}
                 itemWidth={190}
+                focusedIndex={gameModeCarouselTargetIndex}
                 keyExtractor={(item) => item.id}
-                onSnapToItem={setSelectedGameModeIndex}
+                onSnapToItem={(index) => {
+                  setSelectedGameModeIndex(index);
+                  setGameModeCarouselTargetIndex(undefined);
+                }}
                 renderCard={({ item, isFocused }) => (
                   <GameModeCard
                     item={item}
@@ -429,14 +440,6 @@ const styles = StyleSheet.create({
   topBlock: {
     marginTop: 8,
     marginHorizontal: -24,
-  },
-  separator: {
-    height: 3,
-    backgroundColor: '#2f6d8e',
-    opacity: 0.85,
-    marginTop: 18,
-    marginBottom: 18,
-    marginHorizontal: 20,
   },
   liveSyncWrap: {
     marginTop: 18,
