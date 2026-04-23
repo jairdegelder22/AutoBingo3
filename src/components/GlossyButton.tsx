@@ -16,10 +16,18 @@ type GlossyButtonSize = 'normal' | 'large';
 interface GlossyButtonProps {
   label: string;
   onPress: () => void;
+  onPressIn?: (event: GestureResponderEvent) => void;
   variant: GlossyButtonVariant;
   icon?: string;
   size?: GlossyButtonSize;
   disabled?: boolean;
+  labelOffsetY?: number;
+  horizontalPadding?: number;
+  heightOverride?: number;
+  contentOffsetY?: number;
+  hapticStyle?: Haptics.ImpactFeedbackStyle;
+  hapticNotificationType?: Haptics.NotificationFeedbackType;
+  disableHaptics?: boolean;
 }
 
 const VARIANT_TOKENS = {
@@ -79,21 +87,32 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 export default function GlossyButton({
   label,
   onPress,
+  onPressIn,
   variant,
   icon,
   size = 'normal',
   disabled = false,
+  labelOffsetY = 0,
+  horizontalPadding,
+  heightOverride,
+  contentOffsetY = 0,
+  hapticStyle = Haptics.ImpactFeedbackStyle.Medium,
+  hapticNotificationType,
+  disableHaptics = false,
 }: GlossyButtonProps) {
   const pressAnim = useRef(new Animated.Value(0)).current;
 
   const variantTokens = VARIANT_TOKENS[variant];
   const sizeTokens = SIZE_TOKENS[size];
+  const buttonHeight = heightOverride ?? sizeTokens.height;
   const innerRadius = sizeTokens.borderRadius - 2;
 
   const handlePressIn = (_event: GestureResponderEvent) => {
     if (disabled) {
       return;
     }
+
+    onPressIn?.(_event);
 
     Animated.spring(pressAnim, {
       toValue: 1,
@@ -121,7 +140,13 @@ export default function GlossyButton({
       return;
     }
 
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!disableHaptics) {
+      if (hapticNotificationType) {
+        void Haptics.notificationAsync(hapticNotificationType);
+      } else {
+        void Haptics.impactAsync(hapticStyle);
+      }
+    }
     onPress();
   };
 
@@ -185,8 +210,8 @@ export default function GlossyButton({
                 styles.gradientBody,
                 {
                   borderRadius: innerRadius,
-                  height: sizeTokens.height,
-                  paddingHorizontal: sizeTokens.paddingHorizontal,
+                  height: buttonHeight,
+                  paddingHorizontal: horizontalPadding ?? sizeTokens.paddingHorizontal,
                 },
               ]}
             >
@@ -219,7 +244,14 @@ export default function GlossyButton({
                   }
                 ]}
               />
-              <View style={styles.content}>
+              <View
+                style={[
+                  styles.content,
+                  {
+                    transform: [{ translateY: contentOffsetY }],
+                  },
+                ]}
+              >
                 {icon ? <Text style={[styles.icon, { fontSize: sizeTokens.fontSize - 1 }]}>{icon}</Text> : null}
                 <Text
                   numberOfLines={1}
@@ -231,6 +263,7 @@ export default function GlossyButton({
                       color: variantTokens.textColor,
                       fontSize: sizeTokens.fontSize,
                       textShadowColor: variantTokens.textOutline,
+                      transform: [{ translateY: labelOffsetY }],
                     },
                   ]}
                 >

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import { Asset } from 'expo-asset';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import CircularReveal from './components/CircularReveal';
 import HomeScreen from './screens/HomeScreen';
 import ApparaatKeuzeScreen from './screens/ApparaatKeuzeScreen';
 import SoloSetupScreen from './screens/SoloSetupScreen';
@@ -16,9 +17,11 @@ import WaitingScreen from './screens/WaitingScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import BingoCardScreen from './screens/BingoCardScreen';
 import ButtonTestScreen from './src/screens/ButtonTestScreen';
+import CircularRevealDemoScreen from './src/screens/CircularRevealDemoScreen';
 import SingleDeviceSetupTestScreen from './src/screens/SingleDeviceSetupTestScreen';
 import { createRandomSalt, createRandomSeed, getPlayerThemes } from './screens/gameFlowConfig';
 import { PLAYER_IMAGES } from './assets/images/players/playerImages';
+import { THEME_CARD_IMAGES } from './assets/images/theme-cards/themeCardImages';
 import { clearBoardState, restartLobbyGame, subscribeToLobby } from './src/services/liveLobbyService';
 
 const SCREEN_COMPONENTS = {
@@ -34,14 +37,40 @@ const SCREEN_COMPONENTS = {
   Wachten: WaitingScreen,
   Instellingen: SettingsScreen,
   ButtonTest: ButtonTestScreen,
+  CircularRevealDemo: CircularRevealDemoScreen,
   SingleDeviceSetupTest: SingleDeviceSetupTestScreen,
   Spel: GameScreen,
 };
 
+const ROUTE_PRELOADERS = {
+  SingleDeviceSetupTest: [
+    require('./assets/images/players/player-silhouette.png'),
+    ...Object.values(THEME_CARD_IMAGES),
+  ],
+  MultiplayerKeuze: [],
+};
+
+async function preloadAssetsForRoute(routeName) {
+  if (routeName === 'Spel') {
+    return;
+  }
+
+  const assets = ROUTE_PRELOADERS[routeName] ?? [];
+
+  if (!assets.length) {
+    return;
+  }
+
+  await Asset.loadAsync(assets);
+}
+
 export default function App() {
+  const { width, height } = useWindowDimensions();
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [stack, setStack] = useState([{ name: 'Home', params: {} }]);
+  const [enterTransition, setEnterTransition] = useState(null);
+  const enterRevealRef = useRef(null);
   const currentRoute = stack[stack.length - 1];
   const CurrentScreen = SCREEN_COMPONENTS[currentRoute.name] ?? HomeScreen;
 
@@ -70,6 +99,51 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  useLayoutEffect(() => {
+    const transition = currentRoute.params?.transition;
+
+    if (!transition?.transitionKey) {
+      return;
+    }
+
+    setEnterTransition(transition);
+  }, [currentRoute]);
+
+  useEffect(() => {
+    if (!enterTransition) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function startEnterTransition() {
+      const pauseMs = enterTransition.pauseMs ?? 260;
+
+      try {
+        await Promise.all([
+          preloadAssetsForRoute(enterTransition.routeName),
+          new Promise((resolve) => setTimeout(resolve, pauseMs)),
+        ]);
+      } catch (_error) {
+        // Als preload faalt, willen we alsnog de transitie afronden.
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        enterRevealRef.current?.reveal();
+      });
+    }
+
+    void startEnterTransition();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enterTransition]);
 
   const navigation = useMemo(() => ({
     canGoBack: stack.length > 1,
@@ -103,6 +177,21 @@ export default function App() {
     <>
       <StatusBar style="dark" hidden />
       <CurrentScreen navigation={navigation} route={currentRoute} />
+      {enterTransition ? (
+        <CircularReveal
+          key={enterTransition.transitionKey}
+          ref={enterRevealRef}
+          color={enterTransition.color}
+          originX={width / 2}
+          originY={height / 2}
+          initiallyVisible
+          initialProgress={0}
+          mode="uncover"
+          onComplete={() => {
+            setEnterTransition(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }
