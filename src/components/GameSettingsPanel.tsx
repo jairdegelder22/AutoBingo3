@@ -6,6 +6,7 @@ import {
   StyleProp,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   ViewStyle,
 } from 'react-native';
@@ -20,18 +21,30 @@ type GameSettingsPanelProps = {
 
 const HEADER_HEIGHT = 74;
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 export default function GameSettingsPanel({
-  title = 'Gameinstellingen',
+  title = 'Spelregels',
   expandedHeight = 300,
   children,
   style,
 }: GameSettingsPanelProps) {
+  const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
+  const scale = clamp(Math.min(width / 430, height / 932), 0.9, 1.18);
+  const headerHeight = Math.round(HEADER_HEIGHT * scale);
+  const resolvedExpandedHeight = Math.round(
+    expandedHeight === 300
+      ? clamp(height * 0.32, 270, 420)
+      : expandedHeight * scale
+  );
 
   const containerHeight = useMemo(
-    () => HEADER_HEIGHT + expandedHeight,
-    [expandedHeight]
+    () => headerHeight + resolvedExpandedHeight,
+    [headerHeight, resolvedExpandedHeight]
   );
 
   const togglePanel = () => {
@@ -50,7 +63,7 @@ export default function GameSettingsPanel({
 
   const translateY = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [expandedHeight, 0],
+    outputRange: [resolvedExpandedHeight, 0],
   });
 
   return (
@@ -67,7 +80,17 @@ export default function GameSettingsPanel({
           },
         ]}
       >
-        <View style={[styles.contentArea, { height: expandedHeight }]}>
+        <View
+          style={[
+            styles.contentArea,
+            {
+              height: resolvedExpandedHeight,
+              paddingHorizontal: Math.round(20 * scale),
+              paddingTop: Math.round(18 * scale),
+              paddingBottom: Math.round(12 * scale),
+            },
+          ]}
+        >
           {children ?? (
             <View style={styles.placeholderContent}>
               <Text style={styles.placeholderTitle}>Instellingen</Text>
@@ -83,10 +106,25 @@ export default function GameSettingsPanel({
             colors={['#ffffff', '#f5f9fc']}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
-            style={styles.header}
+            style={[
+              styles.header,
+              {
+                minHeight: headerHeight,
+                paddingHorizontal: Math.round(18 * scale),
+              },
+            ]}
           >
-            <View style={styles.handle} />
-            <Text style={styles.headerTitle}>{title}</Text>
+            <View
+              style={[
+                styles.handle,
+                {
+                  top: Math.round(10 * scale),
+                  width: Math.round(56 * scale),
+                  height: Math.round(6 * scale),
+                },
+              ]}
+            />
+            <Text style={[styles.headerTitle, { fontSize: Math.round(18 * scale) }]}>{title}</Text>
           </LinearGradient>
         </Pressable>
       </Animated.View>

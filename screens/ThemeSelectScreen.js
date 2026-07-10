@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Animated, Easing } from 'react-native';
 import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import { useFonts as useNunito, Nunito_600SemiBold } from '@expo-google-fonts/nunito';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../src/settings/haptics';
 import BingoCardScreen from './BingoCardScreen';
 import ScreenTransitionLayer, {
   CENTER_CIRCLE,
@@ -154,7 +154,7 @@ export default function ThemeSelectScreen({ playerCount, playerColors, onBack })
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
           <Text style={[styles.headerText, { fontFamily: fredoka }]}>Kies een thema</Text>
-          <View style={styles.backButton} />
+          <View style={styles.backSpacer} />
         </View>
 
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -205,15 +205,26 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 24,
+    position: 'relative',
   },
   headerText: {
     fontSize: 22,
     color: '#FFFDF7',
     letterSpacing: 0.5,
   },
-  backButton: { width: 40 },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    top: 52,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  backSpacer: { width: 44 },
   backText: {
     fontSize: 24,
     color: '#FFFDF7',

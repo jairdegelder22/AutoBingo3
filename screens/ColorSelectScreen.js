@@ -4,10 +4,12 @@ import {
   Image, Dimensions, Animated,
 } from 'react-native';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../src/settings/haptics';
 import { PLAYER_IMAGES, ALLE_KLEUREN } from '../assets/images/players/playerImages';
+import { getResponsiveMetrics } from '../src/utils/responsive';
 
 const { width: W, height: H } = Dimensions.get('window');
+const { isTablet: IS_TABLET_COLOR } = getResponsiveMetrics(W, H);
 
 const HEADER_H = 110;
 const BUTTON_H = 110;
@@ -49,13 +51,13 @@ export default function ColorSelectScreen({ playerCount, onDone, onBack }) {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitel, { fontFamily: fredoka }]}>Kleur kiezen</Text>
-        <View style={styles.backButton} />
+        <View style={styles.backSpacer} />
       </View>
 
       <View style={styles.rijen}>
         {Array.from({ length: playerCount }, (_, i) => {
           const kleur = ALLE_KLEUREN[indices[i]];
-          const imgGrootte = Math.min(rijHoogte * 0.75, 160);
+          const imgGrootte = Math.min(rijHoogte * (IS_TABLET_COLOR ? 0.86 : 0.75), IS_TABLET_COLOR ? 260 : 160);
           return (
             <View key={i} style={[styles.rij, { height: rijHoogte }]}>
               <TouchableOpacity
@@ -113,15 +115,26 @@ const styles = StyleSheet.create({
     paddingTop: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 24,
+    position: 'relative',
   },
   headerTitel: {
     fontSize: 24,
     color: '#FFFDF7',
     letterSpacing: 0.5,
   },
-  backButton: { width: 36 },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    top: 44,
+    width: IS_TABLET_COLOR ? 66 : 44,
+    height: IS_TABLET_COLOR ? 66 : 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  backSpacer: { width: 44 },
   backText: {
     fontSize: 24,
     color: '#FFFDF7',
@@ -139,15 +152,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E8D5B0',
   },
   pijlKnop: {
-    width: 52,
-    height: 64,
+    width: IS_TABLET_COLOR ? 78 : 52,
+    height: IS_TABLET_COLOR ? 86 : 64,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pijl: {
-    fontSize: 48,
+    fontSize: IS_TABLET_COLOR ? 70 : 48,
     color: '#2D2B55',
-    lineHeight: 56,
+    lineHeight: IS_TABLET_COLOR ? 78 : 56,
   },
   footer: {
     height: BUTTON_H,

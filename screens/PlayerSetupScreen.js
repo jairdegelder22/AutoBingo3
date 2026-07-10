@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BackButton, InlineNote, OptionButton, PrimaryButton, ScreenLayout, Section, TextField } from './flowComponents';
-import { buildPlayerArray, PLAYER_SETUP_STORAGE_KEY, SKIN_OPTIONS } from './gameFlowConfig';
+import { buildPlayerArray, PLAYER_SETUP_STORAGE_KEY, SKIN_OPTIONS, withDefaultPlayerNames } from './gameFlowConfig';
 import { joinLobby } from '../src/services/liveLobbyService';
 
 function SkinPicker({ selectedSkin, onSelect }) {
@@ -44,7 +45,7 @@ export default function PlayerSetupScreen({ navigation, route }) {
   const klassiekModus = baseConfig?.modus === 'klassiek';
   const isReady = useMemo(() => {
     const actieveSpelers = spelers.slice(0, aantalSpelers);
-    return actieveSpelers.every((speler) => speler.naam.trim() && speler.skin);
+    return actieveSpelers.every((speler) => speler.skin);
   }, [aantalSpelers, spelers]);
 
   function updateSpeler(index, patch) {
@@ -54,10 +55,7 @@ export default function PlayerSetupScreen({ navigation, route }) {
   }
 
   async function handleReady() {
-    const geselecteerdeSpelers = spelers.slice(0, aantalSpelers).map((player) => ({
-      ...player,
-      naam: player.naam.trim(),
-    }));
+    const geselecteerdeSpelers = withDefaultPlayerNames(spelers.slice(0, aantalSpelers));
 
     await AsyncStorage.setItem(
       PLAYER_SETUP_STORAGE_KEY,
@@ -86,19 +84,19 @@ export default function PlayerSetupScreen({ navigation, route }) {
   }
 
   return (
-    <ScreenLayout
-      title="Speler setup"
-      footer={<PrimaryButton label="Klaar — Wacht op host" disabled={!isReady} onPress={handleReady} />}
-    >
-      <BackButton onPress={navigation.goBack} />
-
-      <TextField
-        label="Jouw naam"
-        value={spelers[0].naam}
-        onChangeText={(value) => updateSpeler(0, { naam: value })}
-        placeholder="Naam speler 1"
-      />
-      <SkinPicker selectedSkin={spelers[0].skin} onSelect={(skin) => updateSpeler(0, { skin })} />
+    <View style={{ flex: 1 }}>
+      <BackButton navigation={navigation} />
+      <ScreenLayout
+        title="Speler setup"
+        footer={<PrimaryButton label="Klaar — Wacht op host" disabled={!isReady} onPress={handleReady} />}
+      >
+        <TextField
+          label="Jouw naam"
+          value={spelers[0].naam}
+          onChangeText={(value) => updateSpeler(0, { naam: value })}
+          placeholder="Speler 1"
+        />
+        <SkinPicker selectedSkin={spelers[0].skin} onSelect={(skin) => updateSpeler(0, { skin })} />
 
       <Section title="Hoeveel spelers op dit apparaat?">
         <OptionButton
@@ -121,7 +119,7 @@ export default function PlayerSetupScreen({ navigation, route }) {
             label="Tweede naam"
             value={spelers[1].naam}
             onChangeText={(value) => updateSpeler(1, { naam: value })}
-            placeholder="Naam speler 2"
+            placeholder="Speler 2"
           />
           <SkinPicker selectedSkin={spelers[1].skin} onSelect={(skin) => updateSpeler(1, { skin })} />
         </>
@@ -130,6 +128,7 @@ export default function PlayerSetupScreen({ navigation, route }) {
       <InlineNote>
         Live sync gebruikt de lobby-code voor dezelfde spelinhoud en synchroniseert live deelnemers en voortgang.
       </InlineNote>
-    </ScreenLayout>
+      </ScreenLayout>
+    </View>
   );
 }

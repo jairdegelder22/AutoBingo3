@@ -10,12 +10,10 @@ import {
 } from 'react-native';
 import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import { useFonts as useNunito, Nunito_700Bold } from '@expo-google-fonts/nunito';
-import * as Haptics from 'expo-haptics';
-import { PLAYER_IMAGES, ALLE_KLEUREN } from '../assets/images/players/playerImages';
+import * as Haptics from '../src/settings/haptics';
+import { PLAYER_ADD_SILHOUETTE_IMAGE, PLAYER_IMAGES, ALLE_KLEUREN } from '../assets/images/players/playerImages';
 import { THEMES } from './themeCatalog';
 
-const PLAYER_SILHOUETTE = require('../assets/images/players/player-silhouette.png');
-const COLOR_SELECTOR_ICON = require('../assets/images/players/color-selector.png');
 const PANEL_BG = '#F4F7EE';
 const NOTCH_BG = 'rgba(244, 247, 238, 0.72)';
 const TARGET_TOP = 44;
@@ -262,7 +260,7 @@ export default function NewGameSetupScreen({ onBack, onStart }) {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={[styles.headerText, { fontFamily: fredoka }]}>Nieuw spel</Text>
-        <View style={styles.backButton} />
+        <View style={styles.backSpacer} />
       </View>
 
       <View
@@ -346,7 +344,7 @@ export default function NewGameSetupScreen({ onBack, onStart }) {
                       }}
                     >
                       <Image
-                        source={active ? PLAYER_IMAGES[color] : PLAYER_SILHOUETTE}
+                        source={active ? PLAYER_IMAGES[color] : PLAYER_ADD_SILHOUETTE_IMAGE}
                         style={[styles.playerCar, !active && styles.playerCarGhost]}
                         resizeMode="contain"
                       />
@@ -362,7 +360,7 @@ export default function NewGameSetupScreen({ onBack, onStart }) {
                 activeOpacity={0.86}
                 onPress={openColorPicker}
               >
-                <Image source={COLOR_SELECTOR_ICON} style={styles.colorButtonIcon} resizeMode="contain" />
+                <Text style={[styles.colorButtonText, { fontFamily: fredoka }]}>Kleur</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -459,7 +457,7 @@ export default function NewGameSetupScreen({ onBack, onStart }) {
                           ]}
                         >
                           <Image
-                            source={PLAYER_SILHOUETTE}
+                            source={PLAYER_ADD_SILHOUETTE_IMAGE}
                             style={styles.playerCar}
                             resizeMode="contain"
                           />
@@ -571,7 +569,7 @@ export default function NewGameSetupScreen({ onBack, onStart }) {
                 activeOpacity={0.86}
                 onPress={openColorPicker}
               >
-                <Image source={COLOR_SELECTOR_ICON} style={styles.colorButtonIcon} resizeMode="contain" />
+                <Text style={[styles.colorButtonText, { fontFamily: fredoka }]}>Kleur</Text>
               </TouchableOpacity>
             </Animated.View>
 
@@ -597,11 +595,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    position: 'relative',
   },
   backButton: {
-    width: 40,
+    position: 'absolute',
+    left: 16,
+    top: 52,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
   },
+  backSpacer: { width: 44 },
   backText: {
     fontSize: 24,
     color: '#FFFDF7',
@@ -719,9 +726,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: -2,
   },
-  colorButtonIcon: {
-    width: 48,
-    height: 48,
+  colorButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    textShadowColor: 'rgba(0, 0, 0, 0.24)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   playButton: {
     width: 290,

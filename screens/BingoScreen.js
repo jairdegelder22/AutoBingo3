@@ -7,6 +7,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
+import AnimatedBackButton from '../src/components/AnimatedBackButton';
 
 const ALL_ITEMS = [
   "Vrachtwagen", "Tankstation", "Stoplicht", "Busje", "Windmolen",
@@ -65,6 +66,9 @@ export default function BingoScreen({ onNewGame }) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.backButton}>
+        <AnimatedBackButton onActivated={onNewGame} size={66} />
+      </View>
       <Text style={styles.title}>AutoBingo</Text>
 
       <View style={styles.grid}>
@@ -90,9 +94,6 @@ export default function BingoScreen({ onNewGame }) {
       <View style={styles.buttons}>
         <TouchableOpacity style={styles.resetButton} onPress={reset}>
           <Text style={styles.resetButtonText}>Nieuw Spel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.backButton} onPress={onNewGame}>
-          <Text style={styles.backButtonText}>← Terug</Text>
         </TouchableOpacity>
       </View>
 
@@ -177,15 +178,11 @@ const styles = StyleSheet.create({
     color: '#F5C400',
   },
   backButton: {
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
+    position: 'absolute',
+    left: 16,
+    top: 52,
+    zIndex: 20,
+    elevation: 20,
   },
   modalOverlay: {
     flex: 1,

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { BackButton, InlineNote, PrimaryButton, ScreenLayout, TextField } from './flowComponents';
 import { createGameConfig, DEFAULT_ZICHTBAARHEID } from './gameFlowConfig';
 import { decodeLobbyCode, formatLobbyCodeForDisplay, normalizeLobbyCode } from '../src/utils/lobbyCode';
@@ -48,23 +49,25 @@ export default function JoinScreen({ navigation }) {
   }
 
   return (
-    <ScreenLayout
-      title="Code invoeren"
-      footer={<PrimaryButton label="Joinen" onPress={handleJoin} />}
-    >
-      <BackButton onPress={navigation.goBack} />
-      <TextField
-        label="Lobby-code"
-        value={formatLobbyCodeForDisplay(normalizedCode)}
-        onChangeText={(value) => {
-          setError('');
-          setCode(value);
-        }}
-        placeholder="BG·47·KW"
-        autoCapitalize="characters"
-        maxLength={9}
-      />
-      {error ? <InlineNote>{error}</InlineNote> : null}
-    </ScreenLayout>
+    <View style={{ flex: 1 }}>
+      <BackButton navigation={navigation} />
+      <ScreenLayout
+        title="Code invoeren"
+        footer={<PrimaryButton label="Joinen" onPress={handleJoin} />}
+      >
+        <TextField
+          label="Lobby-code"
+          value={formatLobbyCodeForDisplay(normalizedCode)}
+          onChangeText={(value) => {
+            setError('');
+            setCode(value);
+          }}
+          placeholder="BG·47·KW"
+          autoCapitalize="characters"
+          maxLength={9}
+        />
+        {error ? <InlineNote>{error}</InlineNote> : null}
+      </ScreenLayout>
+    </View>
   );
 }

@@ -14,6 +14,9 @@ export const PLAYER_IMAGES = {
   zwart:      require('./player-zwart.png'),
 };
 
+export const PLAYER_ADD_SILHOUETTE_IMAGE = require('./player-add-silhouette.png');
+export const PLAYER_FUTURE_SKIN_IMAGE = require('./player-silhouette.png');
+
 export const PLAYER_HEX = {
   blauw:      '#1A5EA8',
   geel:       '#F5C400',

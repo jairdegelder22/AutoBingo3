@@ -1,26 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Image,
   ImageBackground,
+  Keyboard,
   Modal,
   Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import * as Haptics from '../settings/haptics';
 import ThemeCarousel from '../components/ThemeCarousel';
 import GlossyButton from '../components/GlossyButton';
 import RemovePlayerIcon from '../components/RemovePlayerIcon';
-import { PLAYER_HEX, PLAYER_IMAGES } from '../../assets/images/players/playerImages';
-import { getThemeCardImage } from '../../assets/images/theme-cards/themeCardImages';
-import { createGameConfig, createPlayer, SKIN_OPTIONS, WINCONDITION_OPTIONS } from '../../screens/gameFlowConfig';
+import AnimatedRouteBackButton from '../components/AnimatedRouteBackButton';
+import CircularReveal from '../../components/CircularReveal';
+import PremiumPaywallModal from '../premium/PremiumPaywallModal';
+import { usePremium } from '../premium/PremiumContext';
+import { PLAYER_ADD_SILHOUETTE_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../../assets/images/players/playerImages';
+import { getThemeCardImage, THEME_LOCK_OVERLAY_IMAGE } from '../../assets/images/theme-cards/themeCardImages';
+import { createGameConfig, createPlayer, SKIN_OPTIONS } from '../../screens/gameFlowConfig';
 import { THEMES } from '../../screens/themeCatalog';
 
 const THEME_CARDS = THEMES.map((theme) => ({
@@ -28,41 +34,178 @@ const THEME_CARDS = THEMES.map((theme) => ({
   title: theme.label,
   surface: theme.cardSurface,
   border: theme.cardBorder,
+  outline: theme.cardOutline,
   premium: theme.premium,
 }));
 const MAX_LOCAL_PLAYERS = 2;
-const PLAYER_SILHOUETTE_IMAGE = require('../../assets/images/players/player-silhouette.png');
+const MAX_PLAYER_NAME_LENGTH = 12;
+const PLAYER_SILHOUETTE_IMAGE = PLAYER_ADD_SILHOUETTE_IMAGE;
+const GAME_SETUP_BACKGROUND = require('../../assets/images/backgrounds/game-setup-birds-eye-background-v4.png');
+const SETTINGS_CROWN_ICON = require('../../assets/images/settings/crown-logo.png');
+const SETTINGS_DIAGONAL_ICON = require('../../assets/images/settings/diagonal-logo.png');
+const SETTINGS_RULES_PANEL_IMAGE = require('../../assets/images/settings/rules-menu-panel-v2.png');
+const SETTINGS_RULE_SLIDER_FRAME_WINCONDITION = require('../../assets/images/settings/rules-slider-frame-wincondition.png');
+const SETTINGS_RULE_SLIDER_FRAME_DIAGONAL = require('../../assets/images/settings/rules-slider-frame-diagonal.png');
+const SETTINGS_WIN_CONDITION_TITLE_ICON = require('../../assets/images/settings/win-condition-title.png');
+const SETTINGS_DIAGONAL_TITLE_ICON = require('../../assets/images/settings/diagonal-rule-title.png');
+const SETTINGS_WIN_ONE_LINE = require('../../assets/images/settings/win-1-line.png');
+const SETTINGS_WIN_TWO_LINES = require('../../assets/images/settings/win-2-lines.png');
+const SETTINGS_WIN_FULL_CARD = require('../../assets/images/settings/win-full-card.png');
+const SETTINGS_DIAGONAL_ON = require('../../assets/images/settings/diagonal-on.png');
+const SETTINGS_DIAGONAL_OFF = require('../../assets/images/settings/diagonal-off.png');
 const SCREEN_HORIZONTAL_PADDING = 24;
+const THEME_CARD_WIDTH = 194;
+const THEME_CARD_HEIGHT = Math.round(THEME_CARD_WIDTH * 1.5);
 const STAGE_SINGLE_CAR_SIZE = 188;
 const STAGE_MULTI_CAR_SIZE = 176;
 const CAROUSEL_CAR_SIZE = 224;
+const PLAY_TRANSITION_BLUE = '#1A7BD4';
+const BACKGROUND_PLAYER_OPACITY = 0.28;
+const CAR_ATTENTION_DELAY_MS = 2600;
+const CAR_ATTENTION_STAGGER_MS = 900;
+const SETTINGS_WIN_OPTIONS = [
+  { id: '1rij', label: '1 rij', image: SETTINGS_WIN_ONE_LINE },
+  { id: '2rijen', label: '2 rijen', image: SETTINGS_WIN_TWO_LINES },
+  { id: 'heel-blok', label: 'Hele kaart', image: SETTINGS_WIN_FULL_CARD },
+];
+const SETTINGS_DIAGONAL_OPTIONS = [
+  { id: true, label: 'Wel', image: SETTINGS_DIAGONAL_ON },
+  { id: false, label: 'Niet', image: SETTINGS_DIAGONAL_OFF },
+];
 
-export default function SingleDeviceSetupTestScreen({ navigation }) {
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function withAlpha(hexColor, alpha) {
+  if (typeof hexColor !== 'string' || !hexColor.startsWith('#') || hexColor.length !== 7) {
+    return hexColor;
+  }
+
+  const red = parseInt(hexColor.slice(1, 3), 16);
+  const green = parseInt(hexColor.slice(3, 5), 16);
+  const blue = parseInt(hexColor.slice(5, 7), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function isEmbeddedThemeCard(themeId) {
+  return (
+    themeId === 'snelweg'
+    || themeId === 'stad'
+    || themeId === 'platteland'
+    || themeId === 'vakantie'
+    || themeId === 'voertuigen'
+    || themeId === 'winter'
+    || themeId === 'verkeersborden'
+  );
+}
+
+function getEmbeddedThemeTitleStyle(themeId) {
+  const compactTitleStyle = themeId === 'verkeersborden'
+    ? {
+        fontSize: 18,
+        lineHeight: 25,
+      }
+    : themeId === 'voertuigen'
+    ? {
+        fontSize: 22,
+        lineHeight: 30,
+      }
+    : null;
+
+  if (themeId === 'verkeersborden') {
+    return {
+      color: '#111111',
+      ...compactTitleStyle,
+      letterSpacing: 0.5,
+      textShadowColor: 'rgba(255, 255, 255, 0.52)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    };
+  }
+
+  return {
+    color: '#FFFFFF',
+    ...compactTitleStyle,
+    letterSpacing: 0.5,
+    textShadowColor: '#15539D',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  };
+}
+
+export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
-  const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
-  const [spelers, setSpelers] = useState([{ ...createPlayer({ skin: 'geel' }), naam: 'Speler 1' }]);
+  const { isPremium } = usePremium();
+  const initialConfig = route?.params?.initialConfig ?? null;
+  const initialThemeIndex = Math.max(
+    0,
+    THEME_CARDS.findIndex((theme) => theme.id === initialConfig?.thema)
+  );
+  const initialPlayers = initialConfig?.spelers?.length
+    ? initialConfig.spelers.map((player, index) => ({
+        ...createPlayer({ skin: player.skin ?? (index === 0 ? 'geel' : 'blauw') }),
+        ...player,
+        naam: player.naam ?? `Speler ${index + 1}`,
+      })).slice(0, MAX_LOCAL_PLAYERS)
+    : [{ ...createPlayer({ skin: 'geel' }), naam: 'Speler 1' }];
+  const [selectedThemeIndex, setSelectedThemeIndex] = useState(initialThemeIndex);
+  const [spelers, setSpelers] = useState(initialPlayers);
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState(null);
+  const [focusedNameIndex, setFocusedNameIndex] = useState(null);
   const [skinPickerMounted, setSkinPickerMounted] = useState(false);
   const [heroTop, setHeroTop] = useState(234);
   const [transitionSourceLeft, setTransitionSourceLeft] = useState(0);
   const [transitionSkin, setTransitionSkin] = useState('geel');
   const [transitionCarSize, setTransitionCarSize] = useState(STAGE_SINGLE_CAR_SIZE);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [wincondition, setWincondition] = useState('1rij');
-  const [diagonaal, setDiagonaal] = useState(true);
-  const [kaartOpzet, setKaartOpzet] = useState('zelfde');
+  const [settingsPanelVisible, setSettingsPanelVisible] = useState(false);
+  const [wincondition, setWincondition] = useState(initialConfig?.wincondition ?? '1rij');
+  const [diagonaal, setDiagonaal] = useState(initialConfig?.diagonaal ?? true);
+  const [kaartOpzet, setKaartOpzet] = useState(initialConfig?.kaartOpzet ?? 'zelfde');
+  const [pendingGameStart, setPendingGameStart] = useState(null);
+  const [premiumModalVisible, setPremiumModalVisible] = useState(false);
 
-  const collapsedPanelHeight = 58;
-  const expandedPanelHeight = Math.min(360, screenHeight * 0.42);
+  const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.88, 1.18);
+  const collapsedPanelHeight = Math.round(clamp(screenHeight * 0.078, 66, 88));
+  const expandedPanelHeight = Math.round(clamp(screenHeight * 0.74, 560, screenHeight * 0.82));
+  const setupMetrics = useMemo(() => ({
+    scale,
+    panelContentPaddingHorizontal: Math.round(clamp(screenWidth * 0.052, 20, 48)),
+    panelContentPaddingTop: Math.round(clamp(screenHeight * 0.013, 10, 18)),
+    panelContentPaddingBottom: Math.round(clamp(screenHeight * 0.024, 20, 34)),
+    settingsPillIconSize: Math.round(clamp(screenWidth * 0.052, 20, 30)),
+    settingsTileSize: Math.round(clamp(screenWidth * 0.22, 78, 118)),
+    settingsTileImageSize: Math.round(clamp(screenWidth * 0.16, 58, 86)),
+    settingsDiagonalTileSize: Math.round(clamp(screenWidth * 0.23, 84, 124)),
+    settingsDiagonalImageSize: Math.round(clamp(screenWidth * 0.17, 64, 92)),
+    settingsLabelFontSize: Math.round(clamp(screenWidth * 0.045, 17, 24)),
+    settingsTitleIconSize: Math.round(clamp(screenWidth * 0.118, 46, 66)),
+    settingsSliderHeight: Math.round(clamp(screenHeight * 0.156, 126, 156)),
+    settingsSliderImageSize: Math.round(clamp(screenWidth * 0.155, 58, 78)),
+    settingsSliderDiagonalImageSize: Math.round(clamp(screenWidth * 0.178, 68, 92)),
+    settingsPillFontSize: Math.round(clamp(screenWidth * 0.035, 14, 19)),
+    settingsSectionGap: Math.round(clamp(screenHeight * 0.038, 28, 42)),
+    settingsOptionGap: Math.round(clamp(screenWidth * 0.05, 18, 34)),
+  }), [scale, screenHeight, screenWidth]);
   const panelHeight = useRef(new Animated.Value(collapsedPanelHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const settingsProgress = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const carouselOpacity = useRef(new Animated.Value(0)).current;
   const transitionOpacity = useRef(new Animated.Value(0)).current;
   const transitionTranslateX = useRef(new Animated.Value(0)).current;
+  const keyboardLift = useRef(new Animated.Value(0)).current;
+  const addPlayerFocusOpacity = useRef(new Animated.Value(1)).current;
+  const firstPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 0 ? 1 : 0)).current;
+  const secondPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 1 ? 1 : 0)).current;
+  const playRevealRef = useRef(null);
+  const latestPlayPressPointRef = useRef(null);
   const playerLayoutProgress = useState(() => new Animated.Value(spelers.length >= 2 ? 1 : 0))[0];
   const carRefs = useRef([]);
   const selectedTheme = THEME_CARDS[selectedThemeIndex] ?? THEME_CARDS[0];
+  const selectedThemeAvailable = !selectedTheme?.premium || isPremium;
   const playerCount = spelers.length;
   const selectedPlayer = selectedPlayerIndex === null ? null : spelers[selectedPlayerIndex];
   const stageCarSize = playerCount >= 2 ? STAGE_MULTI_CAR_SIZE : STAGE_SINGLE_CAR_SIZE;
@@ -72,9 +215,17 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
   );
 
   const canStart = useMemo(
-    () => Boolean(selectedTheme?.id && playerCount && !selectedTheme?.premium),
-    [playerCount, selectedTheme?.id, selectedTheme?.premium]
+    () => Boolean(selectedTheme?.id && playerCount),
+    [playerCount, selectedTheme?.id]
   );
+  const settingsPanelTranslateY = settingsProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [expandedPanelHeight - collapsedPanelHeight - Math.round(20 * scale), 0],
+  });
+  const settingsContentTranslateY = settingsProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [30, 0],
+  });
   const playerStageWidth = Math.max(0, screenWidth - SCREEN_HORIZONTAL_PADDING * 2);
   const laneOffset = playerStageWidth / 4;
   const addButtonTranslateX = playerStageWidth * 0.11;
@@ -98,6 +249,50 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
     inputRange: [0, 1],
     outputRange: [10, 0],
   });
+  const isEditingPlayerName = focusedNameIndex !== null;
+  const fallbackKeyboardLift = -Math.round(clamp(screenHeight * 0.18, 142, 190));
+  const firstPlayerStageTranslateX = Animated.add(
+    firstPlayerTranslateX,
+    firstPlayerFocusProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, laneOffset],
+    })
+  );
+  const firstPlayerStageTranslateY = Animated.multiply(firstPlayerFocusProgress, keyboardLift);
+  const firstPlayerStageOpacity = secondPlayerFocusProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, BACKGROUND_PLAYER_OPACITY],
+  });
+  const secondPlayerStageTranslateX = secondPlayerFocusProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [laneOffset, 0],
+  });
+  const secondPlayerStageTranslateY = Animated.multiply(secondPlayerFocusProgress, keyboardLift);
+  const secondPlayerStageOpacity = Animated.add(
+    secondPlayerOpacity,
+    firstPlayerFocusProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, BACKGROUND_PLAYER_OPACITY - 1],
+    })
+  );
+  const secondPlayerRemoveOpacity = secondPlayerFocusProgress.interpolate({
+    inputRange: [0, 0.55, 1],
+    outputRange: [1, 0, 0],
+  });
+  const secondPlayerRemoveScale = secondPlayerFocusProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.82],
+  });
+
+  useEffect(() => {
+    if (!route?.params?.openSettings) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      animateSettings(true);
+    });
+  }, []);
 
   useEffect(() => {
     Animated.timing(playerLayoutProgress, {
@@ -108,21 +303,107 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
     }).start();
   }, [playerLayoutProgress, spelers.length]);
 
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(firstPlayerFocusProgress, {
+        toValue: focusedNameIndex === 0 ? 1 : 0,
+        duration: focusedNameIndex === 0 ? 360 : 460,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(secondPlayerFocusProgress, {
+        toValue: focusedNameIndex === 1 ? 1 : 0,
+        duration: focusedNameIndex === 1 ? 360 : 460,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [firstPlayerFocusProgress, focusedNameIndex, secondPlayerFocusProgress]);
+
+  useLayoutEffect(() => {
+    if (!pendingGameStart) {
+      return;
+    }
+
+    playRevealRef.current?.reveal();
+  }, [pendingGameStart]);
+
+  useEffect(() => {
+    panelHeight.setValue(expandedPanelHeight);
+    settingsProgress.setValue(settingsOpen ? 1 : 0);
+  }, [collapsedPanelHeight, expandedPanelHeight, panelHeight]);
+
+  useEffect(() => {
+    Animated.timing(addPlayerFocusOpacity, {
+      toValue: isEditingPlayerName ? 0 : 1,
+      duration: isEditingPlayerName ? 160 : 220,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [addPlayerFocusOpacity, isEditingPlayerName]);
+
+  useEffect(() => {
+    Animated.timing(keyboardLift, {
+      toValue: isEditingPlayerName ? fallbackKeyboardLift : 0,
+      duration: isEditingPlayerName ? 360 : 460,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [fallbackKeyboardLift, isEditingPlayerName, keyboardLift]);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardWillShow', (event) => {
+      const keyboardHeight = event.endCoordinates?.height ?? 0;
+      const lift = -Math.round(clamp(keyboardHeight * 0.42, 126, 190));
+
+      Animated.timing(keyboardLift, {
+        toValue: lift,
+        duration: event.duration ?? 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+    const hideSubscription = Keyboard.addListener('keyboardWillHide', (event) => {
+      Animated.timing(keyboardLift, {
+        toValue: 0,
+        duration: Math.max(event.duration ?? 380, 380),
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [keyboardLift]);
+
   function animateSettings(open) {
-    setSettingsOpen(open);
+    if (open) {
+      setSettingsPanelVisible(true);
+      setSettingsOpen(true);
+    } else {
+      setSettingsOpen(false);
+    }
 
     Animated.parallel([
-      Animated.timing(panelHeight, {
-        toValue: open ? expandedPanelHeight : collapsedPanelHeight,
-        duration: open ? 280 : 220,
+      Animated.timing(settingsProgress, {
+        toValue: open ? 1 : 0,
+        duration: open ? 440 : 420,
+        easing: open ? Easing.out(Easing.cubic) : Easing.inOut(Easing.cubic),
         useNativeDriver: false,
       }),
       Animated.timing(backdropOpacity, {
         toValue: open ? 1 : 0,
-        duration: open ? 220 : 180,
-        useNativeDriver: true,
+        duration: open ? 300 : 360,
+        easing: open ? Easing.out(Easing.cubic) : Easing.inOut(Easing.cubic),
+        useNativeDriver: false,
       }),
-    ]).start();
+    ]).start(({ finished }) => {
+      if (finished && !open) {
+        setSettingsPanelVisible(false);
+      }
+    });
   }
 
   function openSettings() {
@@ -132,6 +413,11 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
 
   function closeSettings() {
     animateSettings(false);
+  }
+
+  function dismissNameEditing() {
+    Keyboard.dismiss();
+    setFocusedNameIndex(null);
   }
 
   function handleAddPlayer() {
@@ -153,8 +439,15 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
     }
 
     void Haptics.selectionAsync();
+    dismissNameEditing();
     setSpelers((current) => current.filter((_, currentIndex) => currentIndex !== index));
     setKaartOpzet('zelfde');
+  }
+
+  function updatePlayerName(index, naam) {
+    setSpelers((current) => current.map((player, currentIndex) => (
+      currentIndex === index ? { ...player, naam: naam.slice(0, MAX_PLAYER_NAME_LENGTH) } : player
+    )));
   }
 
   function animatePickerOpen(index) {
@@ -248,7 +541,19 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
     });
   }
 
+  function handlePlayPressIn(event) {
+    latestPlayPressPointRef.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+    };
+  }
+
   function handleStart() {
+    if (!selectedThemeAvailable) {
+      setPremiumModalVisible(true);
+      return;
+    }
+
     if (!canStart) {
       return;
     }
@@ -264,68 +569,105 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
       spelers,
     });
 
-    navigation.navigate('Spel', { config });
+    const origin = latestPlayPressPointRef.current ?? {
+      x: screenWidth / 2,
+      y: screenHeight - 120,
+    };
+
+    setPendingGameStart({
+      config,
+      originX: origin.x,
+      originY: origin.y,
+      transitionKey: `singleplayer-spel-${Date.now()}`,
+    });
   }
 
   return (
     <View style={styles.safeArea}>
-      <LinearGradient
-        colors={['#f7fbff', '#eef6fd', '#f8fbff']}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
+      <ImageBackground
+        source={GAME_SETUP_BACKGROUND}
+        resizeMode="cover"
         style={styles.background}
       >
         <SafeAreaView style={styles.safeAreaContent}>
+          <AnimatedRouteBackButton
+            navigation={navigation}
+            size={66}
+            style={styles.backButton}
+          />
           <View style={styles.content}>
-            <View style={styles.headerRow}>
-              <TouchableOpacity onPress={navigation.goBack} style={styles.backButton}>
-                <Text style={styles.backText}>Terug</Text>
-              </TouchableOpacity>
-              <Text style={styles.title}>1 apparaat test</Text>
-              <View style={styles.backSpacer} />
-            </View>
-
             <View style={styles.topBlock}>
               <ThemeCarousel
                 items={THEME_CARDS}
                 itemSpacing={10}
-                itemWidth={214}
+                itemWidth={THEME_CARD_WIDTH}
                 keyExtractor={(item) => item.id}
                 onSnapToItem={setSelectedThemeIndex}
-                renderCard={({ item }) => <ThemeCard item={item} />}
+                renderCard={({ item }) => (
+                  <ThemeCard
+                    item={item}
+                    isPremium={isPremium}
+                    onLockedPress={() => setPremiumModalVisible(true)}
+                  />
+                )}
               />
             </View>
 
-            <View style={styles.playerStageSection}>
+            <Animated.View style={styles.playerStageSection}>
               <Animated.View
+                pointerEvents={focusedNameIndex === 1 ? 'none' : 'auto'}
                 style={[
                   styles.playerStageSlot,
-                  { transform: [{ translateX: firstPlayerTranslateX }] },
+                  {
+                    opacity: firstPlayerStageOpacity,
+                    transform: [
+                      { translateX: firstPlayerStageTranslateX },
+                      { translateY: firstPlayerStageTranslateY },
+                    ],
+                    zIndex: focusedNameIndex === 0 ? 5 : 1,
+                  },
                 ]}
               >
                 <View ref={(node) => { carRefs.current[0] = node; }} collapsable={false}>
-                  <Pressable
-                    style={[styles.heroCarButton, skinPickerMounted && selectedPlayerIndex === 0 ? styles.heroCarButtonHidden : null]}
+                  <AttentionCarButton
+                    skin={spelers[0]?.skin}
+                    size={stageCarSize}
+                    style={skinPickerMounted && selectedPlayerIndex === 0 ? styles.heroCarButtonHidden : null}
                     onPress={() => animatePickerOpen(0)}
-                  >
-                    <PlayerAvatar skin={spelers[0]?.skin} size={stageCarSize} />
-                  </Pressable>
+                    active={!skinPickerMounted && focusedNameIndex !== 1}
+                    attentionDelay={0}
+                  />
                 </View>
+                <PlayerNameInput
+                  value={spelers[0]?.naam ?? ''}
+                  skin={spelers[0]?.skin ?? 'geel'}
+                  defaultName="Speler 1"
+                  onChangeText={(naam) => updatePlayerName(0, naam)}
+                  onFocus={() => setFocusedNameIndex(0)}
+                  onBlur={() => setFocusedNameIndex(null)}
+                  hidden={skinPickerMounted && selectedPlayerIndex === 0}
+                />
               </Animated.View>
 
-              <View
+              <Animated.View
                 pointerEvents="box-none"
                 style={[
                   styles.playerStageSlot,
-                  { transform: [{ translateX: laneOffset }] },
+                  {
+                    transform: [
+                      { translateX: secondPlayerStageTranslateX },
+                      { translateY: secondPlayerStageTranslateY },
+                    ],
+                    zIndex: focusedNameIndex === 1 ? 5 : 1,
+                  },
                 ]}
               >
                 <Animated.View
-                  pointerEvents={spelers.length >= 2 || skinPickerMounted ? 'none' : 'auto'}
+                  pointerEvents={spelers.length >= 2 || skinPickerMounted || isEditingPlayerName ? 'none' : 'auto'}
                   style={[
                     styles.stageOverlay,
                     {
-                      opacity: skinPickerMounted ? 0 : addButtonOpacity,
+                      opacity: skinPickerMounted ? 0 : Animated.multiply(addButtonOpacity, addPlayerFocusOpacity),
                       transform: [{ translateX: addButtonTranslateX }],
                     },
                   ]}
@@ -335,10 +677,11 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
 
                 {spelers[1] ? (
                   <Animated.View
+                    pointerEvents={focusedNameIndex === 0 ? 'none' : 'auto'}
                     style={[
                       styles.stageOverlay,
                       {
-                        opacity: secondPlayerOpacity,
+                        opacity: secondPlayerStageOpacity,
                         transform: [
                           { translateY: secondPlayerTranslateY },
                           { scale: secondPlayerScale },
@@ -348,33 +691,55 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
                   >
                     <View style={styles.secondaryPlayerWrap}>
                       <View ref={(node) => { carRefs.current[1] = node; }} collapsable={false}>
-                        <Pressable
-                          style={[
-                            styles.secondaryCarButton,
-                            skinPickerMounted && selectedPlayerIndex === 1 ? styles.heroCarButtonHidden : null,
-                          ]}
+                        <AttentionCarButton
+                          skin={spelers[1]?.skin}
+                          size={stageCarSize}
+                          style={skinPickerMounted && selectedPlayerIndex === 1 ? styles.heroCarButtonHidden : null}
                           onPress={() => animatePickerOpen(1)}
-                        >
-                          <PlayerAvatar skin={spelers[1]?.skin} size={stageCarSize} />
-                        </Pressable>
+                          active={!skinPickerMounted && focusedNameIndex !== 0}
+                          attentionDelay={CAR_ATTENTION_STAGGER_MS}
+                        />
                       </View>
-                      <Pressable
-                        style={[
-                          styles.removeButton,
-                          skinPickerMounted && selectedPlayerIndex === 1 ? styles.removeButtonHidden : null,
-                        ]}
-                        onPress={() => handleRemovePlayer(1)}
-                      >
-                        <RemovePlayerIcon size={34} />
-                      </Pressable>
+                      <PlayerNameInput
+                        value={spelers[1]?.naam ?? ''}
+                        skin={spelers[1]?.skin ?? 'blauw'}
+                        defaultName="Speler 2"
+                        onChangeText={(naam) => updatePlayerName(1, naam)}
+                        onFocus={() => setFocusedNameIndex(1)}
+                        onBlur={() => setFocusedNameIndex(null)}
+                        hidden={skinPickerMounted && selectedPlayerIndex === 1}
+                      />
+                      {skinPickerMounted && selectedPlayerIndex === 1 ? null : (
+                        <Animated.View
+                          pointerEvents={focusedNameIndex === 1 ? 'none' : 'auto'}
+                          style={[
+                            styles.removeButton,
+                            {
+                              opacity: secondPlayerRemoveOpacity,
+                              transform: [{ scale: secondPlayerRemoveScale }],
+                            },
+                          ]}
+                        >
+                          <Pressable style={styles.removeButtonPressable} onPress={() => handleRemovePlayer(1)}>
+                            <RemovePlayerIcon size={34} />
+                          </Pressable>
+                        </Animated.View>
+                      )}
                     </View>
                   </Animated.View>
                 ) : null}
-              </View>
-            </View>
+              </Animated.View>
+            </Animated.View>
 
             <View style={styles.actionStack}>
-              <GlossyButton label="Play" variant="blue" size="large" onPress={handleStart} disabled={!canStart} />
+              <GlossyButton
+                label="Play"
+                variant="blue"
+                size="large"
+                onPressIn={handlePlayPressIn}
+                onPress={handleStart}
+                disabled={!canStart || !selectedThemeAvailable}
+              />
             </View>
           </View>
 
@@ -418,20 +783,32 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
           style={styles.bottomDock}
         >
           <Animated.View
+            pointerEvents={settingsPanelVisible ? 'auto' : 'none'}
             style={[
               styles.panelShell,
-              settingsOpen ? styles.panelShellOpen : styles.panelShellClosed,
-              { height: panelHeight },
+              settingsPanelVisible ? styles.panelShellOpen : styles.panelShellClosed,
+              {
+                height: expandedPanelHeight,
+                transform: [{ translateY: settingsPanelTranslateY }],
+              },
             ]}
           >
+            <ImageBackground
+              pointerEvents="none"
+              source={SETTINGS_RULES_PANEL_IMAGE}
+              resizeMode="stretch"
+              style={styles.rulesPanelImage}
+              imageStyle={styles.rulesPanelImageAsset}
+            />
             <Pressable
               onPress={settingsOpen ? closeSettings : openSettings}
               style={[
                 styles.panelHeader,
-                settingsOpen ? styles.panelHeaderOpen : styles.panelHeaderClosed,
+                { minHeight: collapsedPanelHeight },
+                settingsPanelVisible ? styles.panelHeaderOpen : styles.panelHeaderClosed,
               ]}
             >
-              <Text style={styles.panelHeaderText}>Gameinstellingen</Text>
+              <Text style={styles.panelHeaderText}>Spelregels</Text>
             </Pressable>
 
             <Animated.View
@@ -439,66 +816,237 @@ export default function SingleDeviceSetupTestScreen({ navigation }) {
               style={[
                 styles.panelContent,
                 {
-                  opacity: backdropOpacity,
+                  opacity: settingsProgress,
+                  paddingHorizontal: 0,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  transform: [{ translateY: settingsContentTranslateY }],
                 },
               ]}
             >
-              <View style={styles.sheetDivider} />
+              <View style={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}>
+                <SettingsRuleSlider
+                  title="Winconditie"
+                  titleIcon={SETTINGS_WIN_CONDITION_TITLE_ICON}
+                  value={wincondition}
+                  options={SETTINGS_WIN_OPTIONS}
+                  onChange={setWincondition}
+                  metrics={setupMetrics}
+                />
 
-              <View style={styles.sheetSection}>
-                <Text style={styles.sheetSectionTitle}>Winconditie</Text>
-                <View style={styles.choiceRow}>
-                  {WINCONDITION_OPTIONS.map((option) => (
-                    <ChoiceChip
-                      key={option.id}
-                      label={option.label}
-                      selected={wincondition === option.id}
-                      onPress={() => setWincondition(option.id)}
-                    />
-                  ))}
-                </View>
+                <SettingsRuleSlider
+                  title="Diagonaal"
+                  titleIcon={SETTINGS_DIAGONAL_TITLE_ICON}
+                  value={diagonaal}
+                  options={SETTINGS_DIAGONAL_OPTIONS}
+                  onChange={setDiagonaal}
+                  metrics={setupMetrics}
+                  variant="diagonal"
+                />
               </View>
-
-              <View style={styles.sheetSection}>
-                <Text style={styles.sheetSectionTitle}>Diagonaal</Text>
-                <View style={styles.choiceRow}>
-                  <ChoiceChip label="Aan" selected={diagonaal} onPress={() => setDiagonaal(true)} />
-                  <ChoiceChip label="Uit" selected={!diagonaal} onPress={() => setDiagonaal(false)} />
-                </View>
-              </View>
-
-              {playerCount === 2 ? (
-                <View style={styles.sheetSection}>
-                  <Text style={styles.sheetSectionTitle}>Kaartopzet</Text>
-                  <View style={styles.choiceRow}>
-                    <ChoiceChip
-                      label="Zelfde kaart"
-                      selected={kaartOpzet === 'zelfde'}
-                      onPress={() => setKaartOpzet('zelfde')}
-                    />
-                    <ChoiceChip
-                      label="Andere kaart"
-                      selected={kaartOpzet === 'anders'}
-                      onPress={() => setKaartOpzet('anders')}
-                    />
-                  </View>
-                </View>
-              ) : null}
             </Animated.View>
           </Animated.View>
+          {!settingsPanelVisible ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open spelregels"
+              onPress={openSettings}
+              style={[
+                styles.collapsedPanelPressTarget,
+                { height: collapsedPanelHeight + Math.round(24 * scale) },
+              ]}
+            />
+          ) : null}
         </View>
-      </LinearGradient>
+      </ImageBackground>
+      {pendingGameStart ? (
+        <CircularReveal
+          key={pendingGameStart.transitionKey}
+          ref={playRevealRef}
+          color={PLAY_TRANSITION_BLUE}
+          originX={pendingGameStart.originX}
+          originY={pendingGameStart.originY}
+          onComplete={() => {
+            navigation.navigate('Spel', {
+              config: pendingGameStart.config,
+              transition: {
+                color: PLAY_TRANSITION_BLUE,
+                originX: screenWidth / 2,
+                originY: screenHeight / 2,
+                routeName: 'Spel',
+                pauseMs: 320,
+                transitionKey: pendingGameStart.transitionKey,
+              },
+            });
+            setPendingGameStart(null);
+          }}
+        />
+      ) : null}
+      <PremiumPaywallModal
+        visible={premiumModalVisible}
+        onClose={() => setPremiumModalVisible(false)}
+        onUnlocked={() => setPremiumModalVisible(false)}
+        title="Premium thema"
+        message="Dit thema hoort bij Premium. Hosten en premium thema’s zijn daarna meteen vrij."
+      />
     </View>
   );
 }
 
 function PlayerAvatar({ skin = 'geel', size = 96, style }) {
+  const source = PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.geel;
+  const shadowWidth = size * 0.76;
+  const shadowHeight = size * 0.18;
+
   return (
-    <Image
-      source={PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.geel}
-      resizeMode="contain"
-      style={[{ width: size, height: size }, style]}
-    />
+    <View style={[styles.playerAvatarWrap, { width: size, height: size }, style]}>
+      <Svg
+        width={shadowWidth}
+        height={shadowHeight}
+        viewBox={`0 0 ${shadowWidth} ${shadowHeight}`}
+        style={[styles.carGroundShadow, { bottom: size * 0.18 }]}
+      >
+        <Defs>
+          <RadialGradient id="setupCarShadowGradient" cx="50%" cy="50%" rx="50%" ry="50%">
+            <Stop offset="0%" stopColor="#111820" stopOpacity="0.2" />
+            <Stop offset="52%" stopColor="#111820" stopOpacity="0.1" />
+            <Stop offset="100%" stopColor="#111820" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Ellipse cx={shadowWidth / 2} cy={shadowHeight / 2} rx={shadowWidth / 2} ry={shadowHeight / 2} fill="url(#setupCarShadowGradient)" />
+      </Svg>
+      <Image
+        source={source}
+        resizeMode="contain"
+        style={{ width: size, height: size }}
+      />
+    </View>
+  );
+}
+
+function AttentionCarButton({ skin, size, onPress, active = true, style, attentionDelay = 0 }) {
+  const attention = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!active) {
+      attention.stopAnimation();
+      attention.setValue(0);
+      return undefined;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(CAR_ATTENTION_DELAY_MS + attentionDelay),
+        Animated.timing(attention, {
+          toValue: 1,
+          duration: 120,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(attention, {
+          toValue: 0,
+          duration: 120,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(attention, {
+          toValue: 0.45,
+          duration: 70,
+          useNativeDriver: true,
+        }),
+        Animated.timing(attention, {
+          toValue: 0,
+          duration: 110,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [active, attention, attentionDelay]);
+
+  const translateY = attention.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -9],
+  });
+  const rotate = attention.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['0deg', '-1.8deg', '1.8deg'],
+  });
+
+  return (
+    <Pressable style={[styles.heroCarButton, style]} onPress={onPress} disabled={!active}>
+      <Animated.View style={{ transform: [{ translateY }, { rotate }] }}>
+        <PlayerAvatar skin={skin} size={size} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function PlayerNameInput({
+  value,
+  skin = 'geel',
+  defaultName = 'Speler',
+  onChangeText,
+  onFocus,
+  onBlur,
+  hidden = false,
+}) {
+  const carColor = PLAYER_HEX[skin] ?? PLAYER_HEX.geel ?? '#F5C400';
+  const handleFocus = () => {
+    onFocus?.();
+    if (value === defaultName) {
+      onChangeText('');
+    }
+  };
+  const handleBlur = () => {
+    if (!value.trim()) {
+      onChangeText(defaultName);
+    }
+    onBlur?.();
+  };
+
+  return (
+    <Pressable
+      onPress={(event) => event.stopPropagation()}
+      style={[
+        styles.playerNamePlate,
+        {
+          backgroundColor: carColor,
+          shadowColor: carColor,
+        },
+        hidden && styles.playerNameInputHidden,
+      ]}
+    >
+      <LinearGradient
+        colors={['rgba(255, 253, 245, 0.98)', 'rgba(255, 246, 225, 0.9)', 'rgba(245, 232, 204, 0.88)']}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.playerNamePlateInner}
+      >
+        <View pointerEvents="none" style={styles.playerNamePlateGloss} />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={defaultName}
+          placeholderTextColor="rgba(20, 71, 102, 0.55)"
+          maxLength={MAX_PLAYER_NAME_LENGTH}
+          autoCapitalize="words"
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={Keyboard.dismiss}
+          style={styles.playerNameInput}
+        />
+      </LinearGradient>
+    </Pressable>
   );
 }
 
@@ -588,54 +1136,81 @@ function SkinCarouselModal({
             )}
           />
 
-          <Pressable
-            style={[styles.selectButton, activeSkinTaken && styles.selectButtonDisabled]}
-            onPress={() => {
-              if (!activeSkinTaken) {
-                onSelectSkin(activeSkin);
-              }
-            }}
-            disabled={activeSkinTaken}
-          >
-            <Text style={styles.selectButtonText}>Selecteer</Text>
-          </Pressable>
+          <View style={styles.selectButtonWrap}>
+            <GlossyButton
+              label="Selecteer"
+              variant="green"
+              size="normal"
+              heightOverride={62}
+              horizontalPadding={44}
+              onPress={() => onSelectSkin(activeSkin)}
+              disabled={activeSkinTaken}
+            />
+          </View>
         </Animated.View>
       </Animated.View>
     </Modal>
   );
 }
 
-function ThemeCard({ item }) {
+function ThemeCard({ item, isPremium = false, onLockedPress }) {
   const themeImage = getThemeCardImage(item.id);
+  const isLocked = item.premium && !isPremium;
+  const usesEmbeddedFrame = isEmbeddedThemeCard(item.id);
+  const cardBorderColor = item.outline ?? item.border;
 
   return (
-    <View style={[styles.carouselCardShell, { shadowColor: item.border }]}>
-      <View style={[styles.carouselCardOutline, { backgroundColor: item.border }]}>
+    <View style={styles.carouselCardShell}>
+      <View
+        style={[
+          styles.carouselCardOutline,
+          usesEmbeddedFrame
+            ? styles.carouselCardOutlineEmbedded
+            : { borderColor: isLocked ? withAlpha(cardBorderColor, 0.42) : cardBorderColor },
+        ]}
+      >
         {themeImage ? (
           <ImageBackground
             source={themeImage}
-            resizeMode="cover"
-            imageStyle={styles.carouselCardImage}
-            style={styles.carouselCardBody}
+            resizeMode={usesEmbeddedFrame ? 'contain' : 'cover'}
+            imageStyle={[
+              styles.carouselCardImage,
+              usesEmbeddedFrame && styles.carouselCardImageEmbedded,
+            ]}
+            style={[
+              styles.carouselCardBody,
+              usesEmbeddedFrame && styles.carouselCardBodyEmbedded,
+            ]}
           >
-            <View style={styles.carouselCardOverlay} />
-            {item.premium ? (
-              <View style={styles.carouselCardPremiumBadge}>
-                <Text style={styles.carouselCardPremiumText}>Locked</Text>
-              </View>
+            {usesEmbeddedFrame ? null : <View style={styles.carouselCardOverlay} />}
+            {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
+            {isLocked ? (
+              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+                <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
+              </Pressable>
             ) : null}
-            <View style={styles.carouselCardLabelWrap}>
-              <Text style={[styles.carouselCardTitle, item.id === 'winter' && styles.carouselCardTitleDark]}>{item.title}</Text>
+            <View style={[styles.carouselCardTitleWrap, usesEmbeddedFrame && styles.carouselCardTitleWrapEmbedded]}>
+              <Text
+                style={[
+                  styles.carouselCardTitle,
+                  usesEmbeddedFrame && getEmbeddedThemeTitleStyle(item.id),
+                ]}
+              >
+                {item.title}
+              </Text>
             </View>
           </ImageBackground>
         ) : (
           <View style={[styles.carouselCardBody, { backgroundColor: item.surface }]}>
-            {item.premium ? (
-              <View style={styles.carouselCardPremiumBadge}>
-                <Text style={styles.carouselCardPremiumText}>Locked</Text>
-              </View>
+            {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
+            {isLocked ? (
+              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+                <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
+              </Pressable>
             ) : null}
-            <Text style={[styles.carouselCardTitle, item.id === 'winter' && styles.carouselCardTitleDark]}>{item.title}</Text>
+            <View style={styles.carouselCardTitleWrap}>
+              <Text style={styles.carouselCardTitle}>{item.title}</Text>
+            </View>
           </View>
         )}
       </View>
@@ -643,11 +1218,210 @@ function ThemeCard({ item }) {
   );
 }
 
-function ChoiceChip({ label, selected, onPress }) {
+function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metrics, variant = 'win' }) {
+  const isDiagonal = variant === 'diagonal';
+  const [railWidth, setRailWidth] = useState(0);
+  const selectorTranslateX = useRef(new Animated.Value(0)).current;
+  const selectorScale = useRef(new Animated.Value(1)).current;
+  const selectedIndex = Math.max(0, options.findIndex((option) => option.id === value));
+  const optionCount = options.length;
+  const selectorWidth = railWidth > 0 ? railWidth / optionCount : 0;
+  const frameSource = isDiagonal
+    ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
+    : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
+  const frameAspectRatio = isDiagonal ? (919 / 1475) : (935 / 1490);
+  const selectorColors = isDiagonal
+    ? ['#A553FF', '#7B24D8', '#4F1196']
+    : ['#62D629', '#2EAA0F', '#146E06'];
+  const titleShadowColor = isDiagonal ? '#4A0A83' : '#155F04';
+  const frameWidth = Math.round(clamp(metrics.scale * 346, 314, 382));
+  const frameHeight = Math.round(frameWidth * frameAspectRatio);
+  const selectorVisualWidth = isDiagonal ? selectorWidth : selectorWidth * 1.06;
+  const selectorVisualOffset = isDiagonal ? 0 : selectorWidth * -0.03;
+
+  function animateSelectorToIndex(index) {
+    if (!selectorWidth) {
+      return;
+    }
+
+    Animated.spring(selectorTranslateX, {
+      toValue: selectorWidth * index,
+      useNativeDriver: true,
+      speed: 22,
+      bounciness: 7,
+    }).start();
+  }
+
+  function popSelector(strength = 1.045) {
+    Animated.sequence([
+      Animated.spring(selectorScale, {
+        toValue: strength,
+        useNativeDriver: true,
+        speed: 34,
+        bounciness: 7,
+      }),
+      Animated.spring(selectorScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 26,
+        bounciness: 7,
+      }),
+    ]).start();
+  }
+
+  function handleOptionPress(option, index) {
+    if (!option) {
+      return;
+    }
+
+    selectorTranslateX.stopAnimation();
+
+    if (option.id === value) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      animateSelectorToIndex(index);
+      popSelector(1.035);
+      return;
+    }
+
+    void Haptics.selectionAsync();
+    onChange(option.id);
+    animateSelectorToIndex(index);
+    popSelector(1.055);
+  }
+
+  useEffect(() => {
+    animateSelectorToIndex(selectedIndex);
+  }, [selectedIndex, selectorWidth]);
+
   return (
-    <Pressable onPress={onPress} style={[styles.choiceChip, selected && styles.choiceChipSelected]}>
-      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextSelected]}>{label}</Text>
-    </Pressable>
+    <View style={styles.settingsRuleSection}>
+      <ImageBackground
+        source={frameSource}
+        resizeMode="stretch"
+        style={[
+          styles.settingsRuleFrame,
+          {
+            width: frameWidth,
+            height: frameHeight,
+          },
+        ]}
+        imageStyle={styles.settingsRuleFrameImage}
+      >
+        <View style={styles.settingsRuleTitleOverlay}>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.95}
+            style={[
+              styles.settingsRuleTitle,
+              {
+                fontSize: Math.round(29 * metrics.scale),
+                textShadowColor: titleShadowColor,
+              },
+            ]}
+          >
+            {title}
+          </Text>
+          <Image
+            source={titleIcon}
+            resizeMode="contain"
+            fadeDuration={0}
+            style={[
+              styles.settingsRuleTitleIcon,
+              {
+                width: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 1.14) : Math.round(metrics.settingsTitleIconSize * 0.92),
+                height: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 0.92) : Math.round(metrics.settingsTitleIconSize * 0.92),
+              },
+            ]}
+          />
+        </View>
+
+        <View
+          onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
+          style={[
+            styles.settingsRuleSlider,
+            isDiagonal && styles.settingsRuleSliderDiagonal,
+          ]}
+        >
+          {selectorWidth > 0 ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.settingsRuleSelector,
+                {
+                  width: selectorVisualWidth,
+                  transform: [
+                    { translateX: selectorTranslateX },
+                    { translateX: selectorVisualOffset },
+                    { scale: selectorScale },
+                  ],
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={selectorColors}
+                locations={[0, 0.55, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0.92, y: 1 }}
+                style={styles.settingsRuleSelectorGradient}
+              />
+            </Animated.View>
+          ) : null}
+
+          <View style={styles.settingsRuleOptionsRow}>
+            {options.map((option, index) => {
+              const selected = option.id === value;
+              const isLongLabel = option.label.length >= 9;
+              const baseLabelSize = isDiagonal ? 25 : 20;
+              const labelSize = option.label.length >= 9
+                ? 17
+                : baseLabelSize;
+              const optionImageSize = isDiagonal
+                ? Math.round(metrics.settingsSliderDiagonalImageSize * 0.84)
+                : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
+
+              return (
+                <Pressable
+                  key={String(option.id)}
+                  onPress={() => handleOptionPress(option, index)}
+                  style={styles.settingsRuleOption}
+                >
+                  <View style={styles.settingsRuleOptionContent}>
+                    <Image
+                      source={option.image}
+                      resizeMode="contain"
+                      fadeDuration={0}
+                      style={[
+                        styles.settingsRuleOptionImage,
+                        {
+                          width: optionImageSize,
+                          height: optionImageSize,
+                        },
+                      ]}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.58}
+                      style={[
+                        styles.settingsRuleOptionLabel,
+                        {
+                          fontSize: Math.round(labelSize * metrics.scale),
+                          lineHeight: Math.round((labelSize + 9) * metrics.scale),
+                        },
+                        selected && styles.settingsRuleOptionLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </ImageBackground>
+    </View>
   );
 }
 
@@ -665,43 +1439,28 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 4,
     paddingBottom: 152,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
   backButton: {
-    minWidth: 50,
-  },
-  backText: {
-    fontSize: 16,
-    color: '#1f5572',
-    fontWeight: '600',
-  },
-  backSpacer: {
-    minWidth: 50,
-  },
-  title: {
-    fontFamily: 'FredokaOne_400Regular',
-    fontSize: 28,
-    color: '#144766',
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    zIndex: 20,
+    elevation: 20,
   },
   topBlock: {
-    marginTop: 8,
+    marginTop: 32,
     marginHorizontal: -24,
   },
   actionStack: {
     gap: 20,
-    marginTop: 8,
+    marginTop: -2,
   },
   playerStageSection: {
-    height: 224,
+    height: 252,
     position: 'relative',
-    marginTop: 24,
+    marginTop: 12,
     marginBottom: 8,
   },
   playerStageSlot: {
@@ -748,11 +1507,12 @@ const styles = StyleSheet.create({
     bottom: 28,
     width: 34,
     height: 34,
+  },
+  removeButtonPressable: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  removeButtonHidden: {
-    opacity: 0,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -760,23 +1520,39 @@ const styles = StyleSheet.create({
   },
   bottomDock: {
     position: 'absolute',
+    left: -8,
+    right: -8,
+    bottom: 0,
+  },
+  collapsedPanelPressTarget: {
+    position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
   },
   panelShell: {
     overflow: 'hidden',
-    backgroundColor: '#fbfdff',
-    borderWidth: 1,
-    borderColor: '#aebfcb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 12,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    shadowColor: '#3B0504',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 14,
+  },
+  rulesPanelImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  rulesPanelImageAsset: {
+    width: '100%',
+    height: '100%',
   },
   panelShellClosed: {
-    borderRadius: 22,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomWidth: 0,
   },
   panelShellOpen: {
     borderTopLeftRadius: 28,
@@ -786,128 +1562,325 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
   },
   panelHeader: {
-    minHeight: 58,
+    minHeight: 74,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fbfdff',
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+    paddingHorizontal: 68,
+    paddingTop: 4,
+    paddingBottom: 10,
   },
   panelHeaderClosed: {
-    borderRadius: 22,
-  },
-  panelHeaderOpen: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
+  panelHeaderOpen: {
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  panelHeaderGloss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  panelHeaderInner: {
+    width: '100%',
+    maxWidth: 340,
+    minHeight: 58,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.48)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#082E43',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  panelHeaderShine: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    top: 7,
+    height: 13,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+  },
   panelHeaderText: {
     fontFamily: 'FredokaOne_400Regular',
-    fontSize: 17,
-    color: '#1b3242',
+    fontSize: 34,
+    lineHeight: 39,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(116, 7, 5, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 3,
+    zIndex: 2,
+    marginTop: 24,
+    marginBottom: 0,
   },
   panelContent: {
     flex: 1,
-    paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 22,
-    backgroundColor: '#fbfdff',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    backgroundColor: 'transparent',
   },
-  sheetDivider: {
-    height: 2,
-    backgroundColor: '#243744',
-    opacity: 0.9,
-    marginBottom: 18,
+  panelContentGloss: {
+    ...StyleSheet.absoluteFillObject,
   },
-  sheetSection: {
-    gap: 10,
-    marginBottom: 18,
+  settingsMenuBody: {
+    alignItems: 'center',
+    width: '100%',
+    paddingTop: 36,
+    paddingBottom: 28,
   },
-  sheetSectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#486172',
+  settingsRuleSection: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
-  choiceRow: {
+  settingsRuleFrame: {
+    alignItems: 'center',
+  },
+  settingsRuleFrameImage: {
+    width: '100%',
+    height: '100%',
+  },
+  settingsRuleTitleOverlay: {
+    position: 'absolute',
+    top: '2.3%',
+    left: '13.5%',
+    right: '13.5%',
+    height: '25%',
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 6,
+    zIndex: 4,
+  },
+  settingsRuleTitleRow: {
+    width: '92%',
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
+    marginBottom: 16,
+    paddingTop: 3,
+    paddingLeft: 19,
+    paddingRight: 19,
+    paddingBottom: 3,
+    borderRadius: 15,
+    backgroundColor: '#6b0e0e',
+    overflow: 'hidden',
+    shadowColor: '#6b0e0e',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 8,
   },
-  choiceChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#eef4f8',
-    borderWidth: 1,
-    borderColor: '#cad7e0',
+  settingsRuleTitleGloss: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 12,
   },
-  choiceChipSelected: {
-    backgroundColor: '#d8eefc',
-    borderColor: '#2d7fb2',
+  settingsRuleTitleShine: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    height: '46%',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.13)',
   },
-  choiceChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#355366',
+  settingsRuleTitleShade: {
+    position: 'absolute',
+    left: 19,
+    right: 19,
+    top: 7,
+    height: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  choiceChipTextSelected: {
-    color: '#13567f',
+  settingsRuleTitle: {
+    flexShrink: 1,
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 0,
+    includeFontPadding: false,
+    textShadowColor: '#8e1212',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    zIndex: 2,
+  },
+  settingsRuleTitleIcon: {
+    marginTop: 1,
+    zIndex: 2,
+  },
+  settingsRuleSlider: {
+    position: 'absolute',
+    left: '7.4%',
+    right: '7.4%',
+    top: '37%',
+    bottom: '9.2%',
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderRadius: 20,
+  },
+  settingsRuleSliderDiagonal: {
+    backgroundColor: 'transparent',
+  },
+  settingsRuleSliderGloss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  settingsRuleSelector: {
+    position: 'absolute',
+    top: -2,
+    bottom: -2,
+    left: 0,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  settingsRuleSelectorGradient: {
+    flex: 1,
+    borderRadius: 32,
+    borderWidth: 0,
+    borderColor: '#FF140E',
+    shadowColor: '#9F0F08',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+  },
+  settingsRuleOptionsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+  },
+  settingsRuleOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingTop: 6,
+    paddingBottom: 5,
+    overflow: 'hidden',
+  },
+  settingsRuleOptionContent: {
+    width: '100%',
+    maxWidth: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    paddingHorizontal: 4,
+  },
+  settingsRuleOptionImage: {
+    alignSelf: 'center',
+    marginBottom: 5,
+  },
+  settingsRuleOptionLabel: {
+    width: '100%',
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 0,
+    includeFontPadding: false,
+    textShadowColor: 'rgba(129, 44, 22, 0.48)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 3,
+  },
+  settingsRuleOptionLabelSelected: {
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(2, 31, 52, 0.72)',
+    textShadowRadius: 5,
   },
   carouselCardShell: {
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  carouselCardOutline: {
-    padding: 3,
     borderRadius: 26,
   },
-  carouselCardBody: {
-    width: 214,
-    height: 250,
-    borderRadius: 23,
+  carouselCardOutline: {
+    borderWidth: 4,
+    borderRadius: 26,
     overflow: 'hidden',
-    justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
+  },
+  carouselCardOutlineEmbedded: {
+    borderWidth: 0,
+    borderRadius: 0,
+    overflow: 'visible',
+  },
+  carouselCardBody: {
+    width: THEME_CARD_WIDTH,
+    height: 250,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  carouselCardBodyEmbedded: {
+    height: THEME_CARD_HEIGHT,
+    borderRadius: 0,
+    overflow: 'visible',
   },
   carouselCardImage: {
-    borderRadius: 23,
+    borderRadius: 22,
+  },
+  carouselCardImageEmbedded: {
+    borderRadius: 0,
   },
   carouselCardOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(8, 24, 38, 0.18)',
   },
-  carouselCardPremiumBadge: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    backgroundColor: 'rgba(12, 25, 35, 0.78)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+  carouselCardLockedDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    zIndex: 1,
+  },
+  carouselCardLockPressable: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
     zIndex: 2,
   },
-  carouselCardPremiumText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+  carouselCardLockOverlay: {
+    width: '100%',
+    height: '100%',
   },
-  carouselCardLabelWrap: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(10, 28, 42, 0.28)',
+  carouselCardTitleWrap: {
+    position: 'absolute',
+    top: 26,
+    left: 12,
+    right: 12,
+    alignItems: 'center',
+  },
+  carouselCardTitleWrapEmbedded: {
+    top: '1.5%',
+    left: '10%',
+    right: '10%',
+    minHeight: 46,
+    justifyContent: 'center',
   },
   carouselCardTitle: {
     fontFamily: 'FredokaOne_400Regular',
-    fontSize: 26,
+    fontSize: 28,
+    lineHeight: 40,
     color: '#ffffff',
-    textShadowColor: 'rgba(0, 0, 0, 0.28)',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.38)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  carouselCardTitleDark: {
-    color: '#223549',
-    textShadowColor: 'rgba(255, 255, 255, 0.24)',
+    textShadowRadius: 5,
   },
   modalBackdrop: {
     flex: 1,
@@ -946,23 +1919,63 @@ const styles = StyleSheet.create({
   carouselCardTaken: {
     opacity: 0.32,
   },
-  selectButton: {
-    minWidth: 220,
+  playerAvatarWrap: {
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#155E75',
-    borderRadius: 18,
-    paddingVertical: 16,
-    borderWidth: 3,
-    borderColor: '#0B3550',
   },
-  selectButtonDisabled: {
-    opacity: 0.4,
+  carGroundShadow: {
+    position: 'absolute',
+    alignSelf: 'center',
   },
-  selectButtonText: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '700',
+  playerNamePlate: {
+    width: 148,
+    minHeight: 42,
+    marginTop: -8,
+    paddingTop: 3,
+    paddingLeft: 3,
+    paddingRight: 3,
+    paddingBottom: 5,
+    borderRadius: 15,
+    position: 'relative',
+    justifyContent: 'center',
+    shadowOpacity: 0.28,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  playerNamePlateInner: {
+    minHeight: 34,
+    borderRadius: 12,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  playerNamePlateGloss: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    top: 5,
+    height: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  playerNameInput: {
+    padding: 0,
+    margin: 0,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 17,
+    lineHeight: 22,
+    color: '#144766',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+  playerNameInputHidden: {
+    opacity: 0,
+  },
+  selectButtonWrap: {
+    minWidth: 220,
   },
   transitionCar: {
     position: 'absolute',

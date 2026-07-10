@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ThemeCarousel from '../components/ThemeCarousel';
-import GlossyButton from '../components/GlossyButton';
+import AnimatedRouteBackButton from '../components/AnimatedRouteBackButton';
 
 type ThemeCard = {
   id: string;
@@ -15,6 +15,7 @@ type ThemeCard = {
 type ThemeCarouselTestScreenProps = {
   navigation?: {
     goBack?: () => void;
+    goBackWithTransition?: (transition: Record<string, unknown>) => void;
   };
 };
 
@@ -70,6 +71,13 @@ export default function ThemeCarouselTestScreen({ navigation }: ThemeCarouselTes
         end={{ x: 0.8, y: 1 }}
         style={styles.background}
       >
+        {navigation?.goBack ? (
+          <AnimatedRouteBackButton
+            navigation={navigation}
+            size={66}
+            style={styles.backWrap}
+          />
+        ) : null}
         <View style={styles.header}>
           <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
           <Text style={styles.title}>Theme coverflow</Text>
@@ -94,11 +102,6 @@ export default function ThemeCarouselTestScreen({ navigation }: ThemeCarouselTes
           <Text style={styles.captionText}>{activeTheme.subtitle}</Text>
         </View>
 
-        {navigation?.goBack ? (
-          <View style={styles.footer}>
-            <GlossyButton label="Terug" variant="blue" onPress={navigation.goBack} />
-          </View>
-        ) : null}
       </LinearGradient>
     </SafeAreaView>
   );
@@ -128,6 +131,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingVertical: 24,
+    position: 'relative',
+  },
+  backWrap: {
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    zIndex: 20,
   },
   header: {
     alignItems: 'center',
@@ -219,9 +229,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     color: '#c6dcec',
-  },
-  footer: {
-    paddingHorizontal: 24,
-    paddingBottom: 8,
   },
 });

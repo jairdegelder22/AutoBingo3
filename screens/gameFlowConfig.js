@@ -76,6 +76,33 @@ export function buildPlayerArray(count, defaults = []) {
   );
 }
 
+export function getDefaultPlayerName(index = 0) {
+  return `Speler ${index + 1}`;
+}
+
+export function isDefaultPlayerName(value = '') {
+  return /^Speler\s+\d+$/i.test(String(value).trim());
+}
+
+export function normalizeCustomPlayerName(value = '') {
+  const normalizedName = typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ')
+    : '';
+
+  return isDefaultPlayerName(normalizedName) ? '' : normalizedName;
+}
+
+export function withDefaultPlayerNames(players = [], startIndex = 0) {
+  return players.map((player, index) => {
+    const normalizedName = normalizeCustomPlayerName(player?.naam);
+
+    return {
+      ...player,
+      naam: normalizedName || getDefaultPlayerName(startIndex + index),
+    };
+  });
+}
+
 export function normalizeLobbyCode(value = '') {
   return value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 4);
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { BackButton, OptionButton, PrimaryButton, ScreenLayout, Section, ToggleRow } from './flowComponents';
 import { createGameConfig, THEME_OPTIONS, WINCONDITION_OPTIONS } from './gameFlowConfig';
 
@@ -30,16 +31,16 @@ export default function SoloSetupScreen({ navigation }) {
   }
 
   return (
-    <ScreenLayout
-      title="Solo setup"
-      footer={<PrimaryButton label="Start Spel" disabled={!isReady} onPress={handleStart} />}
-    >
-      <BackButton onPress={navigation.goBack} />
-
-      <Section title="Stap 1 — Aantal spelers">
-        <OptionButton label="1 speler" selected={aantalSpelers === 1} onPress={() => setAantalSpelers(1)} />
-        <OptionButton label="2 spelers" selected={aantalSpelers === 2} onPress={() => setAantalSpelers(2)} />
-      </Section>
+    <View style={{ flex: 1 }}>
+      <BackButton navigation={navigation} />
+      <ScreenLayout
+        title="Solo setup"
+        footer={<PrimaryButton label="Start Spel" disabled={!isReady} onPress={handleStart} />}
+      >
+        <Section title="Stap 1 — Aantal spelers">
+          <OptionButton label="1 speler" selected={aantalSpelers === 1} onPress={() => setAantalSpelers(1)} />
+          <OptionButton label="2 spelers" selected={aantalSpelers === 2} onPress={() => setAantalSpelers(2)} />
+        </Section>
 
       <Section title="Stap 2 — Thema kiezen">
         {THEME_OPTIONS.map((option) => (
@@ -82,6 +83,7 @@ export default function SoloSetupScreen({ navigation }) {
           />
         </Section>
       ) : null}
-    </ScreenLayout>
+      </ScreenLayout>
+    </View>
   );
 }

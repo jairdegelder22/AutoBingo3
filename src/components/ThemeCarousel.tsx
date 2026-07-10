@@ -11,7 +11,8 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../settings/haptics';
+import { getResponsiveMetrics } from '../utils/responsive';
 
 type ThemeCarouselProps<ItemT> = {
   items: ItemT[];
@@ -47,17 +48,19 @@ export default function ThemeCarousel<ItemT>({
   keyExtractor,
   renderCard,
   itemWidth,
-  itemSpacing = 18,
+  itemSpacing,
   focusedIndex,
   onSnapToItem,
   containerStyle,
   flatListProps,
 }: ThemeCarouselProps<ItemT>) {
-  const { width: screenWidth } = useWindowDimensions();
-  const resolvedItemWidth = itemWidth ?? Math.min(screenWidth * 0.68, 300);
-  const snapInterval = resolvedItemWidth + itemSpacing;
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { isTablet } = getResponsiveMetrics(screenWidth, screenHeight);
+  const resolvedItemWidth = itemWidth ?? Math.min(screenWidth * (isTablet ? 0.54 : 0.68), isTablet ? 380 : 300);
+  const resolvedItemSpacing = itemSpacing ?? (isTablet ? 26 : 18);
+  const snapInterval = resolvedItemWidth + resolvedItemSpacing;
   const sideInset = Math.max(0, (screenWidth - resolvedItemWidth) / 2);
-  const horizontalInset = Math.max(0, sideInset - itemSpacing / 2);
+  const horizontalInset = Math.max(0, sideInset - resolvedItemSpacing / 2);
   const scrollX = useRef(new Animated.Value(0)).current;
   const listRef = useRef<Animated.FlatList<ItemT>>(null);
   const baseCount = items.length;

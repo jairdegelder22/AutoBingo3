@@ -8,6 +8,7 @@ export const THEMES = [
     textColor: '#FFFDF7',
     cardSurface: '#2b7898',
     cardBorder: '#123d51',
+    cardOutline: '#087ED1',
   },
   {
     id: 'stad',
@@ -18,6 +19,7 @@ export const THEMES = [
     textColor: '#FFFDF7',
     cardSurface: '#d28b2f',
     cardBorder: '#7a4700',
+    cardOutline: '#FFB42E',
   },
   {
     id: 'platteland',
@@ -28,16 +30,18 @@ export const THEMES = [
     textColor: '#FFFDF7',
     cardSurface: '#4f9c65',
     cardBorder: '#1f5d36',
+    cardOutline: '#37D65F',
   },
   {
     id: 'vakantie',
     label: 'Vakantie',
-    premium: false,
+    premium: true,
     emoji: '🌴',
     bg: '#E8622A',
     textColor: '#FFFDF7',
     cardSurface: '#d06b42',
     cardBorder: '#7e3518',
+    cardOutline: '#FF7A2F',
   },
   {
     id: 'winter',
@@ -48,6 +52,7 @@ export const THEMES = [
     textColor: '#2D2B55',
     cardSurface: '#d8ecff',
     cardBorder: '#78aede',
+    cardOutline: '#7DD6FF',
   },
   {
     id: 'voertuigen',
@@ -58,6 +63,7 @@ export const THEMES = [
     textColor: '#F5C400',
     cardSurface: '#44516b',
     cardBorder: '#202b3f',
+    cardOutline: '#7F86FF',
   },
   {
     id: 'verkeersborden',
@@ -69,6 +75,7 @@ export const THEMES = [
     border: '#D93B2B',
     cardSurface: '#fffaf2',
     cardBorder: '#d93b2b',
+    cardOutline: '#FF2D22',
   },
 ];
 

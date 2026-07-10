@@ -1,10 +1,23 @@
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import CircularReveal from '../components/CircularReveal';
+import AnimatedBackButton from '../src/components/AnimatedBackButton';
+import { getResponsiveMetrics } from '../src/utils/responsive';
 
-export function ScreenLayout({ title, children, footer, scroll = true }) {
+const BACK_REVEAL_YELLOW = '#F5C400';
+
+export function ScreenLayout({
+  title,
+  children,
+  footer,
+  scroll = true,
+  backgroundImage,
+  backgroundBlurRadius = 0,
+  backgroundOverlayStyle = null,
+}) {
   const ContentWrapper = scroll ? ScrollView : View;
-
-  return (
-    <View style={styles.screen}>
+  const screenContent = (
+    <>
       <ContentWrapper
         style={styles.content}
         contentContainerStyle={scroll ? styles.scrollContent : undefined}
@@ -12,7 +25,27 @@ export function ScreenLayout({ title, children, footer, scroll = true }) {
         {title ? <Text style={styles.title}>{title}</Text> : null}
         {children}
       </ContentWrapper>
-      {footer ? <View style={styles.footer}>{footer}</View> : null}
+      {footer ? (
+        <View style={[styles.footer, backgroundImage ? styles.footerWithBackground : null]}>
+          {footer}
+        </View>
+      ) : null}
+    </>
+  );
+
+  return (
+    <View style={styles.screen}>
+      {backgroundImage ? (
+        <ImageBackground
+          source={backgroundImage}
+          resizeMode="cover"
+          blurRadius={backgroundBlurRadius}
+          style={styles.backgroundImage}
+        >
+          {backgroundOverlayStyle ? <View pointerEvents="none" style={[styles.backgroundOverlay, backgroundOverlayStyle]} /> : null}
+          {screenContent}
+        </ImageBackground>
+      ) : screenContent}
     </View>
   );
 }
@@ -60,11 +93,68 @@ export function PrimaryButton({ label, disabled, onPress }) {
   );
 }
 
-export function BackButton({ onPress, label = 'Terug' }) {
+export function BackButton({ onPress, navigation }) {
+  const { width, height } = useWindowDimensions();
+  const { isTablet, tabletScale } = getResponsiveMetrics(width, height);
+  const buttonSize = isTablet ? Math.round(66 * Math.min(tabletScale, 1.22)) : 66;
+  const revealRef = useRef(null);
+  const [origin, setOrigin] = useState({ x: buttonSize / 2, y: buttonSize / 2 });
+  const [transitioning, setTransitioning] = useState(false);
+
+  useEffect(() => {
+    if (!transitioning) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      revealRef.current?.reveal();
+    });
+  }, [transitioning]);
+
+  function handleActivated(nextOrigin) {
+    if (onPress) {
+      onPress(nextOrigin);
+      return;
+    }
+
+    setOrigin(nextOrigin);
+    setTransitioning(true);
+  }
+
+  function handleRevealComplete() {
+    if (navigation?.goBackWithTransition) {
+      navigation.goBackWithTransition({
+        color: BACK_REVEAL_YELLOW,
+        originX: origin.x,
+        originY: origin.y,
+        pauseMs: 240,
+        transitionKey: `flow-back-${Date.now()}`,
+      });
+      return;
+    }
+
+    onPress?.();
+  }
+
   return (
-    <Pressable style={styles.backButton} onPress={onPress}>
-      <Text style={styles.backButtonText}>{label}</Text>
-    </Pressable>
+    <View pointerEvents="box-none" style={styles.backButton}>
+      <AnimatedBackButton
+        disabled={transitioning}
+        onActivated={handleActivated}
+        size={buttonSize}
+      />
+      <Modal transparent visible={transitioning} animationType="none">
+        <View style={styles.modalFill}>
+          <CircularReveal
+            ref={revealRef}
+            color={BACK_REVEAL_YELLOW}
+            originX={origin.x}
+            originY={origin.y}
+            onComplete={handleRevealComplete}
+          />
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -107,6 +197,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  backgroundImage: {
+    flex: 1,
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 72,
@@ -118,6 +214,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#D3CCBD',
     backgroundColor: '#F4F1E8',
+  },
+  footerWithBackground: {
+    backgroundColor: 'rgba(244, 241, 232, 0.86)',
   },
   title: {
     fontSize: 28,
@@ -187,12 +286,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   backButton: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    zIndex: 20,
+    elevation: 20,
   },
-  backButtonText: {
-    fontSize: 16,
-    color: '#2563EB',
-    fontWeight: '600',
+  modalFill: {
+    flex: 1,
   },
   toggleRow: {
     borderWidth: 1,

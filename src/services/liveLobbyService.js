@@ -12,9 +12,62 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 const BOARD_SIZE = 16;
+const CONNECTION_CHECK_TIMEOUT_MS = 3500;
+const PLAYER_PRESENCE_STALE_MS = 15000;
+let playerPresenceColumnAvailable = true;
+
+function withTimeout(promise, timeoutMs = CONNECTION_CHECK_TIMEOUT_MS) {
+  let timeoutId = null;
+
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+}
+
+export async function checkOnlineConnection(timeoutMs = CONNECTION_CHECK_TIMEOUT_MS) {
+  try {
+    const result = await withTimeout(
+      supabase
+        .from('lobbies')
+        .select('id')
+        .limit(1),
+      timeoutMs
+    );
+
+    if (result?.timedOut) {
+      return false;
+    }
+
+    return !result?.error;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getDefaultPlayerName(index = 0) {
+  return `Speler ${index + 1}`;
+}
+
+function isDefaultPlayerName(value = '') {
+  return /^Speler\s+\d+$/i.test(String(value).trim());
+}
+
+function normalizeCustomPlayerName(value = '') {
+  const normalizedName = typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ')
+    : '';
+
+  return isDefaultPlayerName(normalizedName) ? '' : normalizedName;
+}
 
 function normalizePlayer(player, fallbackRole = 'guest') {
-  const normalizedName = typeof player?.naam === 'string' ? player.naam.trim() : '';
+  const normalizedName = normalizeCustomPlayerName(player?.naam);
 
   return {
     naam: normalizedName,
@@ -43,20 +96,31 @@ function mapLobbyRowToSnapshot(lobbyRow, playerRows = []) {
       kaartOpzet: lobbyRow.card_layout ?? 'zelfde',
     },
     started: lobbyRow.status === 'started',
+    ended: lobbyRow.status === 'ended',
     startedAt: lobbyRow.started_at,
-    players: playerRows.map((row) => ({
-      naam: row.name,
+    hostPlayerId: lobbyRow.host_player_id,
+    players: playerRows.map((row, index) => ({
+      naam: normalizeCustomPlayerName(row.name),
       skin: row.skin,
       playerId: row.player_id,
       role: row.role,
       isReady: row.is_ready,
+      lastSeenAt: row.last_seen_at ?? row.joined_at ?? null,
+      isOffline: row.last_seen_at
+        ? Date.now() - new Date(row.last_seen_at).getTime() > PLAYER_PRESENCE_STALE_MS
+        : false,
     })),
     createdAt: lobbyRow.created_at,
     lobbyId: lobbyRow.id,
   };
 }
 
-async function fetchLobbyRowByCode(code) {
+function isMissingPlayerPresenceColumn(error) {
+  const message = error?.message ?? '';
+  return message.includes("'last_seen_at' column") || message.includes('last_seen_at');
+}
+
+async function fetchLobbyRowByCodeWithStatus(code) {
   const { data, error } = await supabase
     .from('lobbies')
     .select('*')
@@ -65,9 +129,14 @@ async function fetchLobbyRowByCode(code) {
 
   if (error) {
     console.warn('fetchLobbyRowByCode error', error.message);
-    return null;
+    return { data: null, error };
   }
 
+  return { data, error: null };
+}
+
+async function fetchLobbyRowByCode(code) {
+  const { data } = await fetchLobbyRowByCodeWithStatus(code);
   return data;
 }
 
@@ -80,7 +149,7 @@ async function fetchPlayersByLobbyId(lobbyId) {
 
   if (error) {
     console.warn('fetchPlayersByLobbyId error', error.message);
-    return [];
+    return null;
   }
 
   return data ?? [];
@@ -150,7 +219,7 @@ async function resetLobbyState(lobbyId, hostPlayerId) {
   }
 }
 
-export async function ensureLobby({ code, config, hostPlayer }) {
+export async function ensureLobby({ code, config, hostPlayer, resetExisting = true }) {
   if (!code) {
     return null;
   }
@@ -177,7 +246,10 @@ export async function ensureLobby({ code, config, hostPlayer }) {
     return null;
   }
 
-  await resetLobbyState(lobbyRow.id, normalizedHost.playerId);
+  if (resetExisting) {
+    await resetLobbyState(lobbyRow.id, normalizedHost.playerId);
+  }
+
   await upsertPlayers(code, [{ ...normalizedHost, role: 'host' }]);
   return getLobbySnapshot(code);
 }
@@ -188,8 +260,22 @@ export async function upsertPlayers(code, players) {
     return null;
   }
 
-  const payload = players.map((player) => {
-    const normalized = normalizePlayer(player, player?.role || 'guest');
+  const existingPlayers = await fetchPlayersByLobbyId(lobbyRow.id) ?? [];
+  const orderedPlayerIds = existingPlayers.map((player) => player.player_id).filter(Boolean);
+  const normalizedPlayers = players.map((player) => normalizePlayer(player, player?.role || 'guest'));
+
+  normalizedPlayers.forEach((player) => {
+    if (!orderedPlayerIds.includes(player.playerId)) {
+      orderedPlayerIds.push(player.playerId);
+    }
+  });
+
+  const nowIso = new Date().toISOString();
+  const payload = normalizedPlayers.map((normalized) => {
+    const playerOrderIndex = normalized.role === 'host'
+      ? 0
+      : Math.max(0, orderedPlayerIds.indexOf(normalized.playerId));
+
     return {
       lobby_id: lobbyRow.id,
       player_id: normalized.playerId,
@@ -197,12 +283,20 @@ export async function upsertPlayers(code, players) {
       skin: normalized.skin,
       role: normalized.role,
       is_ready: true,
+      ...(playerPresenceColumnAvailable ? { last_seen_at: nowIso } : {}),
     };
   });
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('lobby_players')
     .upsert(payload, { onConflict: 'lobby_id,player_id' });
+
+  if (error && playerPresenceColumnAvailable && isMissingPlayerPresenceColumn(error)) {
+    playerPresenceColumnAvailable = false;
+    ({ error } = await supabase
+      .from('lobby_players')
+      .upsert(payload.map(({ last_seen_at: _lastSeenAt, ...player }) => player), { onConflict: 'lobby_id,player_id' }));
+  }
 
   if (error) {
     console.warn('upsertPlayers error', error.message);
@@ -210,6 +304,35 @@ export async function upsertPlayers(code, players) {
   }
 
   return getLobbySnapshot(code);
+}
+
+export async function touchPlayerPresence(code, playerIds = []) {
+  if (!playerPresenceColumnAvailable || !playerIds.length) {
+    return false;
+  }
+
+  const lobbyRow = await fetchLobbyRowByCode(code);
+  if (!lobbyRow) {
+    return false;
+  }
+
+  const { error } = await supabase
+    .from('lobby_players')
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq('lobby_id', lobbyRow.id)
+    .in('player_id', playerIds);
+
+  if (error) {
+    if (isMissingPlayerPresenceColumn(error)) {
+      playerPresenceColumnAvailable = false;
+      return false;
+    }
+
+    console.warn('touchPlayerPresence error', error.message);
+    return false;
+  }
+
+  return true;
 }
 
 export async function removePlayers(code, playerIds = []) {
@@ -234,6 +357,55 @@ export async function removePlayers(code, playerIds = []) {
   }
 
   return getLobbySnapshot(code);
+}
+
+export async function deleteLobby(code) {
+  const lobbyRow = await fetchLobbyRowByCode(code);
+  if (!lobbyRow) {
+    return null;
+  }
+
+  const { error: endError } = await supabase
+    .from('lobbies')
+    .update({
+      status: 'ended',
+      started_at: null,
+    })
+    .eq('id', lobbyRow.id);
+
+  if (endError) {
+    console.warn('deleteLobby end update error', endError.message);
+  }
+
+  const { error: boardError } = await supabase
+    .from('lobby_board_cells')
+    .delete()
+    .eq('lobby_id', lobbyRow.id);
+
+  if (boardError) {
+    console.warn('deleteLobby board delete error', boardError.message);
+  }
+
+  const { error: playersError } = await supabase
+    .from('lobby_players')
+    .delete()
+    .eq('lobby_id', lobbyRow.id);
+
+  if (playersError) {
+    console.warn('deleteLobby players delete error', playersError.message);
+  }
+
+  const { error: lobbyError } = await supabase
+    .from('lobbies')
+    .delete()
+    .eq('id', lobbyRow.id);
+
+  if (lobbyError) {
+    console.warn('deleteLobby lobby delete error', lobbyError.message);
+    return null;
+  }
+
+  return true;
 }
 
 export async function joinLobby({ code, config, players }) {
@@ -296,6 +468,47 @@ export async function startLobby(code) {
     return null;
   }
 
+  const { error: boardError } = await supabase
+    .from('lobby_board_cells')
+    .delete()
+    .eq('lobby_id', lobbyRow.id);
+
+  if (boardError) {
+    console.warn('startLobby board delete error', boardError.message);
+    return null;
+  }
+
+  return getLobbySnapshot(code);
+}
+
+export async function updateLobbySettings(code, config = {}) {
+  const lobbyRow = await fetchLobbyRowByCode(code);
+  if (!lobbyRow) {
+    return null;
+  }
+
+  const updatePayload = {
+    theme: config?.thema ?? lobbyRow.theme,
+    game_mode: config?.modus ?? lobbyRow.game_mode,
+    seed: config?.seed ?? lobbyRow.seed,
+    salt: config?.salt ?? lobbyRow.salt,
+    win_condition: config?.wincondition ?? lobbyRow.win_condition ?? '1rij',
+    allow_diagonal: typeof config?.diagonaal === 'boolean'
+      ? config.diagonaal
+      : (typeof lobbyRow.allow_diagonal === 'boolean' ? lobbyRow.allow_diagonal : true),
+    card_layout: config?.kaartOpzet ?? lobbyRow.card_layout ?? 'zelfde',
+  };
+
+  const { error } = await supabase
+    .from('lobbies')
+    .update(updatePayload)
+    .eq('id', lobbyRow.id);
+
+  if (error) {
+    console.warn('updateLobbySettings error', error.message);
+    return null;
+  }
+
   return getLobbySnapshot(code);
 }
 
@@ -336,6 +549,38 @@ export async function restartLobbyGame(code, config = {}) {
   return getLobbySnapshot(code);
 }
 
+export async function stopLobbyGame(code) {
+  const lobbyRow = await fetchLobbyRowByCode(code);
+  if (!lobbyRow) {
+    return null;
+  }
+
+  const { error: lobbyError } = await supabase
+    .from('lobbies')
+    .update({
+      status: 'waiting',
+      started_at: null,
+    })
+    .eq('id', lobbyRow.id);
+
+  if (lobbyError) {
+    console.warn('stopLobbyGame update error', lobbyError.message);
+    return null;
+  }
+
+  const { error: boardError } = await supabase
+    .from('lobby_board_cells')
+    .delete()
+    .eq('lobby_id', lobbyRow.id);
+
+  if (boardError) {
+    console.warn('stopLobbyGame board delete error', boardError.message);
+    return null;
+  }
+
+  return getLobbySnapshot(code);
+}
+
 export function subscribeToLobby(code, listener) {
   let isActive = true;
   let channel = null;
@@ -344,19 +589,32 @@ export function subscribeToLobby(code, listener) {
 
   async function publishSnapshot() {
     const snapshot = await getLobbySnapshot(code);
-    if (isActive) {
+    if (!isActive) {
+      return;
+    }
+
+    if (snapshot) {
       listener(snapshot);
+      return;
+    }
+
+    const online = await checkOnlineConnection(1200);
+    if (isActive && online) {
+      listener(null);
     }
   }
 
   async function setup() {
-    const lobbyRow = await fetchLobbyRowByCode(code);
+    const lobbyResult = await fetchLobbyRowByCodeWithStatus(code);
+    const lobbyRow = lobbyResult.data;
     if (!isActive) {
       return;
     }
 
     if (!lobbyRow) {
-      listener(null);
+      if (!lobbyResult.error) {
+        listener(null);
+      }
       retryTimeout = setTimeout(() => {
         if (isActive) {
           void setup();
@@ -408,6 +666,10 @@ export async function getLobbySnapshot(code) {
   }
 
   const playerRows = await fetchPlayersByLobbyId(lobbyRow.id);
+  if (!playerRows) {
+    return null;
+  }
+
   return mapLobbyRowToSnapshot(lobbyRow, playerRows);
 }
 

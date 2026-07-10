@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image, Animated, Easing } from 'react-native';
 import { useFonts as useFredoka, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../src/settings/haptics';
 import ColorSelectScreen from './ColorSelectScreen';
 import ThemeSelectScreen from './ThemeSelectScreen';
 import { PLAYER_IMAGES } from '../assets/images/players/playerImages';
@@ -177,7 +177,7 @@ export default function PlayerSelectScreen({ onSelect, onBack }) {
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
           <Text style={[styles.headerText, { fontFamily: fredoka }]}>Aantal spelers</Text>
-          <View style={styles.backButton} />
+          <View style={styles.backSpacer} />
         </View>
 
         <View style={styles.body}>
@@ -215,15 +215,26 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 24,
+    position: 'relative',
   },
   headerText: {
     fontSize: 22,
     color: '#FFFDF7',
     letterSpacing: 0.5,
   },
-  backButton: { width: 40 },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    top: 52,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  backSpacer: { width: 44 },
   backText: {
     fontSize: 24,
     color: '#FFFDF7',

@@ -1,0 +1,962 @@
+{
+  "ok": true,
+  "frames_root": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames",
+  "errors": [],
+  "warnings": [],
+  "rows": [
+    {
+      "state": "idle",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/idle/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20924,
+          "bbox": [
+            11,
+            5,
+            181,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 282
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/idle/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20448,
+          "bbox": [
+            10,
+            5,
+            182,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 310
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/idle/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18628,
+          "bbox": [
+            19,
+            5,
+            172,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 259
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/idle/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20934,
+          "bbox": [
+            11,
+            5,
+            181,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 275
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/idle/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22785,
+          "bbox": [
+            6,
+            5,
+            185,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 329
+        },
+        {
+          "index": 5,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/idle/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20474,
+          "bbox": [
+            12,
+            5,
+            179,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 344
+        }
+      ]
+    },
+    {
+      "state": "running-right",
+      "expected_frames": 8,
+      "actual_frames": 8,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24069,
+          "bbox": [
+            5,
+            6,
+            187,
+            202
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 426
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20922,
+          "bbox": [
+            16,
+            5,
+            176,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 395
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 17742,
+          "bbox": [
+            25,
+            5,
+            167,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 361
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 16621,
+          "bbox": [
+            33,
+            5,
+            158,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 242
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20319,
+          "bbox": [
+            15,
+            5,
+            177,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 357
+        },
+        {
+          "index": 5,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22003,
+          "bbox": [
+            9,
+            5,
+            182,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 367
+        },
+        {
+          "index": 6,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/06.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20279,
+          "bbox": [
+            10,
+            12,
+            181,
+            196
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 234
+        },
+        {
+          "index": 7,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-right/07.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20288,
+          "bbox": [
+            9,
+            14,
+            182,
+            194
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 202
+        }
+      ]
+    },
+    {
+      "state": "running-left",
+      "expected_frames": 8,
+      "actual_frames": 8,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20288,
+          "bbox": [
+            9,
+            14,
+            182,
+            194
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 202
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20279,
+          "bbox": [
+            10,
+            12,
+            181,
+            196
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 234
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22003,
+          "bbox": [
+            9,
+            5,
+            182,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 367
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20319,
+          "bbox": [
+            15,
+            5,
+            177,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 357
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 16621,
+          "bbox": [
+            33,
+            5,
+            158,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 242
+        },
+        {
+          "index": 5,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 17742,
+          "bbox": [
+            25,
+            5,
+            167,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 361
+        },
+        {
+          "index": 6,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/06.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20922,
+          "bbox": [
+            16,
+            5,
+            176,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 395
+        },
+        {
+          "index": 7,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running-left/07.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24069,
+          "bbox": [
+            5,
+            6,
+            187,
+            202
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 426
+        }
+      ]
+    },
+    {
+      "state": "waving",
+      "expected_frames": 4,
+      "actual_frames": 4,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waving/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20700,
+          "bbox": [
+            5,
+            19,
+            187,
+            188
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 243
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waving/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20427,
+          "bbox": [
+            5,
+            12,
+            187,
+            196
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 180
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waving/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19863,
+          "bbox": [
+            5,
+            14,
+            187,
+            193
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 172
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waving/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20735,
+          "bbox": [
+            5,
+            19,
+            187,
+            189
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 186
+        }
+      ]
+    },
+    {
+      "state": "jumping",
+      "expected_frames": 5,
+      "actual_frames": 5,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/jumping/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18243,
+          "bbox": [
+            5,
+            24,
+            187,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 281
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/jumping/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19857,
+          "bbox": [
+            5,
+            16,
+            187,
+            191
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 217
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/jumping/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18973,
+          "bbox": [
+            5,
+            18,
+            187,
+            190
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 236
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/jumping/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19155,
+          "bbox": [
+            5,
+            19,
+            187,
+            189
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 255
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/jumping/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18036,
+          "bbox": [
+            5,
+            28,
+            187,
+            180
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 235
+        }
+      ]
+    },
+    {
+      "state": "failed",
+      "expected_frames": 8,
+      "actual_frames": 8,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20283,
+          "bbox": [
+            5,
+            23,
+            187,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 373
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19847,
+          "bbox": [
+            5,
+            26,
+            187,
+            181
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 372
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19060,
+          "bbox": [
+            5,
+            29,
+            187,
+            179
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 319
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18558,
+          "bbox": [
+            5,
+            36,
+            187,
+            172
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 250
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 16428,
+          "bbox": [
+            5,
+            40,
+            187,
+            167
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 247
+        },
+        {
+          "index": 5,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 15698,
+          "bbox": [
+            5,
+            45,
+            187,
+            163
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 220
+        },
+        {
+          "index": 6,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/06.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 14403,
+          "bbox": [
+            5,
+            50,
+            187,
+            157
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 241
+        },
+        {
+          "index": 7,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/failed/07.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 13186,
+          "bbox": [
+            5,
+            56,
+            187,
+            152
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 212
+        }
+      ]
+    },
+    {
+      "state": "waiting",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waiting/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19394,
+          "bbox": [
+            5,
+            19,
+            187,
+            189
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 245
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waiting/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19118,
+          "bbox": [
+            5,
+            13,
+            187,
+            194
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 251
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waiting/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18133,
+          "bbox": [
+            5,
+            12,
+            187,
+            195
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 253
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waiting/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19259,
+          "bbox": [
+            5,
+            12,
+            187,
+            195
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 249
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waiting/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18819,
+          "bbox": [
+            5,
+            19,
+            187,
+            189
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 274
+        },
+        {
+          "index": 5,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/waiting/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19561,
+          "bbox": [
+            5,
+            21,
+            187,
+            187
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 236
+        }
+      ]
+    },
+    {
+      "state": "running",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22830,
+          "bbox": [
+            5,
+            6,
+            187,
+            201
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 311
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23805,
+          "bbox": [
+            5,
+            11,
+            187,
+            197
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 257
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19717,
+          "bbox": [
+            19,
+            5,
+            173,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 250
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23047,
+          "bbox": [
+            6,
+            5,
+            185,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 317
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24552,
+          "bbox": [
+            5,
+            8,
+            187,
+            200
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 325
+        },
+        {
+          "index": 5,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/running/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22929,
+          "bbox": [
+            6,
+            5,
+            186,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 308
+        }
+      ]
+    },
+    {
+      "state": "review",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/review/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20755,
+          "bbox": [
+            5,
+            16,
+            187,
+            192
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 278
+        },
+        {
+          "index": 1,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/review/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 21854,
+          "bbox": [
+            5,
+            16,
+            187,
+            192
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 261
+        },
+        {
+          "index": 2,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/review/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20776,
+          "bbox": [
+            12,
+            5,
+            180,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 259
+        },
+        {
+          "index": 3,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/review/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23716,
+          "bbox": [
+            6,
+            5,
+            185,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 345
+        },
+        {
+          "index": 4,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/review/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22970,
+          "bbox": [
+            6,
+            5,
+            186,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 368
+        },
+        {
+          "index": 5,
+          "file": "/Users/jairdegelder/Documents/AutoBingo3/tmp/hatch-pet-scopey/frames/review/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22648,
+          "bbox": [
+            5,
+            11,
+            187,
+            196
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 311
+        }
+      ]
+    }
+  ]
+}

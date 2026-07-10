@@ -2,16 +2,25 @@ import React from 'react';
 import { Image, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import GlossyButton from '../components/GlossyButton';
 import ArcadeScoopButton from '../components/ArcadeScoopButton';
+import AnimatedRouteBackButton from '../components/AnimatedRouteBackButton';
 
 type ButtonTestScreenProps = {
   navigation?: {
     goBack?: () => void;
+    goBackWithTransition?: (transition: Record<string, unknown>) => void;
   };
 };
 
 export default function ButtonTestScreen({ navigation }: ButtonTestScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
+      {navigation?.goBack ? (
+        <AnimatedRouteBackButton
+          navigation={navigation}
+          size={66}
+          style={styles.backWrap}
+        />
+      ) : null}
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
@@ -52,11 +61,6 @@ export default function ButtonTestScreen({ navigation }: ButtonTestScreenProps) 
           <ArcadeScoopButton label="Live sync" variant="coral" size="normal" onPress={() => {}} />
         </View>
 
-        {navigation?.goBack ? (
-          <View style={styles.backWrap}>
-            <GlossyButton label="Terug" variant="red" onPress={navigation.goBack} />
-          </View>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -66,6 +70,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#08121f',
+    position: 'relative',
   },
   content: {
     paddingHorizontal: 20,
@@ -112,6 +117,9 @@ const styles = StyleSheet.create({
     color: '#9fc1d8',
   },
   backWrap: {
-    marginTop: 4,
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    zIndex: 20,
   },
 });

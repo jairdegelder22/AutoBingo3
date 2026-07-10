@@ -6,9 +6,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../settings/haptics';
 import Svg, { Defs, Ellipse, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
 
 type ArcadeScoopButtonVariant = 'sky' | 'gold' | 'coral';
@@ -23,6 +24,10 @@ interface ArcadeScoopButtonProps {
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 const VARIANT_TOKENS = {
   sky: {
@@ -132,15 +137,21 @@ export default function ArcadeScoopButton({
   size = 'normal',
   disabled = false,
 }: ArcadeScoopButtonProps) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [layoutWidth, setLayoutWidth] = useState(0);
   const pressAnim = useRef(new Animated.Value(0)).current;
   const tokens = VARIANT_TOKENS[variant];
   const sizeTokens = SIZE_TOKENS[size];
-  const width = Math.max(layoutWidth, sizeTokens.minWidth);
-  const height = sizeTokens.height;
+  const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.9, 1.18);
+  const minWidth = Math.round(sizeTokens.minWidth * scale);
+  const height = Math.round(sizeTokens.height * scale);
+  const depth = Math.round(sizeTokens.depth * scale);
+  const fontSize = Math.round(sizeTokens.fontSize * scale);
+  const textTopOffset = Math.round(sizeTokens.textTopOffset * scale);
+  const width = Math.max(layoutWidth, minWidth);
 
   const outerPath = useMemo(() => buildScoopPath(width, height, 0), [height, width]);
-  const innerPath = useMemo(() => buildScoopPath(width, height - sizeTokens.depth, 3), [height, sizeTokens.depth, width]);
+  const innerPath = useMemo(() => buildScoopPath(width, height - depth, 3), [depth, height, width]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.round(event.nativeEvent.layout.width);
@@ -206,7 +217,7 @@ export default function ArcadeScoopButton({
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        style={[styles.pressable, { minHeight: height, minWidth: sizeTokens.minWidth }]}
+        style={[styles.pressable, { minHeight: height, minWidth }]}
       >
         <View style={[styles.glow, { shadowColor: tokens.stroke }]} />
         <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={StyleSheet.absoluteFill}>
@@ -225,6 +236,11 @@ export default function ArcadeScoopButton({
               <Stop offset="0" stopColor={tokens.gloss[0]} />
               <Stop offset="0.45" stopColor={tokens.gloss[1]} />
               <Stop offset="1" stopColor={tokens.gloss[2]} />
+            </SvgLinearGradient>
+            <SvgLinearGradient id={`gloss-line-${variant}`} x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0} />
+              <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity={0.58} />
+              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
             </SvgLinearGradient>
             <SvgLinearGradient id={`inner-shadow-${variant}`} x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor="rgba(255,255,255,0)" />
@@ -246,7 +262,7 @@ export default function ArcadeScoopButton({
             cy={height * 0.22}
             rx={Math.max(36, width * 0.34)}
             ry={Math.max(12, height * 0.12)}
-            fill="rgba(255,255,255,0.22)"
+            fill={`url(#gloss-line-${variant})`}
           />
           <Path d={innerPath} fill={`url(#inner-shadow-${variant})`} />
         </Svg>
@@ -259,8 +275,8 @@ export default function ArcadeScoopButton({
             style={[
               styles.label,
               {
-                top: sizeTokens.textTopOffset,
-                fontSize: sizeTokens.fontSize,
+                top: textTopOffset,
+                fontSize,
                 color: tokens.text,
                 textShadowColor: tokens.textOutline,
               },
