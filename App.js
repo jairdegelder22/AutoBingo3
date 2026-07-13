@@ -24,11 +24,12 @@ import { getRandomIcons, getThemeIcons } from './screens/themeIcons';
 import { PLAYER_ADD_SILHOUETTE_IMAGE, PLAYER_FUTURE_SKIN_IMAGE, PLAYER_IMAGES } from './assets/images/players/playerImages';
 import { THEME_CARD_IMAGES } from './assets/images/theme-cards/themeCardImages';
 import { clearBoardState, getLobbySnapshot, removePlayers, restartLobbyGame, stopLobbyGame, subscribeToLobby } from './src/services/liveLobbyService';
-import { AppSettingsProvider } from './src/settings/AppSettingsContext';
+import { AppSettingsProvider, useAppSettings } from './src/settings/AppSettingsContext';
 import { PremiumProvider } from './src/premium/PremiumContext';
 import { getResponsiveMetrics } from './src/utils/responsive';
 import useOnlineConnectionStatus from './src/hooks/useOnlineConnectionStatus';
 import LegalConsentGate, { hasAcceptedCurrentLegalTerms } from './src/legal/LegalConsentGate';
+import { playSoundEffect, preloadSoundEffect } from './src/audio/soundEffects';
 
 const SCREEN_COMPONENTS = {
   Home: HomeScreen,
@@ -170,6 +171,7 @@ const BINGO_GAME_BASE_ASSETS = [
   require('./assets/animations/bingo-light.json'),
 ];
 const GAME_ROUTE_SETTLE_MS = 850;
+const SETTINGS_GEAR_SOUND = 'settingsGearClick';
 
 const ROUTE_PRELOADERS = {
   SingleDeviceSetupTest: SINGLEPLAYER_SETUP_ASSETS,
@@ -179,6 +181,79 @@ const ROUTE_PRELOADERS = {
   Lobby: WAITING_ROOM_ASSETS,
   Instellingen: SETTINGS_SCREEN_ASSETS,
 };
+
+function GlobalSettingsButton({
+  isTablet,
+  tabletScale,
+  runSettingsWiggle,
+  openSettingsFromGlobalButton,
+  settingsWiggleStyle,
+}) {
+  const { settings } = useAppSettings();
+
+  useEffect(() => {
+    preloadSoundEffect(SETTINGS_GEAR_SOUND);
+  }, []);
+
+  function handlePress(event) {
+    void playSoundEffect(SETTINGS_GEAR_SOUND, settings);
+    openSettingsFromGlobalButton(event);
+  }
+
+  return (
+    <Pressable
+      onPressIn={runSettingsWiggle}
+      onPress={handlePress}
+      hitSlop={10}
+      style={[
+        styles.globalSettingsButton,
+        isTablet && {
+          top: 24,
+          right: 24,
+          width: 54 * tabletScale,
+          height: 54 * tabletScale,
+        },
+      ]}
+    >
+      <Animated.View
+        style={[
+          styles.globalSettingsIconWrap,
+          isTablet && {
+            width: 54 * tabletScale,
+            height: 54 * tabletScale,
+          },
+          settingsWiggleStyle,
+        ]}
+      >
+        <Image
+          source={SETTINGS_GEAR_IMAGE}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={[
+            styles.globalSettingsIcon,
+            isTablet && {
+              width: 52 * tabletScale,
+              height: 52 * tabletScale,
+            },
+            styles.globalSettingsIconShadow,
+          ]}
+        />
+        <Image
+          source={SETTINGS_GEAR_IMAGE}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={[
+            styles.globalSettingsIcon,
+            isTablet && {
+              width: 52 * tabletScale,
+              height: 52 * tabletScale,
+            },
+          ]}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 function getSpelAssets(params = {}) {
   const config = params.config ?? params.preloadConfig ?? {};
@@ -263,7 +338,9 @@ export default function App() {
   const navigationRequestRef = useRef(0);
   const currentRoute = stack[stack.length - 1];
   const CurrentScreen = SCREEN_COMPONENTS[currentRoute.name] ?? HomeScreen;
-  const showGlobalSettingsButton = currentRoute.name !== 'Instellingen' && !settingsMenuVisible;
+  const legalAccepted = legalStatus === 'accepted';
+  const legalRequired = legalStatus === 'required';
+  const showGlobalSettingsButton = legalAccepted && currentRoute.name !== 'Instellingen' && !settingsMenuVisible;
 
   useEffect(() => {
     let cancelled = false;
@@ -311,7 +388,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!fontsLoaded || !assetsLoaded || legalStatus !== 'accepted' || bootRevealComplete) {
+    if (!fontsLoaded || !assetsLoaded || legalStatus === 'checking' || bootRevealComplete) {
       return;
     }
 
@@ -558,78 +635,40 @@ export default function App() {
     );
   }
 
-  if (legalStatus !== 'accepted') {
-    return (
-      <>
-        <StatusBar style="light" hidden />
-        <LegalConsentGate onAccepted={() => setLegalStatus('accepted')} />
-      </>
-    );
-  }
-
   return (
     <AppSettingsProvider>
-      <PremiumProvider>
-        <StatusBar style="dark" hidden />
-        <CurrentScreen navigation={navigation} route={currentRoute} />
-        <SettingsScreen
-          navigation={navigation}
-          route={{ name: 'Instellingen', params: {} }}
-          visible={settingsMenuVisible}
-          onClose={() => setSettingsMenuVisible(false)}
-        />
+      {legalAccepted ? (
+        <PremiumProvider>
+          <StatusBar style="dark" hidden />
+          <CurrentScreen navigation={navigation} route={currentRoute} />
+          <SettingsScreen
+            navigation={navigation}
+            route={{ name: 'Instellingen', params: {} }}
+            visible={settingsMenuVisible}
+            onClose={() => setSettingsMenuVisible(false)}
+          />
+        </PremiumProvider>
+      ) : (
+        <>
+          <StatusBar style="dark" hidden />
+          <CurrentScreen navigation={navigation} route={currentRoute} />
+        </>
+      )}
+      {legalRequired && bootRevealComplete ? (
+        <LegalConsentGate onAccepted={() => setLegalStatus('accepted')} />
+      ) : null}
+      {legalAccepted ? (
+        <>
       {showGlobalSettingsButton ? (
-        <Pressable
-          onPressIn={runSettingsWiggle}
-          onPress={openSettingsFromGlobalButton}
-          hitSlop={10}
-          style={[
-            styles.globalSettingsButton,
-            isTablet && {
-              top: 24,
-              right: 24,
-              width: 54 * tabletScale,
-              height: 54 * tabletScale,
-            },
-          ]}
-        >
-          <Animated.View
-            style={[
-              styles.globalSettingsIconWrap,
-              isTablet && {
-                width: 54 * tabletScale,
-                height: 54 * tabletScale,
-              },
-              settingsWiggleStyle,
-            ]}
-          >
-            <Image
-              source={SETTINGS_GEAR_IMAGE}
-              resizeMode="contain"
-              fadeDuration={0}
-              style={[
-                styles.globalSettingsIcon,
-                isTablet && {
-                  width: 52 * tabletScale,
-                  height: 52 * tabletScale,
-                },
-                styles.globalSettingsIconShadow,
-              ]}
-            />
-            <Image
-              source={SETTINGS_GEAR_IMAGE}
-              resizeMode="contain"
-              fadeDuration={0}
-              style={[
-                styles.globalSettingsIcon,
-                isTablet && {
-                  width: 52 * tabletScale,
-                  height: 52 * tabletScale,
-                },
-              ]}
-            />
-          </Animated.View>
-        </Pressable>
+        <GlobalSettingsButton
+          isTablet={isTablet}
+          tabletScale={tabletScale}
+          runSettingsWiggle={runSettingsWiggle}
+          openSettingsFromGlobalButton={openSettingsFromGlobalButton}
+          settingsWiggleStyle={settingsWiggleStyle}
+        />
+      ) : null}
+        </>
       ) : null}
       {!bootRevealComplete ? (
         <CircularReveal
@@ -660,7 +699,6 @@ export default function App() {
           }}
         />
       ) : null}
-      </PremiumProvider>
     </AppSettingsProvider>
   );
 }

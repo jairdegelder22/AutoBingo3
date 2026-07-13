@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import * as Haptics from '../settings/haptics';
 import { getResponsiveMetrics } from '../utils/responsive';
+import { useAppSettings } from '../settings/AppSettingsContext';
+import { playPooledSoundEffect, preloadPooledSoundEffect } from '../audio/soundEffects';
 
 type ThemeCarouselProps<ItemT> = {
   items: ItemT[];
@@ -42,6 +44,8 @@ type ThemeCarouselProps<ItemT> = {
 
 const AnimatedFlatList = Animated.createAnimatedComponent(Animated.FlatList);
 const LOOP_SETS = 3;
+const SCROLL_SOUND = 'scrollGeluid';
+const SCROLL_SOUND_POOL_SIZE = 10;
 
 export default function ThemeCarousel<ItemT>({
   items,
@@ -55,6 +59,7 @@ export default function ThemeCarousel<ItemT>({
   flatListProps,
 }: ThemeCarouselProps<ItemT>) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { settings } = useAppSettings();
   const { isTablet } = getResponsiveMetrics(screenWidth, screenHeight);
   const resolvedItemWidth = itemWidth ?? Math.min(screenWidth * (isTablet ? 0.54 : 0.68), isTablet ? 380 : 300);
   const resolvedItemSpacing = itemSpacing ?? (isTablet ? 26 : 18);
@@ -73,6 +78,10 @@ export default function ThemeCarousel<ItemT>({
   const currentLogicalIndexRef = useRef(0);
   const hasAppliedInitialOffsetRef = useRef(false);
   const lastFocusedIndexRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    preloadPooledSoundEffect(SCROLL_SOUND, SCROLL_SOUND_POOL_SIZE);
+  }, []);
 
   useEffect(() => {
     currentAbsoluteIndexRef.current = initialIndex;
@@ -167,6 +176,7 @@ export default function ThemeCarousel<ItemT>({
       currentLogicalIndexRef.current = logicalIndex;
       if (triggerHaptic) {
         void Haptics.selectionAsync();
+        void playPooledSoundEffect(SCROLL_SOUND, settings, SCROLL_SOUND_POOL_SIZE);
       }
       onSnapToItem?.(logicalIndex);
     }

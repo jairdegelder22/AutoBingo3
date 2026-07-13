@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   GestureResponderEvent,
@@ -11,6 +11,8 @@ import {
 import * as Haptics from '../settings/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getResponsiveMetrics } from '../utils/responsive';
+import { useAppSettings } from '../settings/AppSettingsContext';
+import { playSoundEffect, preloadSoundEffect } from '../audio/soundEffects';
 
 type GlossyButtonVariant = 'blue' | 'yellow' | 'red' | 'green';
 type GlossyButtonSize = 'normal' | 'large';
@@ -34,6 +36,8 @@ interface GlossyButtonProps {
   hapticStyle?: ImpactFeedbackStyleValue;
   hapticNotificationType?: NotificationFeedbackTypeValue;
   disableHaptics?: boolean;
+  soundEffectName?: string | null;
+  disableSound?: boolean;
 }
 
 const VARIANT_TOKENS = {
@@ -117,8 +121,11 @@ export default function GlossyButton({
   hapticStyle = Haptics.ImpactFeedbackStyle.Medium,
   hapticNotificationType,
   disableHaptics = false,
+  soundEffectName = 'glossyButtonClick',
+  disableSound = false,
 }: GlossyButtonProps) {
   const { width, height } = useWindowDimensions();
+  const { settings } = useAppSettings();
   const pressAnim = useRef(new Animated.Value(0)).current;
   const { isTablet } = getResponsiveMetrics(width, height);
 
@@ -131,6 +138,12 @@ export default function GlossyButton({
   const responsivePadding = Math.round(sizeTokens.paddingHorizontal * scale);
   const buttonHeight = heightOverride ?? responsiveHeight;
   const innerRadius = responsiveRadius - 2;
+
+  useEffect(() => {
+    if (!disableSound && soundEffectName) {
+      preloadSoundEffect(soundEffectName);
+    }
+  }, [disableSound, soundEffectName]);
 
   const handlePressIn = (_event: GestureResponderEvent) => {
     if (disabled) {
@@ -173,6 +186,9 @@ export default function GlossyButton({
       } else {
         void Haptics.impactAsync(hapticStyle);
       }
+    }
+    if (!disableSound && soundEffectName) {
+      void playSoundEffect(soundEffectName, settings);
     }
     onPress(event);
   };

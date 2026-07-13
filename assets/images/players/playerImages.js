@@ -12,6 +12,20 @@ export const PLAYER_IMAGES = {
   roze:       require('./player-roze.png'),
   wit:        require('./player-wit.png'),
   zwart:      require('./player-zwart.png'),
+  regenboog:  require('./player-regenboog.png'),
+  koe:        require('./player-koe.png'),
+  kerst:      require('./player-kerst.png'),
+  politie:    require('./player-politie.png'),
+  ambulance:  require('./player-ambulance.png'),
+  brandweer:  require('./player-brandweer.png'),
+  brons:      require('./player-brons.png'),
+  zilver:     require('./player-zilver.png'),
+  goud:       require('./player-goud.png'),
+  kat:        require('./player-kat.png'),
+  hond:       require('./player-hond.png'),
+  hartjes:    require('./player-hartjes.png'),
+  taxi:       require('./player-taxi.png'),
+  vlammen:    require('./player-vlammen.png'),
 };
 
 export const PLAYER_ADD_SILHOUETTE_IMAGE = require('./player-add-silhouette.png');
@@ -28,6 +42,20 @@ export const PLAYER_HEX = {
   roze:       '#E8589E',
   wit:        '#C8C8C8',
   zwart:      '#2A2A2A',
+  regenboog:  '#F25C9B',
+  koe:        '#4B5563',
+  kerst:      '#1D9A55',
+  politie:    '#1A5EA8',
+  ambulance:  '#F5F5F5',
+  brandweer:  '#D93B2B',
+  brons:      '#B87333',
+  zilver:     '#AEB7C2',
+  goud:       '#E5B73B',
+  kat:        '#7C4A2D',
+  hond:       '#A46A3F',
+  hartjes:    '#E8589E',
+  taxi:       '#F5C400',
+  vlammen:    '#F06423',
 };
 
 export const ALLE_KLEUREN = [

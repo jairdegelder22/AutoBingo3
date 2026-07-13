@@ -30,6 +30,8 @@ import { THEMES } from './themeCatalog';
 import { generateLobbyCode } from '../src/utils/lobbyCode';
 import { getResponsiveMetrics } from '../src/utils/responsive';
 import { checkOnlineConnection } from '../src/services/liveLobbyService';
+import { useAppSettings } from '../src/settings/AppSettingsContext';
+import { playSoundEffect, preloadSoundEffect } from '../src/audio/soundEffects';
 
 const GAME_SETUP_BACKGROUND = require('../assets/images/backgrounds/game-setup-birds-eye-background-v4.png');
 const LOBBY_ROAD_BACKGROUND_IMAGE = require('../assets/images/backgrounds/lobby-road-background.png');
@@ -215,6 +217,8 @@ const SETTINGS_DIAGONAL_OPTIONS = [
   { id: true, label: 'Wel', image: SETTINGS_DIAGONAL_ON },
   { id: false, label: 'Niet', image: SETTINGS_DIAGONAL_OFF },
 ];
+const GAME_SETTINGS_KLAP_IN_SOUND = 'gameSettingsKlapIn';
+const GAME_SETTINGS_KLAP_UIT_SOUND = 'gameSettingsKlapUit';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -241,6 +245,7 @@ export default function HostSetupScreen({ navigation }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(screenWidth, screenHeight);
   const { isPremium } = usePremium();
+  const { settings } = useAppSettings();
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
   const [selectedGameModeIndex, setSelectedGameModeIndex] = useState(0);
   const [gameModePickerOpen, setGameModePickerOpen] = useState(false);
@@ -398,6 +403,11 @@ export default function HostSetupScreen({ navigation }) {
     settingsProgress.setValue(settingsOpen ? 1 : 0);
   }, [collapsedPanelHeight, expandedPanelHeight, panelHeight]);
 
+  useEffect(() => {
+    preloadSoundEffect(GAME_SETTINGS_KLAP_IN_SOUND);
+    preloadSoundEffect(GAME_SETTINGS_KLAP_UIT_SOUND);
+  }, []);
+
   function animateSettings(open) {
     if (open) {
       setSettingsPanelVisible(true);
@@ -428,10 +438,12 @@ export default function HostSetupScreen({ navigation }) {
 
   function openSettings() {
     void Haptics.selectionAsync();
+    void playSoundEffect(GAME_SETTINGS_KLAP_UIT_SOUND, settings);
     animateSettings(true);
   }
 
   function closeSettings() {
+    void playSoundEffect(GAME_SETTINGS_KLAP_IN_SOUND, settings);
     animateSettings(false);
   }
 

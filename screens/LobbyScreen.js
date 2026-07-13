@@ -42,6 +42,13 @@ import { THEMES } from './themeCatalog';
 import { getResponsiveMetrics } from '../src/utils/responsive';
 import useOnlineConnectionStatus from '../src/hooks/useOnlineConnectionStatus';
 import ConnectionWarningOverlay from '../src/components/ConnectionWarningOverlay';
+import {
+  SKIN_CHALLENGES,
+  getChallengeProgressValue,
+  isChallengeSkin,
+  isSkinUnlocked,
+  loadSkinChallengeProgress,
+} from '../src/challenges/skinChallenges';
 
 const MAX_PLAYER_NAME_LENGTH = 12;
 const MAX_LOCAL_PLAYERS = 2;
@@ -49,6 +56,7 @@ const MAX_LOBBY_PLAYERS = 6;
 const START_GAME_REVEAL_GREEN = '#159B3B';
 const LEAVE_LOBBY_REVEAL_GREEN = '#159B3B';
 const PLAYER_SILHOUETTE_IMAGE = PLAYER_ADD_SILHOUETTE_IMAGE;
+const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
 const GAME_SETUP_BACKGROUND = require('../assets/images/backgrounds/game-setup-birds-eye-background-v4.png');
 const LOBBY_ROAD_BACKGROUND_IMAGE = require('../assets/images/backgrounds/lobby-road-background.png');
 const LOBBY_PARKING_GRID_IMAGE = require('../assets/images/lobby/lobby-parking-grid.png');
@@ -727,6 +735,7 @@ function SkinCarouselModal({
 }) {
   const { width, height } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(width, height);
+  const [challengeProgress, setChallengeProgress] = useState(null);
   const orderedSkins = useMemo(() => (
     [selectedSkin, ...SKIN_OPTIONS.filter((skin) => skin !== selectedSkin)]
   ), [selectedSkin]);
@@ -735,11 +744,13 @@ function SkinCarouselModal({
   useEffect(() => {
     if (visible) {
       setActiveIndex(0);
+      void loadSkinChallengeProgress().then(setChallengeProgress);
     }
   }, [visible]);
 
   const activeSkin = orderedSkins[activeIndex] ?? selectedSkin;
   const activeSkinTaken = takenSkins.includes(activeSkin) && activeSkin !== selectedSkin;
+  const activeSkinLocked = isChallengeSkin(activeSkin) && !isSkinUnlocked(challengeProgress, activeSkin);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -785,9 +796,22 @@ function SkinCarouselModal({
                   ]}
                 >
                   <PlayerAvatar skin={item} size={isTablet ? 318 : CAROUSEL_CAR_SIZE} />
+                  {isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item) ? (
+                    <Image
+                      source={CHALLENGE_SKIN_LOCK_IMAGE}
+                      style={styles.challengeSkinLock}
+                      resizeMode="contain"
+                    />
+                  ) : null}
                 </View>
               </View>
             )}
+          />
+
+          <SkinChallengeProgressPanel
+            skin={activeSkin}
+            progress={challengeProgress}
+            fontFamily={undefined}
           />
 
           <View style={styles.selectButtonWrap}>
@@ -797,12 +821,43 @@ function SkinCarouselModal({
               heightOverride={isTablet ? 82 : 62}
               horizontalPadding={isTablet ? 62 : 44}
               onPress={() => onSelectSkin(activeSkin)}
-              disabled={activeSkinTaken}
+              disabled={activeSkinTaken || activeSkinLocked}
             />
           </View>
         </Animated.View>
       </Animated.View>
     </Modal>
+  );
+}
+
+function SkinChallengeProgressPanel({ skin, progress }) {
+  const challenge = SKIN_CHALLENGES[skin];
+
+  if (!challenge) {
+    return <View style={styles.challengePanelPlaceholder} />;
+  }
+
+  const progressValue = getChallengeProgressValue(progress, skin);
+  const ratio = progressValue.target > 0 ? progressValue.current / progressValue.target : 1;
+
+  return (
+    <View style={styles.challengePanel}>
+      <Text style={styles.challengeTitle}>{challenge.title}</Text>
+      <Text style={styles.challengeDescription}>{challenge.description}</Text>
+      <View style={styles.challengeProgressRow}>
+        <View style={styles.challengeProgressTrack}>
+          <View
+            style={[
+              styles.challengeProgressFill,
+              { width: `${Math.max(0, Math.min(1, ratio)) * 100}%` },
+            ]}
+          />
+        </View>
+        <Text style={styles.challengeProgressText}>
+          {progressValue.current} / {progressValue.target}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -2517,6 +2572,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  challengeSkinLock: {
+    position: 'absolute',
+    right: 18,
+    bottom: 18,
+    width: 54,
+    height: 54,
+  },
   carouselCardTaken: {
     opacity: 0.32,
   },
@@ -2531,6 +2593,67 @@ const styles = StyleSheet.create({
   },
   selectButtonWrap: {
     minWidth: 220,
+  },
+  challengePanelPlaceholder: {
+    minHeight: 86,
+  },
+  challengePanel: {
+    width: '86%',
+    maxWidth: 430,
+    minHeight: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  challengeTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 21,
+    lineHeight: 25,
+    color: '#FFF7DD',
+    textAlign: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(0, 0, 0, 0.42)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 3,
+  },
+  challengeDescription: {
+    marginTop: 5,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#F4E8CD',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  challengeProgressRow: {
+    width: '100%',
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  challengeProgressTrack: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.34)',
+  },
+  challengeProgressFill: {
+    height: '100%',
+    borderRadius: 6,
+    backgroundColor: '#F5C400',
+  },
+  challengeProgressText: {
+    minWidth: 46,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#FFF7DD',
+    textAlign: 'right',
+    letterSpacing: 0,
   },
   confirmBackdrop: {
     flex: 1,

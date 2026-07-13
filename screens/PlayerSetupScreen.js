@@ -4,18 +4,40 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BackButton, InlineNote, OptionButton, PrimaryButton, ScreenLayout, Section, TextField } from './flowComponents';
 import { buildPlayerArray, PLAYER_SETUP_STORAGE_KEY, SKIN_OPTIONS, withDefaultPlayerNames } from './gameFlowConfig';
 import { joinLobby } from '../src/services/liveLobbyService';
+import {
+  SKIN_CHALLENGES,
+  getChallengeProgressValue,
+  isChallengeSkin,
+  isSkinUnlocked,
+  loadSkinChallengeProgress,
+} from '../src/challenges/skinChallenges';
 
 function SkinPicker({ selectedSkin, onSelect }) {
+  const [challengeProgress, setChallengeProgress] = useState(null);
+
+  useEffect(() => {
+    void loadSkinChallengeProgress().then(setChallengeProgress);
+  }, []);
+
   return (
     <Section title="Skin kiezen">
-      {SKIN_OPTIONS.map((skin) => (
-        <OptionButton
-          key={skin}
-          label={skin}
-          selected={selectedSkin === skin}
-          onPress={() => onSelect(skin)}
-        />
-      ))}
+      {SKIN_OPTIONS.map((skin) => {
+        const challenge = SKIN_CHALLENGES[skin];
+        const progressValue = getChallengeProgressValue(challengeProgress, skin);
+        const locked = isChallengeSkin(skin) && !isSkinUnlocked(challengeProgress, skin);
+
+        return (
+          <OptionButton
+            key={skin}
+            label={challenge?.title ?? skin}
+            subtitle={challenge?.description}
+            rightLabel={challenge ? `${progressValue.current} / ${progressValue.target}` : undefined}
+            selected={selectedSkin === skin}
+            disabled={locked}
+            onPress={() => onSelect(skin)}
+          />
+        );
+      })}
     </Section>
   );
 }

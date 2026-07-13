@@ -25,6 +25,14 @@ import { getBoardState, setBoardCell, subscribeToBoardState } from '../src/servi
 import { getResponsiveMetrics } from '../src/utils/responsive';
 import useOnlineConnectionStatus from '../src/hooks/useOnlineConnectionStatus';
 import ConnectionWarningOverlay from '../src/components/ConnectionWarningOverlay';
+import { useAppSettings } from '../src/settings/AppSettingsContext';
+import { recordFinishedGameForSkinChallenges } from '../src/challenges/skinChallenges';
+import {
+  playPooledSoundEffect,
+  playSoundEffect,
+  preloadPooledSoundEffect,
+  preloadSoundEffect,
+} from '../src/audio/soundEffects';
 
 const STANDARD_GRID_SIZE = 4;
 const CLAIM_GRID_SIZE = 4;
@@ -62,6 +70,10 @@ const OUTER_PADDING = 12;
 const TOP_CONTROLS_HEIGHT = 12;
 const SECTION_GAP = 12;
 const BINGO_LINE_DRAW_DURATION_MS = 1450;
+const BINGO_CHEER_SOUND = 'bingoCheer';
+const BINGO_ITEM_CHECK_SOUND = 'bingoItemCheck';
+const BINGO_ITEM_CHECK_SOUND_POOL_SIZE = 16;
+const BINGO_LINE_PITCH_STEP = Math.pow(2, 1 / 12);
 const UNCHECK_HOLD_DURATION_MS = 3000;
 const COLLECTIVE_COLOR_HOLD_RATIO = 0.34;
 const COLLECTIVE_COLOR_SEGMENT_MS = 4300;
@@ -2782,6 +2794,7 @@ export default function BingoCardScreen({
   isLiveLobbyHost = true,
 }) {
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
+  const { settings } = useAppSettings();
   const normalizedMode = typeof modus === 'string' ? modus.toLowerCase() : '';
   const isCollectiveMode = normalizedMode === 'collectief';
   const isClaimMode = normalizedMode === 'claim';
@@ -2905,9 +2918,12 @@ export default function BingoCardScreen({
   const inspectProgress = useRef(new Animated.Value(0)).current;
   const inspectAnimationRef = useRef(null);
   const playerCheckedRef = useRef(playerChecked);
+  const finishedGameRecordedRef = useRef(false);
+  const localGameStartedAtRef = useRef(Date.now());
   const pendingLocalBoardCellsRef = useRef(new Map());
   const celebrationTimeoutsRef = useRef([]);
   const activeCelebrationKeysRef = useRef(new Set());
+  const suppressWinnerCelebrationRestartRef = useRef(false);
   const winnerRouteRevealRef = useRef(null);
   const pendingWinnerRouteActionRef = useRef(null);
   const winnerRouteRevealBusyRef = useRef(false);
@@ -2948,6 +2964,37 @@ export default function BingoCardScreen({
   );
   const showBotScoreControls = __DEV__ && isClaimMode && botClaimPlayers.length > 0 && !claimGameFinished;
 
+  function getGameElapsedMs() {
+    const parsedStartedAt = typeof startedAt === 'string' ? Date.parse(startedAt) : Number.NaN;
+    const startTime = Number.isFinite(parsedStartedAt) ? parsedStartedAt : localGameStartedAtRef.current;
+    return Math.max(0, Date.now() - startTime);
+  }
+
+  function recordFinishedChallengeProgress(completedBingos = []) {
+    if (finishedGameRecordedRef.current) {
+      return;
+    }
+
+    finishedGameRecordedRef.current = true;
+
+    const boards = isClaimMode
+      ? [{ checked: claimChecked, icons: sharedIcons }]
+      : playerChecked.map((checked, index) => ({
+          checked,
+          icons: playerIcons[index] ?? sharedIcons,
+        }));
+
+    void recordFinishedGameForSkinChallenges({
+      players: resolvedPlayers,
+      boards,
+      completedBingos,
+      elapsedMs: getGameElapsedMs(),
+      syncType,
+      theme: resolvedTheme,
+      mode: normalizedMode,
+    });
+  }
+
   function clearCelebrationTimeouts() {
     celebrationTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
     celebrationTimeoutsRef.current = [];
@@ -2964,6 +3011,11 @@ export default function BingoCardScreen({
     setWinnerColor(null);
     setWinnerIndex(null);
     setSuppressedCheckPulseKeys({});
+  }
+
+  function stopWinnerCelebrationForAction() {
+    suppressWinnerCelebrationRestartRef.current = true;
+    resetWinnerCelebrationState();
   }
 
   function startWinnerRouteReveal(action, origin = {}, color = '#E03030') {
@@ -3263,10 +3315,12 @@ export default function BingoCardScreen({
             ? { ...celebration, activeStep: stepIndex }
             : celebration
         )));
+        playBingoLineStepSound(stepIndex);
 
         if (isFinalStep && isFinalBingo) {
           setCelebrationSplashVisible(true);
           setCelebrationConfettiVisible(true);
+          playBingoCheerSound();
           triggerBingoFinalHaptic();
         }
       }, 70 + stepIndex * stepDelay);
@@ -3343,6 +3397,11 @@ export default function BingoCardScreen({
   }, [playerChecked]);
 
   useEffect(() => {
+    preloadPooledSoundEffect(BINGO_ITEM_CHECK_SOUND, BINGO_ITEM_CHECK_SOUND_POOL_SIZE);
+    preloadSoundEffect(BINGO_CHEER_SOUND);
+  }, []);
+
+  useEffect(() => {
     if (!isCollectiveMode) {
       return undefined;
     }
@@ -3372,20 +3431,52 @@ export default function BingoCardScreen({
 
     const firstWinnerIndex = nextWins.findIndex(Boolean);
     if (firstWinnerIndex >= 0) {
+      recordFinishedChallengeProgress([{
+        playerIndex: firstWinnerIndex,
+        skin: resolvedPlayerColors[firstWinnerIndex] ?? resolvedPlayers[firstWinnerIndex]?.skin,
+      }]);
+
+      if (suppressWinnerCelebrationRestartRef.current) {
+        return;
+      }
+
       if (!winnerModalVisible && !winnerColor) {
         startWinnerCelebration(firstWinnerIndex, playerChecked[firstWinnerIndex]);
       }
       return;
     }
 
+    suppressWinnerCelebrationRestartRef.current = false;
+
     if (winnerColor || winnerModalVisible) {
       resetWinnerCelebrationState();
     }
   }, [actieveRegels, boardGridSize, isClaimMode, playerChecked, resolvedPlayerColors, resolvedPlayerCount, winnerColor, winnerModalVisible]);
 
+  useEffect(() => {
+    if (claimGameFinished) {
+      recordFinishedChallengeProgress([]);
+    }
+  }, [claimGameFinished]);
+
   useEffect(() => () => {
     clearCelebrationTimeouts();
   }, []);
+
+  function playItemCheckSound() {
+    void playPooledSoundEffect(BINGO_ITEM_CHECK_SOUND, settings, BINGO_ITEM_CHECK_SOUND_POOL_SIZE);
+  }
+
+  function playBingoLineStepSound(stepIndex) {
+    void playPooledSoundEffect(BINGO_ITEM_CHECK_SOUND, settings, BINGO_ITEM_CHECK_SOUND_POOL_SIZE, {
+      playbackRate: Math.min(2, BINGO_LINE_PITCH_STEP ** stepIndex),
+      shouldCorrectPitch: false,
+    });
+  }
+
+  function playBingoCheerSound() {
+    void playSoundEffect(BINGO_CHEER_SOUND, settings);
+  }
 
   async function handlePress(playerIndex, index) {
     if (liveSyncEnabled && liveConnectionOffline) {
@@ -3398,6 +3489,7 @@ export default function BingoCardScreen({
       }
 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      playItemCheckSound();
       const claimBoardKey = boardKeys[0];
       const claimPendingKey = `${claimBoardKey}:${index}`;
 
@@ -3478,6 +3570,10 @@ export default function BingoCardScreen({
         delete next[suppressPulseBoardKey];
         return next;
       });
+    }
+
+    if (nextCheckedValue && !createsBingoLine) {
+      playItemCheckSound();
     }
 
     setPlayerChecked((current) => {
@@ -4176,18 +4272,18 @@ export default function BingoCardScreen({
             canReplay={canReplay}
             settingsLabel={settingsLabel}
             onReplay={() => {
-              resetWinnerCelebrationState();
+              stopWinnerCelebrationForAction();
               onReplay?.();
             }}
             onSettings={(origin) => {
+              stopWinnerCelebrationForAction();
               startWinnerRouteReveal((revealOrigin) => {
-                resetWinnerCelebrationState();
                 onSettings?.(revealOrigin);
               }, origin, '#1A7BD4');
             }}
             onMenu={(origin) => {
+              stopWinnerCelebrationForAction();
               startWinnerRouteReveal((revealOrigin) => {
-                resetWinnerCelebrationState();
                 onMenu?.(revealOrigin);
               }, origin, '#F5C400');
             }}

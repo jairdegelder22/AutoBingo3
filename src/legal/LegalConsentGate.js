@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LEGAL_ACCEPTANCE_STORAGE_KEY, LEGAL_TERMS_VERSION, LEGAL_URLS } from './legalConfig';
 
@@ -16,6 +16,7 @@ export async function hasAcceptedCurrentLegalTerms() {
 
 export default function LegalConsentGate({ onAccepted }) {
   const [accepting, setAccepting] = useState(false);
+  const [hasRead, setHasRead] = useState(false);
 
   async function openLegalUrl(url) {
     try {
@@ -26,7 +27,7 @@ export default function LegalConsentGate({ onAccepted }) {
   }
 
   async function acceptTerms() {
-    if (accepting) {
+    if (accepting || !hasRead) {
       return;
     }
 
@@ -48,43 +49,78 @@ export default function LegalConsentGate({ onAccepted }) {
     }
   }
 
+  function handleScroll(event) {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const reachedBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 24;
+
+    if (reachedBottom) {
+      setHasRead(true);
+    }
+  }
+
+  function handleContentSizeChange(_contentWidth, contentHeight) {
+    if (contentHeight <= 0) {
+      return;
+    }
+  }
+
   return (
     <View style={styles.screen}>
       <View style={styles.panel}>
         <Text style={styles.title}>AutoBingo</Text>
-        <Text style={styles.body}>
-          Door verder te gaan ga je akkoord met onze{' '}
-          <Text
-            accessibilityRole="link"
-            style={styles.link}
-            onPress={() => {
-              void openLegalUrl(LEGAL_URLS.terms);
-            }}
-          >
-            Gebruiksvoorwaarden
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
+          onScroll={handleScroll}
+          onContentSizeChange={handleContentSizeChange}
+          scrollEventThrottle={16}
+        >
+          <Text style={styles.heading}>Gebruiksvoorwaarden en privacy</Text>
+          <Text style={styles.body}>
+            Door verder te gaan ga je akkoord met onze Gebruiksvoorwaarden en ons Privacybeleid.
           </Text>
-          {' '}en{' '}
-          <Text
-            accessibilityRole="link"
-            style={styles.link}
-            onPress={() => {
-              void openLegalUrl(LEGAL_URLS.privacy);
-            }}
-          >
-            Privacybeleid
+          <Text style={styles.body}>
+            AutoBingo is bedoeld voor <Text style={styles.bold}>passagiers</Text>.{' '}
+            <Text style={styles.bold}>Bestuurders mogen de app niet bedienen tijdens het rijden.</Text>{' '}
+            Gebruik de app alleen op een veilige manier en volg altijd de verkeersregels.
           </Text>
-          .
-        </Text>
+          <Text style={styles.body}>
+            We bewaren je akkoord lokaal op dit apparaat met versie {LEGAL_TERMS_VERSION}. Als de voorwaarden later
+            wijzigen, vragen we opnieuw om akkoord.
+          </Text>
+          <View style={styles.linkStack}>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                void openLegalUrl(LEGAL_URLS.terms);
+              }}
+              style={styles.linkButton}
+            >
+              <Text style={styles.link}>Lees de Gebruiksvoorwaarden</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                void openLegalUrl(LEGAL_URLS.privacy);
+              }}
+              style={styles.linkButton}
+            >
+              <Text style={styles.link}>Lees het Privacybeleid</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.footerText}>Scroll naar beneden om akkoord te kunnen gaan.</Text>
+        </ScrollView>
         <Pressable
           accessibilityRole="button"
-          disabled={accepting}
+          accessibilityState={{ disabled: accepting || !hasRead }}
+          disabled={accepting || !hasRead}
           onPress={() => {
             void acceptTerms();
           }}
           style={({ pressed }) => [
             styles.button,
-            accepting && styles.buttonDisabled,
-            pressed && !accepting && styles.buttonPressed,
+            (accepting || !hasRead) && styles.buttonDisabled,
+            pressed && !accepting && hasRead && styles.buttonPressed,
           ]}
         >
           {accepting ? (
@@ -100,19 +136,23 @@ export default function LegalConsentGate({ onAccepted }) {
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E03030',
+    backgroundColor: 'rgba(0, 0, 0, 0.48)',
     padding: 22,
+    zIndex: 9800,
+    elevation: 9800,
   },
   panel: {
     width: '100%',
     maxWidth: 430,
+    maxHeight: '82%',
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 22,
-    paddingVertical: 26,
+    paddingTop: 24,
+    paddingBottom: 20,
     shadowColor: '#6B1010',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.22,
@@ -127,16 +167,47 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     textAlign: 'center',
   },
+  scrollArea: {
+    maxHeight: 330,
+  },
+  scrollContent: {
+    paddingBottom: 8,
+  },
+  heading: {
+    marginBottom: 10,
+    color: '#263046',
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 21,
+    lineHeight: 26,
+    textAlign: 'center',
+  },
   body: {
     color: '#263046',
-    fontSize: 18,
-    lineHeight: 27,
-    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 14,
+  },
+  bold: {
+    fontWeight: '800',
+  },
+  linkStack: {
+    gap: 8,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  linkButton: {
+    alignSelf: 'flex-start',
   },
   link: {
     color: '#0B72D9',
     fontWeight: '800',
     textDecorationLine: 'underline',
+  },
+  footerText: {
+    color: '#778092',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   button: {
     minHeight: 56,
@@ -157,7 +228,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
   },
   buttonDisabled: {
-    opacity: 0.72,
+    backgroundColor: '#9AA3B2',
+    opacity: 0.82,
   },
   buttonText: {
     color: '#FFFFFF',

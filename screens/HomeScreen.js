@@ -19,6 +19,15 @@ import { checkOnlineConnection, getLobbySnapshot } from '../src/services/liveLob
 import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { usePremium } from '../src/premium/PremiumContext';
 import { getResponsiveMetrics } from '../src/utils/responsive';
+import { preloadSoundEffect, playSoundEffect } from '../src/audio/soundEffects';
+import { useAppSettings } from '../src/settings/AppSettingsContext';
+import {
+  SKIN_CHALLENGES,
+  getChallengeProgressValue,
+  isChallengeSkin,
+  isSkinUnlocked,
+  loadSkinChallengeProgress,
+} from '../src/challenges/skinChallenges';
 
 const PLAY_BUTTON_IMAGE = require('../assets/images/home-online-button.png');
 const ONLINE_YELLOW_CAR = require('../assets/images/online-car-yellow.png');
@@ -30,20 +39,6 @@ const JOIN_LICENSE_PLATE_IMAGE = require('../assets/images/license-plates/dutch-
 const MAIN_MENU_PREMIUM_CROWN_IMAGE = require('../assets/images/premium/main-menu-premium-crown.png');
 const SKIN_ROAD_BACKGROUND = require('../assets/images/backgrounds/skin-road-background.png');
 const THEME_ROAD_BACKGROUND = require('../assets/images/backgrounds/theme-road-scroll-background-v4.png');
-const PLAYER_POLITIE_IMAGE = require('../assets/images/players/player-politie.png');
-const PLAYER_BRANDWEER_IMAGE = require('../assets/images/players/player-brandweer.png');
-const PLAYER_AMBULANCE_IMAGE = require('../assets/images/players/player-ambulance.png');
-const PLAYER_TAXI_IMAGE = require('../assets/images/players/player-taxi.png');
-const PLAYER_HARTJES_IMAGE = require('../assets/images/players/player-hartjes.png');
-const PLAYER_VLAMMEN_IMAGE = require('../assets/images/players/player-vlammen.png');
-const PLAYER_GOUD_IMAGE = require('../assets/images/players/player-goud.png');
-const PLAYER_ZILVER_IMAGE = require('../assets/images/players/player-zilver.png');
-const PLAYER_BRONS_IMAGE = require('../assets/images/players/player-brons.png');
-const PLAYER_KERST_IMAGE = require('../assets/images/players/player-kerst.png');
-const PLAYER_KOE_IMAGE = require('../assets/images/players/player-koe.png');
-const PLAYER_REGENBOOG_IMAGE = require('../assets/images/players/player-regenboog.png');
-const PLAYER_HOND_IMAGE = require('../assets/images/players/player-hond.png');
-const PLAYER_KAT_IMAGE = require('../assets/images/players/player-kat.png');
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
 const NAV_ICON_IMAGES = {
   palette: {
@@ -62,13 +57,19 @@ const NAV_ICON_IMAGES = {
 const SKIN_ROAD_IMAGE_RATIO = 1920 / 819;
 const SKIN_ROAD_REPEAT_COUNT = 2;
 const SKIN_ROAD_ZOOM = 1.28;
+const FALLBACK_WINDOW_WIDTH = 390;
+const FALLBACK_WINDOW_HEIGHT = 844;
 const HOME_ACTION_HORIZONTAL_PADDING = 20;
 const HOME_ACTION_GAP = 14;
 const ONLINE_RED_GRADIENT = ['#f57070', '#e03030', '#c01818', '#9e0f0f'];
 const ONLINE_RED_OUTLINE = '#6b0e0e';
 const HOME_ACTION_COLLAPSED_HEIGHT = 122;
 const HOME_ACTION_EXPANDED_HEIGHT = 236;
-const ONLINE_CAR_JUMP_DELAYS = [0, 230, 460];
+const ONLINE_CAR_JUMP_DELAYS = [0, 299, 568];
+const PRESS_THEN_MEEP_DELAY_MS = 300;
+const GLOSSY_BUTTON_CLICK_SOUND = 'glossyButtonClick';
+const ONLINE_CARS_MEEP_SOUND = 'onlineCarsMeeps';
+const PLAY_MEEP_SOUND = 'playOnlineMeep';
 const SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO = 1.38;
 const SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO = 1.32;
 const SKIN_SHOP_TILE_IMAGE_HEIGHT = 140;
@@ -89,24 +90,10 @@ const HOME_SCREEN_PRELOAD_ASSETS = [
   SKIN_ROAD_BACKGROUND,
   THEME_ROAD_BACKGROUND,
   THEME_LOCK_OVERLAY_OVERVIEW_IMAGE,
-  PLAYER_POLITIE_IMAGE,
-  PLAYER_BRANDWEER_IMAGE,
-  PLAYER_AMBULANCE_IMAGE,
-  PLAYER_TAXI_IMAGE,
-  PLAYER_HARTJES_IMAGE,
-  PLAYER_VLAMMEN_IMAGE,
-  PLAYER_GOUD_IMAGE,
-  PLAYER_ZILVER_IMAGE,
-  PLAYER_BRONS_IMAGE,
-  PLAYER_KERST_IMAGE,
-  PLAYER_KOE_IMAGE,
-  PLAYER_REGENBOOG_IMAGE,
-  PLAYER_HOND_IMAGE,
-  PLAYER_KAT_IMAGE,
   CHALLENGE_SKIN_LOCK_IMAGE,
   PLAYER_FUTURE_SKIN_IMAGE,
-  ...Object.values(NAV_ICON_IMAGES).flatMap((variants) => Object.values(variants)),
   ...Object.values(PLAYER_IMAGES),
+  ...Object.values(NAV_ICON_IMAGES).flatMap((variants) => Object.values(variants)),
 ];
 const HOME_TAB_HOME = 'home';
 const HOME_TAB_SKINSHOP = 'skinshop';
@@ -131,7 +118,7 @@ const NAV_ITEMS = [
   { key: HOME_TAB_THEMECARDS, label: 'Kaarten', icon: 'checkerboard', accent: '#F2C94C' },
 ];
 
-const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.map((skin) => ({
+const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.filter((skin) => !isChallengeSkin(skin)).map((skin) => ({
   id: skin,
   label: SKIN_LABELS[skin] ?? skin,
   color: PLAYER_HEX[skin] ?? '#FFFFFF',
@@ -140,147 +127,36 @@ const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.map((skin) => ({
   unlockType: 'free',
 }));
 
-const CHALLENGE_SKIN_SHOP_ITEMS = [
-  {
-    id: 'politie',
-    label: 'Politie',
-    color: '#1A5EA8',
-    image: PLAYER_POLITIE_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Speel 5 potjes in de modus Klassiek.',
-  },
-  {
-    id: 'brandweer',
-    label: 'Brandweer',
-    color: '#E03030',
-    image: PLAYER_BRANDWEER_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Maak een bingo binnen 10 minuten.',
-  },
-  {
-    id: 'ambulance',
-    label: 'Ambulance',
-    color: '#E5F312',
-    image: PLAYER_AMBULANCE_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Speel samen een online potje.',
-  },
-  {
-    id: 'taxi',
-    label: 'Taxi',
-    color: '#F5C400',
-    image: PLAYER_TAXI_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Join een online potje met een lobbycode.',
-  },
-  {
-    id: 'hartjes',
-    label: 'Hartjes',
-    color: '#E8589E',
-    image: PLAYER_HARTJES_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Speel 3 potjes samen op hetzelfde apparaat.',
-  },
-  {
-    id: 'vlammen',
-    label: 'Vlammen',
-    color: '#E8622A',
-    image: PLAYER_VLAMMEN_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Claim 8 vakjes in een potje Claim Bingo.',
-  },
-  {
-    id: 'goud',
-    label: 'Goud',
-    color: '#D99A10',
-    image: PLAYER_GOUD_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Win 10 potjes Auto Bingo.',
-  },
-  {
-    id: 'zilver',
-    label: 'Zilver',
-    color: '#B9C0C7',
-    image: PLAYER_ZILVER_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Win 5 potjes Auto Bingo.',
-  },
-  {
-    id: 'brons',
-    label: 'Brons',
-    color: '#B66B32',
-    image: PLAYER_BRONS_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Win je eerste potje Auto Bingo.',
-  },
-  {
-    id: 'kerst',
-    label: 'Kerst',
-    color: '#E03030',
-    image: PLAYER_KERST_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Speel een potje met het thema Winter.',
-  },
-  {
-    id: 'koe',
-    label: 'Koe',
-    color: '#111111',
-    image: PLAYER_KOE_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Speel 3 potjes met het thema Platteland.',
-  },
-  {
-    id: 'regenboog',
-    label: 'Regenboog',
-    color: '#27BDEB',
-    image: PLAYER_REGENBOOG_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Speel minstens 1 potje met 4 verschillende kleuren.',
-  },
-  {
-    id: 'kat',
-    label: 'Kat',
-    color: '#E58218',
-    image: PLAYER_KAT_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Speel 3 potjes met het thema Platteland.',
-  },
-  {
-    id: 'hond',
-    label: 'Hond',
-    color: '#C76A1E',
-    image: PLAYER_HOND_IMAGE,
-    premium: false,
-    unlockType: 'challenge',
-    challenge: 'Win een potje met minstens 2 spelers.',
-  },
-];
+function buildSkinShopItems(challengeProgress) {
+  const challengeItems = Object.values(SKIN_CHALLENGES).map((challenge) => {
+    const progressValue = getChallengeProgressValue(challengeProgress, challenge.skin);
 
-const SKIN_SHOP_ITEMS = [
-  ...STANDARD_SKIN_SHOP_ITEMS,
-  ...CHALLENGE_SKIN_SHOP_ITEMS,
-  {
-    id: 'future-skin',
-    label: 'Binnenkort',
-    color: '#A8ADB4',
-    image: PLAYER_FUTURE_SKIN_IMAGE,
-    premium: false,
-    unlockType: 'future',
-  },
-];
+    return {
+      id: challenge.skin,
+      label: challenge.title,
+      color: PLAYER_HEX[challenge.skin] ?? '#FFFFFF',
+      image: PLAYER_IMAGES[challenge.skin],
+      premium: false,
+      unlockType: 'challenge',
+      unlocked: isSkinUnlocked(challengeProgress, challenge.skin),
+      challenge: challenge.description,
+      challengeProgress: progressValue,
+    };
+  });
+
+  return [
+    ...STANDARD_SKIN_SHOP_ITEMS,
+    ...challengeItems,
+    {
+      id: 'future-skin',
+      label: 'Binnenkort',
+      color: '#A8ADB4',
+      image: PLAYER_FUTURE_SKIN_IMAGE,
+      premium: false,
+      unlockType: 'future',
+    },
+  ];
+}
 
 function isSkinShopItemUnlocked(item) {
   if (item.unlockType === 'future') {
@@ -435,7 +311,8 @@ function HomeTabButton({ item, active, onPress, metrics }) {
 
 function SkinRoadBackground() {
   const { width } = useWindowDimensions();
-  const imageWidth = width * SKIN_ROAD_ZOOM;
+  const safeWidth = Number.isFinite(width) && width > 0 ? width : FALLBACK_WINDOW_WIDTH;
+  const imageWidth = safeWidth * SKIN_ROAD_ZOOM;
   const imageHeight = imageWidth * SKIN_ROAD_IMAGE_RATIO;
   const roadImages = Array.from({ length: SKIN_ROAD_REPEAT_COUNT }, (_, index) => index);
 
@@ -817,14 +694,16 @@ function ThemeItemInspectOverlay({ cell, progress, onClose }) {
 
 function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
   const { height, width } = useWindowDimensions();
-  const { isTablet } = getResponsiveMetrics(width, height);
-  const imageWidth = width * SKIN_ROAD_ZOOM;
+  const safeWidth = Number.isFinite(width) && width > 0 ? width : FALLBACK_WINDOW_WIDTH;
+  const safeHeight = Number.isFinite(height) && height > 0 ? height : FALLBACK_WINDOW_HEIGHT;
+  const { isTablet } = getResponsiveMetrics(safeWidth, safeHeight);
+  const imageWidth = safeWidth * SKIN_ROAD_ZOOM;
   const imageHeight = imageWidth * SKIN_ROAD_IMAGE_RATIO;
   const rowCount = Math.ceil(items.length / 2);
   const tileHeight = isTablet ? 214 : 146;
   const topOffset = isTablet ? 82 : 64;
   const navHeight = isTablet ? 154 : 118;
-  const targetLastRowTop = height - navHeight - tileHeight * 0.48;
+  const targetLastRowTop = safeHeight - navHeight - tileHeight * 0.48;
   const rowHeight = rowCount > 1
     ? Math.min(isTablet ? 236 : 154, Math.max(isTablet ? 184 : 132, (targetLastRowTop - topOffset) / (rowCount - 1)))
     : 144;
@@ -832,7 +711,11 @@ function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
     imageHeight * SKIN_ROAD_REPEAT_COUNT,
     topOffset + Math.max(0, rowCount - 1) * rowHeight + tileHeight + navHeight + 58
   );
-  const roadImages = Array.from({ length: Math.ceil(contentHeight / imageHeight) }, (_, index) => index);
+  const roadImageCount = Math.max(
+    1,
+    Math.min(8, Number.isFinite(contentHeight / imageHeight) ? Math.ceil(contentHeight / imageHeight) : SKIN_ROAD_REPEAT_COUNT)
+  );
+  const roadImages = Array.from({ length: roadImageCount }, (_, index) => index);
 
   return (
     <ScrollView
@@ -851,7 +734,7 @@ function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
               {
                 width: imageWidth,
                 height: imageHeight,
-                left: (width - imageWidth) / 2,
+                left: (safeWidth - imageWidth) / 2,
                 top: imageIndex * imageHeight,
               },
             ]}
@@ -1110,11 +993,15 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
   const isChallengeLocked = skin.unlockType === 'challenge' && !skin.unlocked;
   const hasSkinNameLabel = !isChallengeLocked && !isFutureSkin;
   const challengeText = skin.challenge ?? 'Voltooi de bijbehorende challenge om deze skin gratis te ontgrendelen.';
+  const challengeProgress = skin.challengeProgress ?? { current: 0, target: 1 };
+  const challengeRatio = challengeProgress.target > 0
+    ? Math.max(0, Math.min(1, challengeProgress.current / challengeProgress.target))
+    : 1;
   const { isTablet } = getResponsiveMetrics(width, height);
   const targetWidth = isTablet ? Math.min(width * 0.86, 680) : Math.min(width * 1.08, 470);
   const targetHeight = targetWidth * 0.76;
   const targetContainerHeight = isChallengeLocked
-    ? targetHeight + 112
+    ? targetHeight + 142
     : hasSkinNameLabel
       ? targetHeight + 86
       : targetHeight;
@@ -1227,6 +1114,19 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
               >
                 {challengeText}
               </Text>
+              <View style={styles.skinInspectChallengeProgressRow}>
+                <View style={styles.skinInspectChallengeProgressTrack}>
+                  <View
+                    style={[
+                      styles.skinInspectChallengeProgressFill,
+                      { width: `${challengeRatio * 100}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.skinInspectChallengeProgressText}>
+                  {challengeProgress.current} / {challengeProgress.target}
+                </Text>
+              </View>
             </Animated.View>
           </>
         ) : null}
@@ -1528,6 +1428,7 @@ export default function HomeScreen({ navigation, route }) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(windowWidth, windowHeight);
   const { isPremium } = usePremium();
+  const { settings } = useAppSettings();
   const pulse = useRef(new Animated.Value(1)).current;
   const premiumCrownPulse = useRef(new Animated.Value(1)).current;
   const hostPadlockJiggle = useRef(new Animated.Value(0)).current;
@@ -1547,6 +1448,7 @@ export default function HomeScreen({ navigation, route }) {
   const hostOptionRef = useRef(null);
   const joinOptionRef = useRef(null);
   const joinCodeInputRef = useRef(null);
+  const pendingOnlineJumpTimeoutRef = useRef(null);
   const pendingRouteRef = useRef(null);
   const pendingRouteParamsRef = useRef(null);
   const pendingThemeBackRef = useRef(false);
@@ -1571,6 +1473,7 @@ export default function HomeScreen({ navigation, route }) {
   const [selectedThemeItemIndex, setSelectedThemeItemIndex] = useState(0);
   const [selectedThemeDetail, setSelectedThemeDetail] = useState(null);
   const [skinInspection, setSkinInspection] = useState(null);
+  const [skinChallengeProgress, setSkinChallengeProgress] = useState(null);
   const [pendingThemeDetail, setPendingThemeDetail] = useState(null);
   const [themeRevealState, setThemeRevealState] = useState({
     covering: false,
@@ -1632,7 +1535,24 @@ export default function HomeScreen({ navigation, route }) {
   useEffect(() => {
     setLobbyExitMessage(route?.params?.lobbyExitMessage ?? '');
   }, [route?.params?.lobbyExitMessage]);
+
+  useEffect(() => {
+    preloadSoundEffect(GLOSSY_BUTTON_CLICK_SOUND);
+    preloadSoundEffect(ONLINE_CARS_MEEP_SOUND);
+    preloadSoundEffect(PLAY_MEEP_SOUND);
+
+    return () => {
+      if (pendingOnlineJumpTimeoutRef.current) {
+        clearTimeout(pendingOnlineJumpTimeoutRef.current);
+        pendingOnlineJumpTimeoutRef.current = null;
+      }
+    };
+  }, []);
   const normalizedJoinCode = useMemo(() => normalizeLobbyCode(joinCode), [joinCode]);
+  const skinShopItems = useMemo(
+    () => buildSkinShopItems(skinChallengeProgress),
+    [skinChallengeProgress]
+  );
   const showMainMenuPremiumButton = (
     [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !isPremium
@@ -1695,6 +1615,14 @@ export default function HomeScreen({ navigation, route }) {
   useEffect(() => {
     void Asset.loadAsync(HOME_SCREEN_PRELOAD_ASSETS).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== HOME_TAB_SKINSHOP) {
+      return;
+    }
+
+    void loadSkinChallengeProgress().then(setSkinChallengeProgress);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!isJoinPlateVisible) {
@@ -1924,7 +1852,39 @@ export default function HomeScreen({ navigation, route }) {
       }),
     ]);
 
+  const buildPlayMeepJumpAnimation = () =>
+    Animated.sequence([
+      Animated.delay(230),
+      Animated.timing(playCarJump, {
+        toValue: -12,
+        duration: 70,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(playCarJump, {
+        toValue: 0,
+        duration: 45,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.delay(10),
+      Animated.timing(playCarJump, {
+        toValue: -10,
+        duration: 55,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(playCarJump, {
+        toValue: 0,
+        duration: 150,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]);
+
   const runOnlineCarJumpSequence = ({ withHaptics = false, onComplete } = {}) => {
+    void playSoundEffect(ONLINE_CARS_MEEP_SOUND, settings);
+
     if (withHaptics) {
       triggerLightJumpHaptic();
     }
@@ -2013,7 +1973,7 @@ export default function HomeScreen({ navigation, route }) {
       return;
     }
 
-    runOnlineCarJumpSequence();
+    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
 
     setIsJoinPlateVisible(true);
     setJoinCode('');
@@ -2151,7 +2111,7 @@ export default function HomeScreen({ navigation, route }) {
     isNavigatingRef.current = true;
     triggerLightJumpHaptic();
 
-    buildJumpAnimation(playCarJump).start(({ finished }) => {
+    buildPlayMeepJumpAnimation().start(({ finished }) => {
       if (!finished) {
         isNavigatingRef.current = false;
         return;
@@ -2174,11 +2134,20 @@ export default function HomeScreen({ navigation, route }) {
     }
 
     if (isOnlineMenuVisible) {
+      if (pendingOnlineJumpTimeoutRef.current) {
+        clearTimeout(pendingOnlineJumpTimeoutRef.current);
+        pendingOnlineJumpTimeoutRef.current = null;
+      }
+      void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
       closeOnlineMenu();
       return;
     }
 
-    runOnlineCarJumpSequence({ withHaptics: true });
+    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
+    pendingOnlineJumpTimeoutRef.current = setTimeout(() => {
+      pendingOnlineJumpTimeoutRef.current = null;
+      runOnlineCarJumpSequence({ withHaptics: true });
+    }, PRESS_THEN_MEEP_DELAY_MS);
     openOnlineMenu();
   };
 
@@ -2188,24 +2157,19 @@ export default function HomeScreen({ navigation, route }) {
     }
 
     isNavigatingRef.current = true;
-    runOnlineCarJumpSequence({ onComplete: ({ finished }) => {
-      if (!finished) {
-        isNavigatingRef.current = false;
-        return;
-      }
-
-      setTimeout(() => {
-        void triggerReveal({
-          targetRef,
-          color: '#E03030',
-          routeName,
-          origin,
-        });
-      }, 150);
-    }});
+    setTimeout(() => {
+      void triggerReveal({
+        targetRef,
+        color: '#E03030',
+        routeName,
+        origin,
+      });
+    }, 150);
   };
 
   const handleHostOptionPress = async () => {
+    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
+
     if (!isPremium) {
       openPremiumModal('host');
       return;
@@ -2447,7 +2411,7 @@ export default function HomeScreen({ navigation, route }) {
         >
           <View style={[styles.tabPage, { width: windowWidth }]}>
             <SkinShopPanel
-              items={SKIN_SHOP_ITEMS}
+              items={skinShopItems}
               inspectedSkinId={skinInspection?.skin?.id}
               onInspect={openSkinInspect}
             />
@@ -2679,6 +2643,7 @@ export default function HomeScreen({ navigation, route }) {
                         heightOverride={actionButtonHeight}
                         labelFontScale={isTablet ? 1.18 : 1}
                         hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
+                        soundEffectName={PLAY_MEEP_SOUND}
                         onPressIn={(event) => {
                           latestPressPointRef.current = {
                             x: event.nativeEvent.pageX,

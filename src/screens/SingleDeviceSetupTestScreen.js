@@ -28,6 +28,15 @@ import { PLAYER_ADD_SILHOUETTE_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../../as
 import { getThemeCardImage, THEME_LOCK_OVERLAY_IMAGE } from '../../assets/images/theme-cards/themeCardImages';
 import { createGameConfig, createPlayer, SKIN_OPTIONS } from '../../screens/gameFlowConfig';
 import { THEMES } from '../../screens/themeCatalog';
+import { useAppSettings } from '../settings/AppSettingsContext';
+import { playSoundEffect, preloadSoundEffect } from '../audio/soundEffects';
+import {
+  SKIN_CHALLENGES,
+  getChallengeProgressValue,
+  isChallengeSkin,
+  isSkinUnlocked,
+  loadSkinChallengeProgress,
+} from '../challenges/skinChallenges';
 
 const THEME_CARDS = THEMES.map((theme) => ({
   id: theme.id,
@@ -41,6 +50,7 @@ const MAX_LOCAL_PLAYERS = 2;
 const MAX_PLAYER_NAME_LENGTH = 12;
 const PLAYER_SILHOUETTE_IMAGE = PLAYER_ADD_SILHOUETTE_IMAGE;
 const GAME_SETUP_BACKGROUND = require('../../assets/images/backgrounds/game-setup-birds-eye-background-v4.png');
+const CHALLENGE_SKIN_LOCK_IMAGE = require('../../assets/images/players/challenge-skin-lock.png');
 const SETTINGS_CROWN_ICON = require('../../assets/images/settings/crown-logo.png');
 const SETTINGS_DIAGONAL_ICON = require('../../assets/images/settings/diagonal-logo.png');
 const SETTINGS_RULES_PANEL_IMAGE = require('../../assets/images/settings/rules-menu-panel-v2.png');
@@ -72,6 +82,8 @@ const SETTINGS_DIAGONAL_OPTIONS = [
   { id: true, label: 'Wel', image: SETTINGS_DIAGONAL_ON },
   { id: false, label: 'Niet', image: SETTINGS_DIAGONAL_OFF },
 ];
+const GAME_SETTINGS_KLAP_IN_SOUND = 'gameSettingsKlapIn';
+const GAME_SETTINGS_KLAP_UIT_SOUND = 'gameSettingsKlapUit';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -138,6 +150,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
 export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const { isPremium } = usePremium();
+  const { settings } = useAppSettings();
   const initialConfig = route?.params?.initialConfig ?? null;
   const initialThemeIndex = Math.max(
     0,
@@ -334,6 +347,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }, [collapsedPanelHeight, expandedPanelHeight, panelHeight]);
 
   useEffect(() => {
+    preloadSoundEffect(GAME_SETTINGS_KLAP_IN_SOUND);
+    preloadSoundEffect(GAME_SETTINGS_KLAP_UIT_SOUND);
+  }, []);
+
+  useEffect(() => {
     Animated.timing(addPlayerFocusOpacity, {
       toValue: isEditingPlayerName ? 0 : 1,
       duration: isEditingPlayerName ? 160 : 220,
@@ -408,10 +426,12 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
 
   function openSettings() {
     void Haptics.selectionAsync();
+    void playSoundEffect(GAME_SETTINGS_KLAP_UIT_SOUND, settings);
     animateSettings(true);
   }
 
   function closeSettings() {
+    void playSoundEffect(GAME_SETTINGS_KLAP_IN_SOUND, settings);
     animateSettings(false);
   }
 
@@ -1072,6 +1092,7 @@ function SkinCarouselModal({
   onClose,
   onSelectSkin,
 }) {
+  const [challengeProgress, setChallengeProgress] = useState(null);
   const orderedSkins = useMemo(
     () => [selectedSkin, ...SKIN_OPTIONS.filter((skin) => skin !== selectedSkin)],
     [selectedSkin]
@@ -1081,11 +1102,13 @@ function SkinCarouselModal({
   useEffect(() => {
     if (visible) {
       setActiveIndex(0);
+      void loadSkinChallengeProgress().then(setChallengeProgress);
     }
   }, [visible]);
 
   const activeSkin = orderedSkins[activeIndex] ?? selectedSkin;
   const activeSkinTaken = takenSkins.includes(activeSkin) && activeSkin !== selectedSkin;
+  const activeSkinLocked = isChallengeSkin(activeSkin) && !isSkinUnlocked(challengeProgress, activeSkin);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -1131,9 +1154,21 @@ function SkinCarouselModal({
                   ]}
                 >
                   <PlayerAvatar skin={item} size={CAROUSEL_CAR_SIZE} />
+                  {isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item) ? (
+                    <Image
+                      source={CHALLENGE_SKIN_LOCK_IMAGE}
+                      style={styles.challengeSkinLock}
+                      resizeMode="contain"
+                    />
+                  ) : null}
                 </View>
               </View>
             )}
+          />
+
+          <SkinChallengeProgressPanel
+            skin={activeSkin}
+            progress={challengeProgress}
           />
 
           <View style={styles.selectButtonWrap}>
@@ -1144,12 +1179,43 @@ function SkinCarouselModal({
               heightOverride={62}
               horizontalPadding={44}
               onPress={() => onSelectSkin(activeSkin)}
-              disabled={activeSkinTaken}
+              disabled={activeSkinTaken || activeSkinLocked}
             />
           </View>
         </Animated.View>
       </Animated.View>
     </Modal>
+  );
+}
+
+function SkinChallengeProgressPanel({ skin, progress }) {
+  const challenge = SKIN_CHALLENGES[skin];
+
+  if (!challenge) {
+    return <View style={styles.challengePanelPlaceholder} />;
+  }
+
+  const progressValue = getChallengeProgressValue(progress, skin);
+  const ratio = progressValue.target > 0 ? progressValue.current / progressValue.target : 1;
+
+  return (
+    <View style={styles.challengePanel}>
+      <Text style={styles.challengeTitle}>{challenge.title}</Text>
+      <Text style={styles.challengeDescription}>{challenge.description}</Text>
+      <View style={styles.challengeProgressRow}>
+        <View style={styles.challengeProgressTrack}>
+          <View
+            style={[
+              styles.challengeProgressFill,
+              { width: `${Math.max(0, Math.min(1, ratio)) * 100}%` },
+            ]}
+          />
+        </View>
+        <Text style={styles.challengeProgressText}>
+          {progressValue.current} / {progressValue.target}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -1916,6 +1982,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  challengeSkinLock: {
+    position: 'absolute',
+    right: 18,
+    bottom: 18,
+    width: 54,
+    height: 54,
+  },
   carouselCardTaken: {
     opacity: 0.32,
   },
@@ -1976,6 +2049,67 @@ const styles = StyleSheet.create({
   },
   selectButtonWrap: {
     minWidth: 220,
+  },
+  challengePanelPlaceholder: {
+    minHeight: 86,
+  },
+  challengePanel: {
+    width: '86%',
+    maxWidth: 430,
+    minHeight: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  challengeTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 21,
+    lineHeight: 25,
+    color: '#FFF7DD',
+    textAlign: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(0, 0, 0, 0.42)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 3,
+  },
+  challengeDescription: {
+    marginTop: 5,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#F4E8CD',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  challengeProgressRow: {
+    width: '100%',
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  challengeProgressTrack: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.34)',
+  },
+  challengeProgressFill: {
+    height: '100%',
+    borderRadius: 6,
+    backgroundColor: '#F5C400',
+  },
+  challengeProgressText: {
+    minWidth: 46,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#FFF7DD',
+    textAlign: 'right',
+    letterSpacing: 0,
   },
   transitionCar: {
     position: 'absolute',

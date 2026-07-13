@@ -1,0 +1,87 @@
+export const THEMES = [
+  {
+    id: 'snelweg',
+    label: 'Snelweg',
+    premium: false,
+    emoji: '🛣️',
+    bg: '#D93B2B',
+    textColor: '#FFFDF7',
+    cardSurface: '#2b7898',
+    cardBorder: '#123d51',
+    cardOutline: '#087ED1',
+  },
+  {
+    id: 'stad',
+    label: 'Stad',
+    premium: false,
+    emoji: '🏙️',
+    bg: '#1A5EA8',
+    textColor: '#FFFDF7',
+    cardSurface: '#d28b2f',
+    cardBorder: '#7a4700',
+    cardOutline: '#FFB42E',
+  },
+  {
+    id: 'platteland',
+    label: 'Platteland',
+    premium: false,
+    emoji: '🌾',
+    bg: '#2E8B3F',
+    textColor: '#FFFDF7',
+    cardSurface: '#4f9c65',
+    cardBorder: '#1f5d36',
+    cardOutline: '#37D65F',
+  },
+  {
+    id: 'vakantie',
+    label: 'Vakantie',
+    premium: true,
+    emoji: '🌴',
+    bg: '#E8622A',
+    textColor: '#FFFDF7',
+    cardSurface: '#d06b42',
+    cardBorder: '#7e3518',
+    cardOutline: '#FF7A2F',
+  },
+  {
+    id: 'winter',
+    label: 'Winter',
+    premium: true,
+    emoji: '❄️',
+    bg: '#6EB5FF',
+    textColor: '#2D2B55',
+    cardSurface: '#d8ecff',
+    cardBorder: '#78aede',
+    cardOutline: '#7DD6FF',
+  },
+  {
+    id: 'voertuigen',
+    label: 'Voertuigen',
+    premium: true,
+    emoji: '🚗',
+    bg: '#2D2B55',
+    textColor: '#F5C400',
+    cardSurface: '#44516b',
+    cardBorder: '#202b3f',
+    cardOutline: '#7F86FF',
+  },
+  {
+    id: 'verkeersborden',
+    label: 'Verkeersborden',
+    premium: true,
+    emoji: '⚠️',
+    bg: '#FFFDF7',
+    textColor: '#2D2B55',
+    border: '#D93B2B',
+    cardSurface: '#fffaf2',
+    cardBorder: '#d93b2b',
+    cardOutline: '#FF2D22',
+  },
+];
+
+export const FREE_THEMES = THEMES.filter((theme) => !theme.premium);
+export const PREMIUM_THEMES = THEMES.filter((theme) => theme.premium);
+
+export function getThemeById(themeId) {
+  return THEMES.find((theme) => theme.id === themeId) ?? THEMES[0];
+}

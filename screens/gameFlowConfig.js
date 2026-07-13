@@ -25,6 +25,20 @@ export const SKIN_OPTIONS = [
   'lichtblauw',
   'zwart',
   'wit',
+  'regenboog',
+  'koe',
+  'kerst',
+  'politie',
+  'ambulance',
+  'brandweer',
+  'brons',
+  'zilver',
+  'goud',
+  'kat',
+  'hond',
+  'hartjes',
+  'taxi',
+  'vlammen',
 ];
 
 export const DEFAULT_ZICHTBAARHEID = {
