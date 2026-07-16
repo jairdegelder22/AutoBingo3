@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Image, ImageBackground, Linking, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Easing, Image, ImageBackground, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import GlossyButton from '../src/components/GlossyButton';
+import WarmupImages from '../src/components/WarmupImages';
 import * as Haptics from '../src/settings/haptics';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
 import { usePremium } from '../src/premium/PremiumContext';
@@ -9,6 +10,8 @@ import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { hasPremiumEntitlement } from '../src/premium/revenueCatClient';
 import { getResponsiveMetrics } from '../src/utils/responsive';
 import { LEGAL_URLS } from '../src/legal/legalConfig';
+import { redeemUnlockCode } from '../src/unlocks/unlockCodes';
+import { SETTINGS_ASSETS } from '../src/assets/preloadManifest';
 
 const SETTINGS_MENU_IMAGE = require('../assets/images/settings/settings-menu-panel.png');
 const SETTINGS_LANGUAGE_IMAGE = require('../assets/images/settings/settings-language.png');
@@ -16,6 +19,7 @@ const SETTINGS_TUTORIAL_IMAGE = require('../assets/images/settings/settings-tuto
 const SETTINGS_PRIVACY_IMAGE = require('../assets/images/settings/settings-privacy.png');
 const SETTINGS_PREMIUM_RESTORE_IMAGE = require('../assets/images/settings/settings-premium-restore.png');
 const SETTINGS_PREMIUM_IMAGE = require('../assets/images/premium/main-menu-premium-crown.png');
+const CODE_ENTRY_MENU_IMAGE = require('../assets/images/settings/code-invoeren-menu.png');
 const SFX_ON_IMAGE = require('../assets/images/settings/toggles/sfx-on.png');
 const SFX_OFF_IMAGE = require('../assets/images/settings/toggles/sfx-off.png');
 const MUSIC_ON_IMAGE = require('../assets/images/settings/toggles/music-on.png');
@@ -36,10 +40,13 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
     customerInfo,
     isPremium,
     restorePremiumPurchases,
+    unlockPremiumWithCode,
   } = usePremium();
   const { width, height } = useWindowDimensions();
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
+  const [codeModalVisible, setCodeModalVisible] = useState(false);
   const [restoreInProgress, setRestoreInProgress] = useState(false);
+  const [menuImageReady, setMenuImageReady] = useState(!visible);
   const menuProgress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const { isTablet } = getResponsiveMetrics(width, height);
   const menuWidth = isTablet
@@ -49,11 +56,19 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
   const menuScale = menuWidth / 975;
   const scaled = (value) => value * menuScale;
   const closeSettings = onClose ?? (() => navigation.goBack());
+  const handleSettingsWarmupReady = useCallback(() => {
+    setMenuImageReady(true);
+  }, []);
 
   useEffect(() => {
     menuProgress.stopAnimation();
 
     if (visible) {
+      if (!menuImageReady) {
+        menuProgress.setValue(0);
+        return;
+      }
+
       menuProgress.setValue(0);
       Animated.timing(menuProgress, {
         toValue: 1,
@@ -70,11 +85,13 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
       easing: Easing.in(Easing.quad),
       useNativeDriver: true,
     }).start();
-  }, [menuProgress, visible]);
+  }, [menuImageReady, menuProgress, visible]);
 
   useEffect(() => {
     if (!visible) {
       setPremiumModalVisible(false);
+      setCodeModalVisible(false);
+      setMenuImageReady(false);
     }
   }, [visible]);
 
@@ -160,6 +177,10 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
     );
   }
 
+  async function handleRedeemCode(code) {
+    return redeemUnlockCode(code, { unlockPremiumWithCode });
+  }
+
   const shortcutButtons = [
     {
       key: 'language',
@@ -185,6 +206,12 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
       icon: SETTINGS_PREMIUM_RESTORE_IMAGE,
       onPress: handleRestorePremium,
     },
+    {
+      key: 'redeem-code',
+      label: 'Code invoeren',
+      icon: null,
+      onPress: () => setCodeModalVisible(true),
+    },
   ];
 
   const menuAnimatedStyle = {
@@ -208,6 +235,14 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={closeSettings}>
       <View style={styles.screen}>
+        <WarmupImages
+          assets={SETTINGS_ASSETS}
+          active={visible}
+          timeoutMs={null}
+          imageSize={128}
+          batchSize={16}
+          onReady={handleSettingsWarmupReady}
+        />
         <Pressable style={styles.dismissBackdrop} onPress={closeSettings} />
 
         <Animated.View
@@ -219,6 +254,8 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
             source={SETTINGS_MENU_IMAGE}
             resizeMode="stretch"
             style={[styles.menu, { width: menuWidth, height: menuHeight }]}
+            fadeDuration={0}
+            onLoadEnd={() => setMenuImageReady(true)}
           >
             <View
               style={[
@@ -276,7 +313,7 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
                   top: scaled(408),
                   left: scaled(122),
                   right: scaled(122),
-                  gap: scaled(74),
+                  gap: scaled(62),
                 },
               ]}
             >
@@ -341,6 +378,11 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
         visible={premiumModalVisible}
         onClose={() => setPremiumModalVisible(false)}
         onUnlocked={() => setPremiumModalVisible(false)}
+      />
+      <UnlockCodeModal
+        visible={codeModalVisible}
+        onClose={() => setCodeModalVisible(false)}
+        onRedeem={handleRedeemCode}
       />
     </Modal>
   );
@@ -449,10 +491,11 @@ function MiniToggleButton({
               />
               <Text style={[styles.miniToggleText, { fontSize, lineHeight: fontSize * 1.1 }]}>{label}</Text>
               <View style={[styles.miniToggleIconWrap, { width: iconSize, height: iconSize }]}>
-                <Image source={icon} resizeMode="contain" style={styles.miniToggleIcon} />
+                <Image source={icon} resizeMode="contain" style={styles.miniToggleIcon} fadeDuration={0} />
                 <Image
                   source={badge}
                   resizeMode="contain"
+                  fadeDuration={0}
                   style={[
                     styles.miniToggleBadge,
                     {
@@ -522,22 +565,166 @@ function SettingsShortcutButton({ label, icon, onPress, height, iconSize, iconRi
         onPressOut={pressIconOut}
         hapticStyle={Haptics.ImpactFeedbackStyle.Light}
       />
-      <Animated.Image
-        pointerEvents="none"
-        source={icon}
-        resizeMode="contain"
-        style={[
-          styles.shortcutIcon,
-          iconPressedStyle,
-          {
-            width: iconSize,
-            height: iconSize,
-            right: iconRight,
-            marginTop: -iconSize / 2,
-          },
-        ]}
-      />
+      {icon ? (
+        <Animated.Image
+          pointerEvents="none"
+          source={icon}
+          resizeMode="contain"
+          style={[
+            styles.shortcutIcon,
+            iconPressedStyle,
+            {
+              width: iconSize,
+              height: iconSize,
+              right: iconRight,
+              marginTop: -iconSize / 2,
+            },
+          ]}
+        />
+      ) : null}
     </View>
+  );
+}
+
+function UnlockCodeModal({ visible, onClose, onRedeem }) {
+  const { width, height } = useWindowDimensions();
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const panelWidth = Math.min(width - 10, height * (962 / 1179) * 0.94, 430);
+
+  useEffect(() => {
+    if (!visible) {
+      setCode('');
+      setBusy(false);
+      setResult(null);
+      setKeyboardVisible(false);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+
+    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [visible]);
+
+  async function handleSubmit() {
+    const trimmedCode = code.trim();
+
+    if (!trimmedCode || busy) {
+      return;
+    }
+
+    setBusy(true);
+    setResult(null);
+
+    try {
+      const nextResult = await onRedeem(trimmedCode);
+      setResult(nextResult);
+
+      if (nextResult?.ok) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } catch (_error) {
+      setResult({
+        ok: false,
+        title: 'Code invoeren lukt niet',
+        message: 'Probeer het zo opnieuw.',
+      });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleBackdropPress() {
+    if (keyboardVisible) {
+      Keyboard.dismiss();
+      return;
+    }
+
+    onClose();
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.codeModalScreen}
+      >
+        <Pressable style={styles.dismissBackdrop} onPress={handleBackdropPress} />
+        <View style={[styles.codePanel, { width: panelWidth }]}>
+          <Image
+            pointerEvents="none"
+            source={CODE_ENTRY_MENU_IMAGE}
+            resizeMode="contain"
+            style={styles.codePanelBackground}
+            fadeDuration={0}
+          />
+          <View style={styles.codePanelContent}>
+            <Pressable
+              style={styles.codePanelDismissLayer}
+              onPress={() => {
+                if (keyboardVisible) {
+                  Keyboard.dismiss();
+                }
+              }}
+            />
+            <Text style={styles.codeTitle}>Code invoeren</Text>
+            <Text style={styles.codeMessage}>
+              Vul een speciale code in om extra's op dit apparaat vrij te spelen.
+            </Text>
+            <TextInput
+              value={code}
+              onChangeText={(nextCode) => {
+                setCode(nextCode);
+                setResult(null);
+              }}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+              editable={!busy}
+              style={styles.codeInput}
+            />
+            <View style={styles.codeResultSlot}>
+              {result ? (
+                <Text style={[styles.codeResult, result.ok ? styles.codeResultSuccess : styles.codeResultError]}>
+                  {result.title}. {result.message}
+                </Text>
+              ) : null}
+            </View>
+            <View style={styles.codeActions}>
+              <View style={styles.codeActionButton}>
+                <GlossyButton
+                  label={busy ? 'Laden...' : 'Invoeren'}
+                  variant="green"
+                  size="normal"
+                  onPress={handleSubmit}
+                  disabled={busy || !code.trim()}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -652,6 +839,107 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     zIndex: 3,
+  },
+  codeModalScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.52)',
+    padding: 18,
+    zIndex: 9200,
+    elevation: 9200,
+  },
+  codePanel: {
+    aspectRatio: 962 / 1179,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    shadowColor: '#032B72',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.34,
+    shadowRadius: 16,
+    elevation: 18,
+  },
+  codePanelBackground: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  codePanelContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 58,
+    paddingTop: 130,
+    paddingBottom: 86,
+  },
+  codePanelDismissLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  codeTitle: {
+    zIndex: 1,
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17364A',
+    fontSize: 28,
+    lineHeight: 34,
+    textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.85)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 2,
+  },
+  codeMessage: {
+    zIndex: 1,
+    marginTop: 8,
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#315266',
+    fontSize: 15,
+    lineHeight: 21,
+    textAlign: 'center',
+  },
+  codeInput: {
+    zIndex: 1,
+    width: '100%',
+    minHeight: 58,
+    marginTop: 34,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: '#1A75BA',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 18,
+    color: '#17364A',
+    textAlign: 'center',
+  },
+  codeResult: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  codeResultSlot: {
+    zIndex: 1,
+    width: '100%',
+    minHeight: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  codeResultSuccess: {
+    color: '#087233',
+  },
+  codeResultError: {
+    color: '#9E0F0F',
+  },
+  codeActions: {
+    zIndex: 1,
+    width: '68%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 0,
+  },
+  codeActionButton: {
+    width: '100%',
   },
   legalLinks: {
     position: 'absolute',

@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Image,
   ImageBackground,
+  InteractionManager,
   Keyboard,
   Modal,
   Pressable,
@@ -21,11 +22,12 @@ import ThemeCarousel from '../components/ThemeCarousel';
 import GlossyButton from '../components/GlossyButton';
 import RemovePlayerIcon from '../components/RemovePlayerIcon';
 import AnimatedRouteBackButton from '../components/AnimatedRouteBackButton';
+import WarmupImages from '../components/WarmupImages';
 import CircularReveal from '../../components/CircularReveal';
 import PremiumPaywallModal from '../premium/PremiumPaywallModal';
 import { usePremium } from '../premium/PremiumContext';
 import { PLAYER_ADD_SILHOUETTE_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../../assets/images/players/playerImages';
-import { getThemeCardImage, THEME_LOCK_OVERLAY_IMAGE } from '../../assets/images/theme-cards/themeCardImages';
+import { getThemeCardImage, THEME_CARD_IMAGES, THEME_LOCK_OVERLAY_IMAGE } from '../../assets/images/theme-cards/themeCardImages';
 import { createGameConfig, createPlayer, SKIN_OPTIONS } from '../../screens/gameFlowConfig';
 import { THEMES } from '../../screens/themeCatalog';
 import { useAppSettings } from '../settings/AppSettingsContext';
@@ -37,6 +39,7 @@ import {
   isSkinUnlocked,
   loadSkinChallengeProgress,
 } from '../challenges/skinChallenges';
+import { SETUP_ASSETS } from '../assets/preloadManifest';
 
 const THEME_CARDS = THEMES.map((theme) => ({
   id: theme.id,
@@ -84,6 +87,8 @@ const SETTINGS_DIAGONAL_OPTIONS = [
 ];
 const GAME_SETTINGS_KLAP_IN_SOUND = 'gameSettingsKlapIn';
 const GAME_SETTINGS_KLAP_UIT_SOUND = 'gameSettingsKlapUit';
+const SETUP_THEME_CARD_IMAGE_COUNT = Object.keys(THEME_CARD_IMAGES).length;
+const SETUP_CRITICAL_IMAGE_COUNT = 2 + SETUP_THEME_CARD_IMAGE_COUNT;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -123,6 +128,11 @@ function getEmbeddedThemeTitleStyle(themeId) {
     ? {
         fontSize: 22,
         lineHeight: 30,
+      }
+    : themeId === 'platteland'
+    ? {
+        fontSize: 26,
+        lineHeight: 36,
       }
     : null;
 
@@ -179,6 +189,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const [kaartOpzet, setKaartOpzet] = useState(initialConfig?.kaartOpzet ?? 'zelfde');
   const [pendingGameStart, setPendingGameStart] = useState(null);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
+  const [setupLayoutReady, setSetupLayoutReady] = useState(false);
+  const [setupImagesReady, setSetupImagesReady] = useState(false);
 
   const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.88, 1.18);
   const collapsedPanelHeight = Math.round(clamp(screenHeight * 0.078, 66, 88));
@@ -210,11 +222,13 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const transitionOpacity = useRef(new Animated.Value(0)).current;
   const transitionTranslateX = useRef(new Animated.Value(0)).current;
   const keyboardLift = useRef(new Animated.Value(0)).current;
+  const nameFocusDimOpacity = useRef(new Animated.Value(0)).current;
   const addPlayerFocusOpacity = useRef(new Animated.Value(1)).current;
   const firstPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 0 ? 1 : 0)).current;
   const secondPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 1 ? 1 : 0)).current;
   const playRevealRef = useRef(null);
   const latestPlayPressPointRef = useRef(null);
+  const loadedSetupCriticalImagesRef = useRef(new Set());
   const playerLayoutProgress = useState(() => new Animated.Value(spelers.length >= 2 ? 1 : 0))[0];
   const carRefs = useRef([]);
   const selectedTheme = THEME_CARDS[selectedThemeIndex] ?? THEME_CARDS[0];
@@ -231,6 +245,16 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     () => Boolean(selectedTheme?.id && playerCount),
     [playerCount, selectedTheme?.id]
   );
+  const markSetupCriticalImageLoaded = useCallback((key) => {
+    loadedSetupCriticalImagesRef.current.add(key);
+
+    if (loadedSetupCriticalImagesRef.current.size >= SETUP_CRITICAL_IMAGE_COUNT) {
+      setSetupImagesReady(true);
+    }
+  }, []);
+  const handleSetupWarmupReady = useCallback(() => {
+    setSetupImagesReady(true);
+  }, []);
   const settingsPanelTranslateY = settingsProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [expandedPanelHeight - collapsedPanelHeight - Math.round(20 * scale), 0],
@@ -241,6 +265,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   });
   const playerStageWidth = Math.max(0, screenWidth - SCREEN_HORIZONTAL_PADDING * 2);
   const laneOffset = playerStageWidth / 4;
+  const hasTwoLocalPlayers = spelers.length >= 2;
   const addButtonTranslateX = playerStageWidth * 0.11;
   const firstPlayerTranslateX = playerLayoutProgress.interpolate({
     inputRange: [0, 1],
@@ -263,12 +288,12 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     outputRange: [10, 0],
   });
   const isEditingPlayerName = focusedNameIndex !== null;
-  const fallbackKeyboardLift = -Math.round(clamp(screenHeight * 0.18, 142, 190));
+  const fallbackKeyboardLift = -Math.round(clamp(screenHeight * 0.14, 112, 155));
   const firstPlayerStageTranslateX = Animated.add(
     firstPlayerTranslateX,
     firstPlayerFocusProgress.interpolate({
       inputRange: [0, 1],
-      outputRange: [0, laneOffset],
+      outputRange: [0, hasTwoLocalPlayers ? laneOffset : 0],
     })
   );
   const firstPlayerStageTranslateY = Animated.multiply(firstPlayerFocusProgress, keyboardLift);
@@ -306,6 +331,28 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       animateSettings(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (!setupLayoutReady || !setupImagesReady) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) {
+            navigation.markRouteReady?.();
+          }
+        });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigation, setupImagesReady, setupLayoutReady]);
 
   useEffect(() => {
     Animated.timing(playerLayoutProgress, {
@@ -370,9 +417,18 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }, [fallbackKeyboardLift, isEditingPlayerName, keyboardLift]);
 
   useEffect(() => {
+    Animated.timing(nameFocusDimOpacity, {
+      toValue: isEditingPlayerName ? 1 : 0,
+      duration: isEditingPlayerName ? 220 : 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [isEditingPlayerName, nameFocusDimOpacity]);
+
+  useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardWillShow', (event) => {
       const keyboardHeight = event.endCoordinates?.height ?? 0;
-      const lift = -Math.round(clamp(keyboardHeight * 0.42, 126, 190));
+      const lift = -Math.round(clamp(keyboardHeight * 0.34, 104, 155));
 
       Animated.timing(keyboardLift, {
         toValue: lift,
@@ -603,19 +659,42 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }
 
   return (
-    <View style={styles.safeArea}>
+    <View
+      style={styles.safeArea}
+      onLayout={() => setSetupLayoutReady(true)}
+    >
+      <WarmupImages
+        assets={SETUP_ASSETS}
+        timeoutMs={null}
+        imageSize={128}
+        batchSize={16}
+        onReady={handleSetupWarmupReady}
+      />
       <ImageBackground
         source={GAME_SETUP_BACKGROUND}
         resizeMode="cover"
         style={styles.background}
+        fadeDuration={0}
+        onLoadEnd={() => markSetupCriticalImageLoaded('background')}
       >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.nameFocusTopScrim,
+            { opacity: nameFocusDimOpacity },
+          ]}
+        />
         <SafeAreaView style={styles.safeAreaContent}>
-          <AnimatedRouteBackButton
-            navigation={navigation}
-            size={66}
-            style={styles.backButton}
-          />
-          <View style={styles.content}>
+          <View pointerEvents={isEditingPlayerName ? 'none' : 'auto'} style={styles.backButton}>
+            <AnimatedRouteBackButton
+              navigation={navigation}
+              size={66}
+            />
+          </View>
+          <Pressable
+            style={styles.content}
+            onPress={isEditingPlayerName ? dismissNameEditing : undefined}
+          >
             <View style={styles.topBlock}>
               <ThemeCarousel
                 items={THEME_CARDS}
@@ -623,17 +702,29 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 itemWidth={THEME_CARD_WIDTH}
                 keyExtractor={(item) => item.id}
                 onSnapToItem={setSelectedThemeIndex}
+                flatListProps={{ scrollEnabled: !isEditingPlayerName }}
                 renderCard={({ item }) => (
                   <ThemeCard
                     item={item}
                     isPremium={isPremium}
                     onLockedPress={() => setPremiumModalVisible(true)}
+                    onImageLoadEnd={() => markSetupCriticalImageLoaded(`theme-${item.id}`)}
                   />
                 )}
               />
             </View>
 
-            <Animated.View style={styles.playerStageSection}>
+            <Animated.View
+              pointerEvents={isEditingPlayerName ? 'auto' : 'none'}
+              style={[
+                styles.nameFocusShield,
+                { opacity: nameFocusDimOpacity },
+              ]}
+            >
+              <Pressable style={StyleSheet.absoluteFill} onPress={dismissNameEditing} />
+            </Animated.View>
+
+            <Animated.View pointerEvents="box-none" style={styles.playerStageSection}>
               <Animated.View
                 pointerEvents={focusedNameIndex === 1 ? 'none' : 'auto'}
                 style={[
@@ -654,8 +745,9 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                     size={stageCarSize}
                     style={skinPickerMounted && selectedPlayerIndex === 0 ? styles.heroCarButtonHidden : null}
                     onPress={() => animatePickerOpen(0)}
-                    active={!skinPickerMounted && focusedNameIndex !== 1}
+                    active={!skinPickerMounted && !isEditingPlayerName}
                     attentionDelay={0}
+                    onImageLoadEnd={() => markSetupCriticalImageLoaded('player')}
                   />
                 </View>
                 <PlayerNameInput
@@ -716,7 +808,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                           size={stageCarSize}
                           style={skinPickerMounted && selectedPlayerIndex === 1 ? styles.heroCarButtonHidden : null}
                           onPress={() => animatePickerOpen(1)}
-                          active={!skinPickerMounted && focusedNameIndex !== 0}
+                          active={!skinPickerMounted && !isEditingPlayerName}
                           attentionDelay={CAR_ATTENTION_STAGGER_MS}
                         />
                       </View>
@@ -761,7 +853,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 disabled={!canStart || !selectedThemeAvailable}
               />
             </View>
-          </View>
+          </Pressable>
 
           <View pointerEvents={settingsOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
             <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
@@ -799,7 +891,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
         ) : null}
 
         <View
-          pointerEvents="box-none"
+          pointerEvents={isEditingPlayerName ? 'none' : 'box-none'}
           style={styles.bottomDock}
         >
           <Animated.View
@@ -894,7 +986,10 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 originX: screenWidth / 2,
                 originY: screenHeight / 2,
                 routeName: 'Spel',
-                pauseMs: 320,
+                pauseMs: 80,
+                minSolidMs: 420,
+                settleMs: 120,
+                routeReadySettleMs: 160,
                 transitionKey: pendingGameStart.transitionKey,
               },
             });
@@ -913,7 +1008,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   );
 }
 
-function PlayerAvatar({ skin = 'geel', size = 96, style }) {
+function PlayerAvatar({ skin = 'geel', size = 96, style, onImageLoadEnd }) {
   const source = PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.geel;
   const shadowWidth = size * 0.76;
   const shadowHeight = size * 0.18;
@@ -938,13 +1033,15 @@ function PlayerAvatar({ skin = 'geel', size = 96, style }) {
       <Image
         source={source}
         resizeMode="contain"
+        fadeDuration={0}
+        onLoadEnd={onImageLoadEnd}
         style={{ width: size, height: size }}
       />
     </View>
   );
 }
 
-function AttentionCarButton({ skin, size, onPress, active = true, style, attentionDelay = 0 }) {
+function AttentionCarButton({ skin, size, onPress, active = true, style, attentionDelay = 0, onImageLoadEnd }) {
   const attention = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -1002,7 +1099,7 @@ function AttentionCarButton({ skin, size, onPress, active = true, style, attenti
   return (
     <Pressable style={[styles.heroCarButton, style]} onPress={onPress} disabled={!active}>
       <Animated.View style={{ transform: [{ translateY }, { rotate }] }}>
-        <PlayerAvatar skin={skin} size={size} />
+        <PlayerAvatar skin={skin} size={size} onImageLoadEnd={onImageLoadEnd} />
       </Animated.View>
     </Pressable>
   );
@@ -1140,6 +1237,10 @@ function SkinCarouselModal({
             containerStyle={styles.carouselWrap}
             flatListProps={{ initialScrollIndex: 0 }}
             renderCard={({ item, isFocused }) => (
+              (() => {
+                const itemLocked = isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item);
+
+                return (
               <View
                 style={[
                   styles.carouselCardShellPicker,
@@ -1153,8 +1254,10 @@ function SkinCarouselModal({
                     takenSkins.includes(item) && item !== selectedSkin ? styles.carouselCardTaken : null,
                   ]}
                 >
-                  <PlayerAvatar skin={item} size={CAROUSEL_CAR_SIZE} />
-                  {isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item) ? (
+                  <View style={itemLocked ? styles.challengeSkinLockedCar : null}>
+                    <PlayerAvatar skin={item} size={CAROUSEL_CAR_SIZE} />
+                  </View>
+                  {itemLocked ? (
                     <Image
                       source={CHALLENGE_SKIN_LOCK_IMAGE}
                       style={styles.challengeSkinLock}
@@ -1163,12 +1266,9 @@ function SkinCarouselModal({
                   ) : null}
                 </View>
               </View>
+                );
+              })()
             )}
-          />
-
-          <SkinChallengeProgressPanel
-            skin={activeSkin}
-            progress={challengeProgress}
           />
 
           <View style={styles.selectButtonWrap}>
@@ -1182,6 +1282,11 @@ function SkinCarouselModal({
               disabled={activeSkinTaken || activeSkinLocked}
             />
           </View>
+
+          <SkinChallengeProgressPanel
+            skin={activeSkin}
+            progress={challengeProgress}
+          />
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -1219,7 +1324,7 @@ function SkinChallengeProgressPanel({ skin, progress }) {
   );
 }
 
-function ThemeCard({ item, isPremium = false, onLockedPress }) {
+function ThemeCard({ item, isPremium = false, onLockedPress, onImageLoadEnd }) {
   const themeImage = getThemeCardImage(item.id);
   const isLocked = item.premium && !isPremium;
   const usesEmbeddedFrame = isEmbeddedThemeCard(item.id);
@@ -1239,6 +1344,8 @@ function ThemeCard({ item, isPremium = false, onLockedPress }) {
           <ImageBackground
             source={themeImage}
             resizeMode={usesEmbeddedFrame ? 'contain' : 'cover'}
+            fadeDuration={0}
+            onLoadEnd={onImageLoadEnd}
             imageStyle={[
               styles.carouselCardImage,
               usesEmbeddedFrame && styles.carouselCardImageEmbedded,
@@ -1507,6 +1614,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 4,
     paddingBottom: 152,
+    position: 'relative',
   },
   backButton: {
     position: 'absolute',
@@ -1518,16 +1626,36 @@ const styles = StyleSheet.create({
   topBlock: {
     marginTop: 32,
     marginHorizontal: -24,
+    zIndex: 1,
   },
   actionStack: {
     gap: 20,
     marginTop: -2,
+    zIndex: 1,
+  },
+  nameFocusShield: {
+    position: 'absolute',
+    top: 0,
+    left: -24,
+    right: -24,
+    bottom: 0,
+    zIndex: 3,
+    backgroundColor: 'rgba(5, 12, 22, 0.42)',
+  },
+  nameFocusTopScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 130,
+    backgroundColor: 'rgba(5, 12, 22, 0.42)',
   },
   playerStageSection: {
     height: 252,
     position: 'relative',
     marginTop: 12,
     marginBottom: 8,
+    zIndex: 4,
   },
   playerStageSlot: {
     ...StyleSheet.absoluteFillObject,
@@ -1984,10 +2112,16 @@ const styles = StyleSheet.create({
   },
   challengeSkinLock: {
     position: 'absolute',
-    right: 18,
-    bottom: 18,
-    width: 54,
-    height: 54,
+    left: '50%',
+    top: '50%',
+    width: 96,
+    height: 96,
+    marginLeft: -48,
+    marginTop: -48,
+    zIndex: 4,
+  },
+  challengeSkinLockedCar: {
+    opacity: 0.34,
   },
   carouselCardTaken: {
     opacity: 0.32,

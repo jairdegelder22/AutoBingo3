@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
   Easing,
   Image,
   ImageBackground,
+  InteractionManager,
   Modal,
   Pressable,
   StyleSheet,
@@ -36,9 +37,11 @@ import { getPlayerSurfaceColors } from '../src/utils/playerColorStyles';
 import GlossyButton from '../src/components/GlossyButton';
 import PopupPanel from '../src/components/PopupPanel';
 import CircularReveal from '../components/CircularReveal';
+import WarmupImages from '../src/components/WarmupImages';
 import { getResponsiveMetrics } from '../src/utils/responsive';
 import useOnlineConnectionStatus from '../src/hooks/useOnlineConnectionStatus';
 import ConnectionWarningOverlay from '../src/components/ConnectionWarningOverlay';
+import { WAITING_ROOM_ASSETS } from '../src/assets/preloadManifest';
 
 const MAX_PLAYER_NAME_LENGTH = 12;
 const MAX_LOCAL_PLAYERS = 2;
@@ -598,7 +601,34 @@ export default function WaitingScreen({ navigation, route }) {
   const [storedPlayerLoaded, setStoredPlayerLoaded] = useState(!shouldRestoreStoredPlayer);
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState(null);
   const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
+  const [waitingLayoutReady, setWaitingLayoutReady] = useState(false);
+  const [waitingAssetsReady, setWaitingAssetsReady] = useState(false);
   const [skinPickerMounted, setSkinPickerMounted] = useState(false);
+  const handleWaitingWarmupReady = useCallback(() => {
+    setWaitingAssetsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!waitingLayoutReady || !waitingAssetsReady) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) {
+            navigation.markRouteReady?.();
+          }
+        });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigation, waitingAssetsReady, waitingLayoutReady]);
   const [heroTop, setHeroTop] = useState(234);
   const [transitionSourceLeft, setTransitionSourceLeft] = useState(0);
   const [transitionSkin, setTransitionSkin] = useState('rood');
@@ -1030,7 +1060,10 @@ export default function WaitingScreen({ navigation, route }) {
         originX: screenWidth / 2,
         originY: screenHeight / 2,
         routeName: 'Spel',
-        pauseMs: 220,
+        pauseMs: 80,
+        minSolidMs: 360,
+        settleMs: 120,
+        routeReadySettleMs: 160,
         transitionKey,
       },
     });
@@ -1218,7 +1251,15 @@ export default function WaitingScreen({ navigation, route }) {
 
   return (
     <>
+      <WarmupImages
+        assets={WAITING_ROOM_ASSETS}
+        timeoutMs={null}
+        imageSize={128}
+        batchSize={16}
+        onReady={handleWaitingWarmupReady}
+      />
       <ScreenLayout
+        onLayout={() => setWaitingLayoutReady(true)}
         title=""
         scroll={false}
         backgroundImage={LOBBY_ROAD_BACKGROUND_IMAGE}

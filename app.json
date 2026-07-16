@@ -12,13 +12,19 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jairdegelder.autobingo"
     },
     "android": {
+      "package": "com.jairdegelder.autobingo",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -27,7 +33,29 @@
       "expo-font",
       "expo-video",
       "expo-audio",
-      "expo-asset"
-    ]
+      "expo-asset",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-5873918058071695~2488958739"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Auto Bingo gebruikt je foto's alleen als jij een screenshot toevoegt aan een bugmelding."
+        }
+      ]
+    ],
+    "react-native-google-mobile-ads": {
+      "android_app_id": "ca-app-pub-3940256099942544~3347511713",
+      "ios_app_id": "ca-app-pub-5873918058071695~2488958739"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9335119c-38c6-4807-8628-b8e50d879cbd"
+      }
+    }
   }
 }

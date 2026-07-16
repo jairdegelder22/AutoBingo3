@@ -10,7 +10,18 @@ import React, {
 import { Animated, Easing, StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-const DEFAULT_DURATION = 850;
+const DEFAULT_DURATION = 620;
+
+function buildCirclePath(originX, originY, circleRadius) {
+  const safeRadius = Math.max(0.001, circleRadius);
+
+  return [
+    `M ${originX} ${originY}`,
+    `m -${safeRadius}, 0`,
+    `a ${safeRadius},${safeRadius} 0 1,0 ${safeRadius * 2},0`,
+    `a ${safeRadius},${safeRadius} 0 1,0 -${safeRadius * 2},0`,
+  ].join(' ');
+}
 
 const CircularReveal = forwardRef(function CircularReveal(
   {
@@ -37,19 +48,18 @@ const CircularReveal = forwardRef(function CircularReveal(
     [height, width]
   );
   const radius = diameter / 2;
-  const holeRadius = Math.max(0.001, radius * renderProgress);
+  const circleRadius = Math.max(0.001, radius * renderProgress);
 
-  const uncoverPath = useMemo(() => {
-    const outer = `M 0 0 H ${width} V ${height} H 0 Z`;
-    const circle = [
-      `M ${originX} ${originY}`,
-      `m -${holeRadius}, 0`,
-      `a ${holeRadius},${holeRadius} 0 1,0 ${holeRadius * 2},0`,
-      `a ${holeRadius},${holeRadius} 0 1,0 -${holeRadius * 2},0`,
-    ].join(' ');
+  const visiblePath = useMemo(() => {
+    const circle = buildCirclePath(originX, originY, circleRadius);
 
-    return `${outer} ${circle}`;
-  }, [height, holeRadius, originX, originY, width]);
+    if (mode === 'uncover') {
+      const outer = `M 0 0 H ${width} V ${height} H 0 Z`;
+      return `${outer} ${circle}`;
+    }
+
+    return circle;
+  }, [circleRadius, height, mode, originX, originY, width]);
 
   const stopAnimation = useCallback(() => {
     animationRef.current?.stop();
@@ -67,7 +77,7 @@ const CircularReveal = forwardRef(function CircularReveal(
         toValue,
         duration: DEFAULT_DURATION,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
+        useNativeDriver: false,
       });
 
       animationRef.current.start(({ finished }) => {
@@ -134,38 +144,14 @@ const CircularReveal = forwardRef(function CircularReveal(
     return null;
   }
 
-  if (mode === 'uncover') {
-    return (
-      <Animated.View
-        pointerEvents={blocksTouches ? 'auto' : 'none'}
-        style={styles.overlay}
-      >
-        <Svg width={width} height={height}>
-          <Path d={uncoverPath} fill={color} fillRule="evenodd" />
-        </Svg>
-      </Animated.View>
-    );
-  }
-
   return (
     <Animated.View
       pointerEvents={blocksTouches ? 'auto' : 'none'}
       style={styles.overlay}
     >
-      <Animated.View
-        style={[
-          styles.circle,
-          {
-            width: diameter,
-            height: diameter,
-            borderRadius: radius,
-            backgroundColor: color,
-            left: originX - radius,
-            top: originY - radius,
-            transform: [{ scale: progress }],
-          },
-        ]}
-      />
+      <Svg width={width} height={height}>
+        <Path d={visiblePath} fill={color} fillRule="evenodd" />
+      </Svg>
     </Animated.View>
   );
 });
@@ -174,9 +160,6 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9999,
-  },
-  circle: {
-    position: 'absolute',
   },
 });
 

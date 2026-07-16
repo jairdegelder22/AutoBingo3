@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   addCustomerInfoUpdateListener,
@@ -11,8 +12,11 @@ import {
   restorePurchases,
 } from './revenueCatClient';
 
+const CODE_PREMIUM_STORAGE_KEY = 'autobingo:premium-code-unlock:v1';
+
 const PremiumContext = createContext({
   isPremium: false,
+  codePremiumUnlocked: false,
   loading: true,
   available: false,
   offering: null,
@@ -20,6 +24,7 @@ const PremiumContext = createContext({
   lifetimePackage: null,
   error: null,
   refreshPremium: async () => {},
+  unlockPremiumWithCode: async () => {},
   purchasePremiumPackage: async () => null,
   restorePremiumPurchases: async () => null,
 });
@@ -39,7 +44,8 @@ function getPackageByType(offering, packageType) {
 }
 
 export function PremiumProvider({ children }) {
-  const [isPremium, setIsPremium] = useState(false);
+  const [revenueCatPremium, setRevenueCatPremium] = useState(false);
+  const [codePremiumUnlocked, setCodePremiumUnlocked] = useState(false);
   const [customerInfo, setCustomerInfo] = useState(null);
   const [offerings, setOfferings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +57,12 @@ export function PremiumProvider({ children }) {
     setError(null);
 
     try {
-      const ready = await configureRevenueCat();
+      const [ready] = await Promise.all([
+        configureRevenueCat(),
+        AsyncStorage.getItem(CODE_PREMIUM_STORAGE_KEY).then((storedValue) => {
+          setCodePremiumUnlocked(storedValue === 'true');
+        }),
+      ]);
       setAvailable(ready);
 
       if (!ready) {
@@ -66,7 +77,7 @@ export function PremiumProvider({ children }) {
 
       setCustomerInfo(nextCustomerInfo);
       setOfferings(nextOfferings);
-      setIsPremium(hasPremiumEntitlement(nextCustomerInfo));
+      setRevenueCatPremium(hasPremiumEntitlement(nextCustomerInfo));
 
       return nextCustomerInfo;
     } catch (nextError) {
@@ -102,9 +113,14 @@ export function PremiumProvider({ children }) {
 
     return addCustomerInfoUpdateListener((nextCustomerInfo) => {
       setCustomerInfo(nextCustomerInfo);
-      setIsPremium(hasPremiumEntitlement(nextCustomerInfo));
+      setRevenueCatPremium(hasPremiumEntitlement(nextCustomerInfo));
     });
   }, [available]);
+
+  const unlockPremiumWithCode = useCallback(async () => {
+    await AsyncStorage.setItem(CODE_PREMIUM_STORAGE_KEY, 'true');
+    setCodePremiumUnlocked(true);
+  }, []);
 
   const purchasePremiumPackage = useCallback(async (packageToPurchase) => {
     setError(null);
@@ -115,7 +131,7 @@ export function PremiumProvider({ children }) {
 
       if (nextCustomerInfo) {
         setCustomerInfo(nextCustomerInfo);
-        setIsPremium(hasPremiumEntitlement(nextCustomerInfo));
+        setRevenueCatPremium(hasPremiumEntitlement(nextCustomerInfo));
       }
 
       return result;
@@ -133,7 +149,7 @@ export function PremiumProvider({ children }) {
 
       if (nextCustomerInfo) {
         setCustomerInfo(nextCustomerInfo);
-        setIsPremium(hasPremiumEntitlement(nextCustomerInfo));
+        setRevenueCatPremium(hasPremiumEntitlement(nextCustomerInfo));
       }
 
       return nextCustomerInfo;
@@ -146,9 +162,11 @@ export function PremiumProvider({ children }) {
   const offering = getDefaultOffering(offerings);
   const monthlyPackage = getPackageByType(offering, 'MONTHLY');
   const lifetimePackage = getPackageByType(offering, 'LIFETIME');
+  const isPremium = revenueCatPremium || codePremiumUnlocked;
 
   const value = useMemo(() => ({
     isPremium,
+    codePremiumUnlocked,
     customerInfo,
     loading,
     available,
@@ -157,10 +175,12 @@ export function PremiumProvider({ children }) {
     lifetimePackage,
     error,
     refreshPremium,
+    unlockPremiumWithCode,
     purchasePremiumPackage,
     restorePremiumPurchases,
   }), [
     available,
+    codePremiumUnlocked,
     customerInfo,
     error,
     isPremium,
@@ -171,6 +191,7 @@ export function PremiumProvider({ children }) {
     purchasePremiumPackage,
     refreshPremium,
     restorePremiumPurchases,
+    unlockPremiumWithCode,
   ]);
 
   return (

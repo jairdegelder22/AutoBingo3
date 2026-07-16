@@ -14,6 +14,8 @@ export function ScreenLayout({
   backgroundImage,
   backgroundBlurRadius = 0,
   backgroundOverlayStyle = null,
+  footerTransparent = false,
+  onLayout,
 }) {
   const ContentWrapper = scroll ? ScrollView : View;
   const screenContent = (
@@ -26,7 +28,13 @@ export function ScreenLayout({
         {children}
       </ContentWrapper>
       {footer ? (
-        <View style={[styles.footer, backgroundImage ? styles.footerWithBackground : null]}>
+        <View
+          style={[
+            styles.footer,
+            backgroundImage ? styles.footerWithBackground : null,
+            footerTransparent && styles.footerTransparent,
+          ]}
+        >
           {footer}
         </View>
       ) : null}
@@ -34,7 +42,7 @@ export function ScreenLayout({
   );
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onLayout={onLayout}>
       {backgroundImage ? (
         <ImageBackground
           source={backgroundImage}
@@ -217,6 +225,10 @@ const styles = StyleSheet.create({
   },
   footerWithBackground: {
     backgroundColor: 'rgba(244, 241, 232, 0.86)',
+  },
+  footerTransparent: {
+    borderTopWidth: 0,
+    backgroundColor: 'transparent',
   },
   title: {
     fontSize: 28,

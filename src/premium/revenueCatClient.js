@@ -10,8 +10,8 @@ const REVENUECAT_PREMIUM_ENTITLEMENT_ALIASES = [
 ];
 
 const REVENUECAT_PUBLIC_API_KEYS = {
-  ios: 'test_swErSGSIbYAKSKxWckOWcSOKkFC',
-  android: 'test_swErSGSIbYAKSKxWckOWcSOKkFC',
+  ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? 'appl_dCHcvbUfDJlLdPflYCQkYTGFUhe',
+  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? null,
 };
 
 let purchasesModule = null;

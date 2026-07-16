@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet } from 'react-native';
 import * as Haptics from '../settings/haptics';
+import { playSoundEffect } from '../audio/soundEffects';
+import { useAppSettings } from '../settings/AppSettingsContext';
 
 const BACK_BUTTON_IMAGE = require('../../assets/images/navigation/back-button.png');
 const BACK_BUTTON_PRESSED_IMAGE = require('../../assets/images/navigation/back-button-pressed.png');
+const STANDARD_BUTTON_SOUND = 'glossyButtonClick';
 
 export default function AnimatedBackButton({
   disabled = false,
@@ -11,6 +14,7 @@ export default function AnimatedBackButton({
   size = 66,
   style = null,
 }) {
+  const { settings } = useAppSettings();
   const [pressed, setPressed] = useState(false);
 
   function activateFromButton(event) {
@@ -20,6 +24,7 @@ export default function AnimatedBackButton({
 
     const { pageX, pageY } = event?.nativeEvent ?? {};
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void playSoundEffect(STANDARD_BUTTON_SOUND, settings);
     onActivated?.({
       x: typeof pageX === 'number' ? pageX : size / 2,
       y: typeof pageY === 'number' ? pageY : size / 2,

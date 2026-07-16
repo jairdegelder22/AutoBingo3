@@ -46,6 +46,7 @@ const AnimatedFlatList = Animated.createAnimatedComponent(Animated.FlatList);
 const LOOP_SETS = 3;
 const SCROLL_SOUND = 'scrollGeluid';
 const SCROLL_SOUND_POOL_SIZE = 10;
+const SCROLL_SOUND_VOLUME_MULTIPLIER = 0.6;
 
 export default function ThemeCarousel<ItemT>({
   items,
@@ -176,7 +177,9 @@ export default function ThemeCarousel<ItemT>({
       currentLogicalIndexRef.current = logicalIndex;
       if (triggerHaptic) {
         void Haptics.selectionAsync();
-        void playPooledSoundEffect(SCROLL_SOUND, settings, SCROLL_SOUND_POOL_SIZE);
+        void playPooledSoundEffect(SCROLL_SOUND, settings, SCROLL_SOUND_POOL_SIZE, {
+          volumeMultiplier: SCROLL_SOUND_VOLUME_MULTIPLIER,
+        });
       }
       onSnapToItem?.(logicalIndex);
     }
@@ -282,6 +285,8 @@ export default function ThemeCarousel<ItemT>({
         getItemLayout={getItemLayout}
         initialScrollIndex={initialIndex}
         keyExtractor={(item, index) => `${keyExtractor(item as ItemT, baseCount > 0 ? index % baseCount : index)}-${index}`}
+        initialNumToRender={loopedItems.length}
+        maxToRenderPerBatch={loopedItems.length}
         onLayout={ensureInitialOffset}
         onMomentumScrollEnd={handleMomentumEnd}
         onScroll={handleScroll}
@@ -294,6 +299,8 @@ export default function ThemeCarousel<ItemT>({
         showsHorizontalScrollIndicator={false}
         snapToAlignment="start"
         snapToInterval={snapInterval}
+        updateCellsBatchingPeriod={0}
+        windowSize={Math.max(7, loopedItems.length)}
         style={styles.list}
         onContentSizeChange={ensureInitialOffset}
         contentContainerStyle={[

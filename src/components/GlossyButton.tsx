@@ -150,6 +150,10 @@ export default function GlossyButton({
       return;
     }
 
+    if (!disableSound && soundEffectName) {
+      void playSoundEffect(soundEffectName, settings);
+    }
+
     onPressIn?.(_event);
 
     Animated.spring(pressAnim, {
@@ -186,9 +190,6 @@ export default function GlossyButton({
       } else {
         void Haptics.impactAsync(hapticStyle);
       }
-    }
-    if (!disableSound && soundEffectName) {
-      void playSoundEffect(soundEffectName, settings);
     }
     onPress(event);
   };

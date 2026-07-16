@@ -1,4 +1,5 @@
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { createAudioPlayer } from 'expo-audio';
+import { configureAudioPlaybackMode } from './audioSession';
 
 const SOUND_EFFECTS = {
   bingoCheer: require('../../assets/audio/bingo-cheer.mp3'),
@@ -6,16 +7,16 @@ const SOUND_EFFECTS = {
   gameSettingsKlapIn: require('../../assets/audio/game-settings-klap-in.mp3'),
   gameSettingsKlapUit: require('../../assets/audio/game-settings-klap-uit.mp3'),
   glossyButtonClick: require('../../assets/audio/glossy-button-click.mp3'),
-  onlineCarsMeeps: require('../../assets/audio/online-cars-meeps.mp3'),
-  playOnlineMeep: require('../../assets/audio/play-online-meep.mp3'),
+  onlineHornMode: require('../../assets/audio/online-horn-mode.mp3'),
+  playHornHonk: require('../../assets/audio/play-horn-honk.wav'),
   scrollGeluid: require('../../assets/audio/scroll-geluid.wav'),
-  settingsGearClick: require('../../assets/audio/settings-gear-click.mp3'),
+  settingsGearClick: require('../../assets/audio/settings-gear-click.wav'),
+  navTabSwitchClick: require('../../assets/audio/nav-tab-switch-click.mp3'),
 };
 
 const players = {};
 const pooledPlayers = {};
 const pooledPlayerIndexes = {};
-let audioModeConfigured = false;
 
 function shouldPlay(settings) {
   return (
@@ -60,17 +61,6 @@ function applyPlaybackOptions(player, settings, options = {}) {
       // Non-critical: fall back to the source pitch/rate.
     }
   }
-}
-
-async function configureAudioMode() {
-  if (audioModeConfigured) {
-    return;
-  }
-
-  audioModeConfigured = true;
-  await setAudioModeAsync({
-    playsInSilentMode: true,
-  });
 }
 
 function getPlayer(soundName) {
@@ -129,7 +119,7 @@ export async function playSoundEffect(soundName, settings, options = {}) {
   }
 
   try {
-    await configureAudioMode();
+    await configureAudioPlaybackMode();
     const player = getPlayer(soundName);
 
     if (!player) {
@@ -150,7 +140,7 @@ export async function playPooledSoundEffect(soundName, settings, poolSize = 6, o
   }
 
   try {
-    await configureAudioMode();
+    await configureAudioPlaybackMode();
     const player = getPooledPlayer(soundName, poolSize);
 
     if (!player) {

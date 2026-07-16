@@ -14,7 +14,7 @@ export async function hasAcceptedCurrentLegalTerms() {
   }
 }
 
-export default function LegalConsentGate({ onAccepted }) {
+export default function LegalConsentGate({ onAccepted, backgroundColor = 'rgba(0, 0, 0, 0.48)' }) {
   const [accepting, setAccepting] = useState(false);
   const [hasRead, setHasRead] = useState(false);
 
@@ -65,7 +65,7 @@ export default function LegalConsentGate({ onAccepted }) {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor }]}>
       <View style={styles.panel}>
         <Text style={styles.title}>AutoBingo</Text>
         <ScrollView
@@ -139,7 +139,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.48)',
     padding: 22,
     zIndex: 9800,
     elevation: 9800,

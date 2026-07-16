@@ -1,6 +1,7 @@
-import { BackHandler, Animated, Easing, Image, ImageBackground, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Asset } from 'expo-asset';
+import { BackHandler, Animated, Easing, Image, ImageBackground, InteractionManager, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from '../src/settings/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
@@ -9,6 +10,7 @@ import AnimatedBackButton from '../src/components/AnimatedBackButton';
 import GlossyButton from '../src/components/GlossyButton';
 import PopupPanel from '../src/components/PopupPanel';
 import ThemeCarousel from '../src/components/ThemeCarousel';
+import WarmupImages from '../src/components/WarmupImages';
 import { PLAYER_FUTURE_SKIN_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getThemeCardImage, getThemeDetailBackgroundImage, THEME_LOCK_OVERLAY_OVERVIEW_IMAGE } from '../assets/images/theme-cards/themeCardImages';
 import { createGameConfig, DEFAULT_ZICHTBAARHEID, SKIN_OPTIONS } from './gameFlowConfig';
@@ -16,6 +18,7 @@ import { THEMES } from './themeCatalog';
 import { getThemeIcons } from './themeIcons';
 import { decodeLobbyCode, normalizeLobbyCode } from '../src/utils/lobbyCode';
 import { checkOnlineConnection, getLobbySnapshot } from '../src/services/liveLobbyService';
+import { submitBugReportToSupabase } from '../src/services/bugReportService';
 import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { usePremium } from '../src/premium/PremiumContext';
 import { getResponsiveMetrics } from '../src/utils/responsive';
@@ -28,6 +31,14 @@ import {
   isSkinUnlocked,
   loadSkinChallengeProgress,
 } from '../src/challenges/skinChallenges';
+import {
+  BUG_REPORT_MODAL_ASSETS,
+  HOME_ASSETS,
+  HOME_CRITICAL_ASSETS,
+  PREMIUM_MODAL_ASSETS,
+  getThemeDetailAssets,
+} from '../src/assets/preloadManifest';
+import { preloadImageAssets } from '../src/assets/preloadImages';
 
 const PLAY_BUTTON_IMAGE = require('../assets/images/home-online-button.png');
 const ONLINE_YELLOW_CAR = require('../assets/images/online-car-yellow.png');
@@ -37,6 +48,20 @@ const HOST_LOCK_CHAINS_IMAGE = require('../assets/images/host-lock-chains.png');
 const HOST_LOCK_PADLOCK_IMAGE = require('../assets/images/host-lock-padlock.png');
 const JOIN_LICENSE_PLATE_IMAGE = require('../assets/images/license-plates/dutch-join-plate-cropped.png');
 const MAIN_MENU_PREMIUM_CROWN_IMAGE = require('../assets/images/premium/main-menu-premium-crown.png');
+const BUG_REPORT_BUTTON_IMAGE = require('../assets/images/ui/bug-report-button.png');
+const BUG_REPORT_MENU_IMAGE = require('../assets/images/ui/bug-report-menu.png');
+const BUG_REPORT_CLOSE_IMAGE = require('../assets/images/ui/bug-report-close.png');
+const PREMIUM_MENU_IMAGE = require('../assets/images/premium/premium-menu.png');
+const PREMIUM_NO_ADS_IMAGE = require('../assets/images/premium/benefits/no-ads-user.png');
+const PREMIUM_EXTRA_THEMES_IMAGE = require('../assets/images/premium/benefits/extra-themes-user.png');
+const PREMIUM_HOST_BINGO_IMAGE = require('../assets/images/premium/benefits/host-bingo-user.png');
+const PREMIUM_CLOSE_IMAGE = require('../assets/images/premium/close-premium.png');
+const PREMIUM_TAKE_BUTTON_IMAGE = require('../assets/images/premium/take-premium-button.png');
+const PREMIUM_TAKE_BUTTON_PRESSED_IMAGE = require('../assets/images/premium/take-premium-button-pressed.png');
+const PREMIUM_RADIO_UNSELECTED_IMAGE = require('../assets/images/premium/radio-unselected.png');
+const PREMIUM_RADIO_SELECTED_IMAGE = require('../assets/images/premium/radio-selected.png');
+const DRIVER_WARNING_MENU_IMAGE = require('../assets/images/ui/driver-warning-menu.png');
+const DRIVER_WARNING_ICON_IMAGE = require('../assets/images/ui/driver-warning-icon.png');
 const SKIN_ROAD_BACKGROUND = require('../assets/images/backgrounds/skin-road-background.png');
 const THEME_ROAD_BACKGROUND = require('../assets/images/backgrounds/theme-road-scroll-background-v4.png');
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
@@ -65,39 +90,43 @@ const ONLINE_RED_GRADIENT = ['#f57070', '#e03030', '#c01818', '#9e0f0f'];
 const ONLINE_RED_OUTLINE = '#6b0e0e';
 const HOME_ACTION_COLLAPSED_HEIGHT = 122;
 const HOME_ACTION_EXPANDED_HEIGHT = 236;
-const ONLINE_CAR_JUMP_DELAYS = [0, 299, 568];
-const PRESS_THEN_MEEP_DELAY_MS = 300;
+const ONLINE_CAR_HORN_JUMP_DELAYS = [0, 295, 465];
+const PRESS_THEN_HORN_DELAY_MS = 300;
+const PLAY_HORN_JUMP_DELAYS = [60, 420];
 const GLOSSY_BUTTON_CLICK_SOUND = 'glossyButtonClick';
-const ONLINE_CARS_MEEP_SOUND = 'onlineCarsMeeps';
-const PLAY_MEEP_SOUND = 'playOnlineMeep';
+const NAV_TAB_SWITCH_SOUND = 'navTabSwitchClick';
+const NAV_TAB_SWITCH_VOLUME_MULTIPLIER = 0.65;
+const SETTINGS_GEAR_SOUND = 'settingsGearClick';
+const ONLINE_CARS_HORN_SOUND = 'onlineHornMode';
+const PLAY_HORN_SOUND = 'playHornHonk';
+const BUG_REPORT_STORAGE_KEY = 'autoBingo.pendingBugReports';
+const BUG_REPORT_APP_VERSION = '1.0.0';
+const BUG_REPORT_SEVERITIES = [
+  { value: 'low', label: 'Klein' },
+  { value: 'medium', label: 'Vervelend' },
+  { value: 'high', label: 'Blokkeert' },
+];
+const DRIVER_WARNING_ICON_WIDTH_RATIO = 0.532;
+const DRIVER_WARNING_ICON_MAX_SIZE = 224;
+const DRIVER_WARNING_ICON_MARGIN_TOP = 10;
+const DRIVER_WARNING_ICON_MARGIN_BOTTOM = 5;
+const EMPTY_BUG_REPORT_FORM = {
+  location: '',
+  summary: '',
+  steps: '',
+  severity: 'medium',
+  screenshot: null,
+};
 const SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO = 1.38;
 const SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO = 1.32;
 const SKIN_SHOP_TILE_IMAGE_HEIGHT = 140;
 const SKIN_SHOP_CAR_BOB_DISTANCE = 6;
 const SKIN_SHOP_CAR_BOB_DURATION = 1750;
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const HOME_SCREEN_PRELOAD_ASSETS = [
-  require('../assets/homepage.png'),
-  require('../assets/logo.png'),
-  PLAY_BUTTON_IMAGE,
-  ONLINE_YELLOW_CAR,
-  ONLINE_BLUE_CAR,
-  ONLINE_GREEN_CAR,
-  HOST_LOCK_CHAINS_IMAGE,
-  HOST_LOCK_PADLOCK_IMAGE,
-  JOIN_LICENSE_PLATE_IMAGE,
-  MAIN_MENU_PREMIUM_CROWN_IMAGE,
-  SKIN_ROAD_BACKGROUND,
-  THEME_ROAD_BACKGROUND,
-  THEME_LOCK_OVERLAY_OVERVIEW_IMAGE,
-  CHALLENGE_SKIN_LOCK_IMAGE,
-  PLAYER_FUTURE_SKIN_IMAGE,
-  ...Object.values(PLAYER_IMAGES),
-  ...Object.values(NAV_ICON_IMAGES).flatMap((variants) => Object.values(variants)),
-];
 const HOME_TAB_HOME = 'home';
 const HOME_TAB_SKINSHOP = 'skinshop';
 const HOME_TAB_THEMECARDS = 'themecards';
+const HOME_CRITICAL_IMAGE_COUNT = 3;
 
 const SKIN_LABELS = {
   rood: 'Rood',
@@ -220,6 +249,11 @@ function getEmbeddedThemeTitleStyle(themeId) {
         fontSize: 22,
         lineHeight: 30,
       }
+    : themeId === 'platteland'
+    ? {
+        fontSize: 26,
+        lineHeight: 36,
+      }
     : null;
 
   if (themeId === 'verkeersborden') {
@@ -262,6 +296,7 @@ function HomeNavIcon({ icon, active, size = 60 }) {
     <Image
       source={source}
       resizeMode="contain"
+      fadeDuration={0}
       style={[styles.homeNavIconImage, { width: size, height: size }]}
     />
   );
@@ -611,7 +646,7 @@ function ThemeItemTile({ itemImage, onInspect }) {
 
   return (
     <Pressable ref={tileRef} style={styles.themeItemTile} onPress={handlePress}>
-      <Image source={itemImage} resizeMode="contain" style={styles.themeItemImage} />
+      <Image source={itemImage} resizeMode="contain" fadeDuration={0} style={styles.themeItemImage} />
     </Pressable>
   );
 }
@@ -1252,6 +1287,7 @@ function ThemeDetailScreen({ theme, onBack }) {
       <ImageBackground
         source={backgroundImage}
         resizeMode="cover"
+        fadeDuration={0}
         style={styles.themeDetailScreen}
       >
         {content}
@@ -1315,6 +1351,7 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
               <ImageBackground
                 source={item.previewImage}
                 resizeMode={embeddedFrame ? 'stretch' : 'cover'}
+                fadeDuration={0}
                 imageStyle={[
                   styles.themeShowcaseCardImage,
                   embeddedFrame && styles.themeShowcaseCardImageEmbedded,
@@ -1377,7 +1414,7 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
         {selectedItemImage ? (
           <>
             <View style={styles.itemPreviewStage}>
-              <Image source={selectedItemImage} resizeMode="contain" style={styles.itemPreviewImage} />
+              <Image source={selectedItemImage} resizeMode="contain" fadeDuration={0} style={styles.itemPreviewImage} />
             </View>
             <Text style={styles.itemPreviewCaption}>
               Voorbeelditem {boundedItemIndex + 1} van {previewItems.length}
@@ -1393,7 +1430,7 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
                   onPress={() => onSelectItem(index)}
                   style={[styles.itemThumb, index === boundedItemIndex && styles.itemThumbActive]}
                 >
-                  <Image source={itemImage} resizeMode="contain" style={styles.itemThumbImage} />
+                  <Image source={itemImage} resizeMode="contain" fadeDuration={0} style={styles.itemThumbImage} />
                 </Pressable>
               ))}
             </ScrollView>
@@ -1424,13 +1461,25 @@ function measureViewCenter(targetRef) {
   });
 }
 
-export default function HomeScreen({ navigation, route }) {
+export default function HomeScreen({
+  navigation,
+  route,
+  showDriverWarning = false,
+  onDriverWarningComplete = null,
+}) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(windowWidth, windowHeight);
   const { isPremium } = usePremium();
   const { settings } = useAppSettings();
   const pulse = useRef(new Animated.Value(1)).current;
   const premiumCrownPulse = useRef(new Animated.Value(1)).current;
+  const premiumButtonPress = useRef(new Animated.Value(0)).current;
+  const bugReportPress = useRef(new Animated.Value(0)).current;
+  const joinOptionPress = useRef(new Animated.Value(0)).current;
+  const hostOptionPress = useRef(new Animated.Value(0)).current;
+  const driverWarningFade = useRef(new Animated.Value(0)).current;
+  const driverWarningButtonFade = useRef(new Animated.Value(0)).current;
+  const driverWarningDismissedRef = useRef(false);
   const hostPadlockJiggle = useRef(new Animated.Value(0)).current;
   const playCarJump = useRef(new Animated.Value(0)).current;
   const onlineYellowJump = useRef(new Animated.Value(0)).current;
@@ -1442,7 +1491,6 @@ export default function HomeScreen({ navigation, route }) {
   const isNavigatingRef = useRef(false);
   const revealRef = useRef(null);
   const themeCoverRevealRef = useRef(null);
-  const themeUncoverRevealRef = useRef(null);
   const playButtonWrapRef = useRef(null);
   const onlineButtonWrapRef = useRef(null);
   const hostOptionRef = useRef(null);
@@ -1453,6 +1501,7 @@ export default function HomeScreen({ navigation, route }) {
   const pendingRouteParamsRef = useRef(null);
   const pendingThemeBackRef = useRef(false);
   const latestPressPointRef = useRef(null);
+  const loadedCriticalImagesRef = useRef(new Set());
   const themeRoadOffsetRef = useRef(0);
   const activeTabTranslateX = useRef(new Animated.Value(0)).current;
   const tabPageTranslateX = useRef(new Animated.Value(-windowWidth)).current;
@@ -1467,6 +1516,13 @@ export default function HomeScreen({ navigation, route }) {
   const [isJoinBusy, setIsJoinBusy] = useState(false);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [premiumModalSource, setPremiumModalSource] = useState(null);
+  const [driverWarningVisible, setDriverWarningVisible] = useState(showDriverWarning);
+  const [driverWarningButtonReady, setDriverWarningButtonReady] = useState(false);
+  const [bugReportModalVisible, setBugReportModalVisible] = useState(false);
+  const [bugReportForm, setBugReportForm] = useState(EMPTY_BUG_REPORT_FORM);
+  const [bugReportError, setBugReportError] = useState('');
+  const [bugReportSuccess, setBugReportSuccess] = useState('');
+  const [bugReportSubmitting, setBugReportSubmitting] = useState(false);
   const [lobbyExitMessage, setLobbyExitMessage] = useState(route?.params?.lobbyExitMessage ?? '');
   const [activeTab, setActiveTab] = useState(HOME_TAB_HOME);
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
@@ -1475,13 +1531,19 @@ export default function HomeScreen({ navigation, route }) {
   const [skinInspection, setSkinInspection] = useState(null);
   const [skinChallengeProgress, setSkinChallengeProgress] = useState(null);
   const [pendingThemeDetail, setPendingThemeDetail] = useState(null);
+  const [homeAssetsReady, setHomeAssetsReady] = useState(false);
+  const [homeLayoutReady, setHomeLayoutReady] = useState(false);
+  const [homeImagesReady, setHomeImagesReady] = useState(false);
   const [themeRevealState, setThemeRevealState] = useState({
     covering: false,
-    uncovering: false,
     color: '#1A5EA8',
     origin: { x: windowWidth / 2, y: 360 },
   });
   const tabWidth = windowWidth / NAV_ITEMS.length;
+  const driverWarningIconSize = Math.min(
+    DRIVER_WARNING_ICON_MAX_SIZE,
+    windowWidth * DRIVER_WARNING_ICON_WIDTH_RATIO
+  );
   const navMetrics = {
     navHeight: isTablet ? 154 : 118,
     navHighlightHeight: isTablet ? 176 : 136,
@@ -1531,6 +1593,74 @@ export default function HomeScreen({ navigation, route }) {
     inputRange: [0, 1],
     outputRange: [0, 4],
   });
+  const getOnlineMiniButtonPressStyle = (pressValue) => ({
+    transform: [
+      {
+        translateY: pressValue.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 4],
+        }),
+      },
+      {
+        scale: pressValue.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 0.97],
+        }),
+      },
+    ],
+  });
+  const getOnlineMiniButtonOutlinePressStyle = (pressValue) => ({
+    paddingBottom: pressValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [2, 0],
+    }),
+  });
+  const compactHomeChrome = !isTablet && (windowWidth <= 402 || windowHeight <= 880);
+  const homeMenuButtonSize = 54;
+  const homeMenuButtonTop = 16;
+  const homeMenuButtonLeft = 16;
+  const homeMenuButtonGap = 10;
+  const premiumButtonPressStyle = {
+    transform: [
+      {
+        translateY: premiumButtonPress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 3],
+        }),
+      },
+      {
+        scale: premiumButtonPress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 0.94],
+        }),
+      },
+      { scale: premiumCrownPulse },
+    ],
+  };
+  const bugReportPressStyle = {
+    transform: [
+      {
+        translateY: bugReportPress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 3],
+        }),
+      },
+      {
+        scale: bugReportPress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 0.94],
+        }),
+      },
+    ],
+  };
+
+  const markHomeCriticalImageLoaded = useCallback((key) => {
+    loadedCriticalImagesRef.current.add(key);
+
+    if (loadedCriticalImagesRef.current.size >= HOME_CRITICAL_IMAGE_COUNT) {
+      setHomeImagesReady(true);
+    }
+  }, []);
 
   useEffect(() => {
     setLobbyExitMessage(route?.params?.lobbyExitMessage ?? '');
@@ -1538,8 +1668,10 @@ export default function HomeScreen({ navigation, route }) {
 
   useEffect(() => {
     preloadSoundEffect(GLOSSY_BUTTON_CLICK_SOUND);
-    preloadSoundEffect(ONLINE_CARS_MEEP_SOUND);
-    preloadSoundEffect(PLAY_MEEP_SOUND);
+    preloadSoundEffect(NAV_TAB_SWITCH_SOUND);
+    preloadSoundEffect(SETTINGS_GEAR_SOUND);
+    preloadSoundEffect(ONLINE_CARS_HORN_SOUND);
+    preloadSoundEffect(PLAY_HORN_SOUND);
 
     return () => {
       if (pendingOnlineJumpTimeoutRef.current) {
@@ -1556,6 +1688,10 @@ export default function HomeScreen({ navigation, route }) {
   const showMainMenuPremiumButton = (
     [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !isPremium
+    && !selectedThemeDetail
+  );
+  const showMainMenuBugReportButton = (
+    [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !selectedThemeDetail
   );
   const joinPlateSlots = useMemo(() => {
@@ -1613,8 +1749,26 @@ export default function HomeScreen({ navigation, route }) {
   });
 
   useEffect(() => {
-    void Asset.loadAsync(HOME_SCREEN_PRELOAD_ASSETS).catch(() => {});
-  }, []);
+    if (!homeAssetsReady || !homeLayoutReady || !homeImagesReady) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) {
+            navigation.markRouteReady?.();
+          }
+        });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [homeAssetsReady, homeImagesReady, homeLayoutReady, navigation]);
 
   useEffect(() => {
     if (activeTab !== HOME_TAB_SKINSHOP) {
@@ -1695,16 +1849,6 @@ export default function HomeScreen({ navigation, route }) {
       }),
     ]).start();
   }, [activeTab, activeTabTranslateX, tabPageTranslateX, tabWidth, windowWidth]);
-
-  useEffect(() => {
-    if (!themeRevealState.uncovering) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      themeUncoverRevealRef.current?.reveal();
-    });
-  }, [themeRevealState.uncovering]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -1833,6 +1977,65 @@ export default function HomeScreen({ navigation, route }) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
+  const pressPremiumButtonIn = () => {
+    Animated.spring(premiumButtonPress, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 52,
+      bounciness: 0,
+    }).start();
+  };
+
+  const pressPremiumButtonOut = () => {
+    Animated.spring(premiumButtonPress, {
+      toValue: 0,
+      useNativeDriver: true,
+      speed: 34,
+      bounciness: 5,
+    }).start();
+  };
+
+  const pressBugReportButtonIn = () => {
+    Animated.spring(bugReportPress, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 52,
+      bounciness: 0,
+    }).start();
+  };
+
+  const pressBugReportButtonOut = () => {
+    Animated.spring(bugReportPress, {
+      toValue: 0,
+      useNativeDriver: true,
+      speed: 34,
+      bounciness: 5,
+    }).start();
+  };
+
+  const pressOnlineMiniButtonIn = (pressValue, event) => {
+    latestPressPointRef.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+    };
+
+    Animated.spring(pressValue, {
+      toValue: 1,
+      useNativeDriver: false,
+      speed: 50,
+      bounciness: 0,
+    }).start();
+  };
+
+  const pressOnlineMiniButtonOut = (pressValue) => {
+    Animated.spring(pressValue, {
+      toValue: 0,
+      useNativeDriver: false,
+      speed: 30,
+      bounciness: 4,
+    }).start();
+  };
+
   const buildJumpAnimation = (value) =>
     Animated.sequence([
       Animated.timing(value, {
@@ -1852,61 +2055,82 @@ export default function HomeScreen({ navigation, route }) {
       }),
     ]);
 
-  const buildPlayMeepJumpAnimation = () =>
+  const buildOnlineHornJumpAnimation = (value) =>
     Animated.sequence([
-      Animated.delay(230),
-      Animated.timing(playCarJump, {
-        toValue: -12,
-        duration: 70,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(playCarJump, {
-        toValue: 0,
-        duration: 45,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.delay(10),
-      Animated.timing(playCarJump, {
-        toValue: -10,
+      Animated.timing(value, {
+        toValue: -18,
         duration: 55,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(playCarJump, {
+      Animated.timing(value, {
+        toValue: 2,
+        duration: 48,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(value, {
         toValue: 0,
-        duration: 150,
+        duration: 92,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
     ]);
 
+  const buildPlayHornHopAnimation = (height = -12) =>
+    Animated.sequence([
+      Animated.timing(playCarJump, {
+        toValue: height,
+        duration: 58,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(playCarJump, {
+        toValue: 2,
+        duration: 52,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(playCarJump, {
+        toValue: 0,
+        duration: 96,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]);
+
+  const buildPlayHornJumpAnimation = () =>
+    Animated.sequence([
+      Animated.delay(PRESS_THEN_HORN_DELAY_MS + PLAY_HORN_JUMP_DELAYS[0]),
+      buildPlayHornHopAnimation(-13),
+      Animated.delay(PLAY_HORN_JUMP_DELAYS[1] - PLAY_HORN_JUMP_DELAYS[0] - 206),
+      buildPlayHornHopAnimation(-10),
+    ]);
+
   const runOnlineCarJumpSequence = ({ withHaptics = false, onComplete } = {}) => {
-    void playSoundEffect(ONLINE_CARS_MEEP_SOUND, settings);
+    void playSoundEffect(ONLINE_CARS_HORN_SOUND, settings);
 
-    if (withHaptics) {
-      triggerLightJumpHaptic();
-    }
-    buildJumpAnimation(onlineYellowJump).start();
-
-    setTimeout(() => {
-      if (withHaptics) {
-        triggerLightJumpHaptic();
-      }
-      buildJumpAnimation(onlineBlueJump).start();
-    }, ONLINE_CAR_JUMP_DELAYS[1]);
-
-    setTimeout(() => {
-      if (withHaptics) {
-        triggerLightJumpHaptic();
-      }
-      buildJumpAnimation(onlineGreenJump).start(onComplete);
-    }, ONLINE_CAR_JUMP_DELAYS[2]);
+    [
+      { delay: ONLINE_CAR_HORN_JUMP_DELAYS[0], value: onlineYellowJump },
+      { delay: ONLINE_CAR_HORN_JUMP_DELAYS[1], value: onlineBlueJump },
+      { delay: ONLINE_CAR_HORN_JUMP_DELAYS[2], value: onlineGreenJump, onComplete },
+    ].forEach(({ delay, value, onComplete: jumpComplete }) => {
+      setTimeout(() => {
+        if (withHaptics) {
+          triggerLightJumpHaptic();
+        }
+        buildOnlineHornJumpAnimation(value).start(jumpComplete);
+      }, delay);
+    });
   };
 
-  const openPremiumModal = (source = 'menu') => {
+  const openPremiumModal = async (source = 'menu') => {
     setPremiumModalSource(source);
+    try {
+      await preloadImageAssets(PREMIUM_MODAL_ASSETS);
+    } catch (_error) {
+      // Modal mag alsnog openen als prefetch faalt.
+    }
     setPremiumModalVisible(true);
   };
 
@@ -1915,8 +2139,212 @@ export default function HomeScreen({ navigation, route }) {
     setPremiumModalSource(null);
   };
 
+  useEffect(() => {
+    if (!showDriverWarning || driverWarningDismissedRef.current) {
+      return undefined;
+    }
+
+    setDriverWarningVisible(true);
+    driverWarningFade.stopAnimation();
+    driverWarningButtonFade.stopAnimation();
+    driverWarningFade.setValue(0);
+    driverWarningButtonFade.setValue(0);
+    setDriverWarningButtonReady(false);
+
+    Animated.timing(driverWarningFade, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    const buttonTimer = setTimeout(() => {
+      Animated.timing(driverWarningButtonFade, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) {
+          setDriverWarningButtonReady(true);
+        }
+      });
+    }, 1500);
+
+    return () => {
+      clearTimeout(buttonTimer);
+    };
+  }, [driverWarningButtonFade, driverWarningFade, showDriverWarning]);
+
+  const completeDriverWarning = () => {
+    if (driverWarningDismissedRef.current) {
+      return;
+    }
+
+    driverWarningDismissedRef.current = true;
+    setDriverWarningButtonReady(false);
+    Animated.parallel([
+      Animated.timing(driverWarningFade, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(driverWarningButtonFade, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished) {
+        return;
+      }
+
+      setDriverWarningVisible(false);
+      onDriverWarningComplete?.();
+    });
+  };
+
+  const openBugReportModal = async () => {
+    setBugReportError('');
+    setBugReportSuccess('');
+    try {
+      await preloadImageAssets(BUG_REPORT_MODAL_ASSETS);
+    } catch (_error) {
+      // Bug melden mag alsnog openen als prefetch faalt.
+    }
+    setBugReportModalVisible(true);
+  };
+
+  const closeBugReportModal = () => {
+    setBugReportModalVisible(false);
+    setBugReportError('');
+  };
+
+  const updateBugReportForm = (field, value) => {
+    setBugReportForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setBugReportError('');
+    setBugReportSuccess('');
+  };
+
+  const pickBugReportScreenshot = async () => {
+    setBugReportError('');
+    setBugReportSuccess('');
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setBugReportError('Geef toegang tot je foto’s om een screenshot toe te voegen.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      quality: 0.75,
+      exif: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]) {
+      return;
+    }
+
+    updateBugReportForm('screenshot', result.assets[0]);
+  };
+
+  const submitBugReport = async () => {
+    if (bugReportSubmitting) {
+      return;
+    }
+
+    const location = bugReportForm.location.trim();
+    const summary = bugReportForm.summary.trim();
+    const steps = bugReportForm.steps.trim();
+
+    if (location.length < 3) {
+      setBugReportError('Vul in waar je de bug zag.');
+      return;
+    }
+
+    if (summary.length < 6) {
+      setBugReportError('Vertel kort wat er mis ging.');
+      return;
+    }
+
+    if (steps.length < 6) {
+      setBugReportError('Vul in hoe we de bug kunnen nadoen.');
+      return;
+    }
+
+    setBugReportSubmitting(true);
+    setBugReportError('');
+
+    const reportContext = {
+      activeTab,
+      isPremium,
+      selectedThemeId: selectedThemeDetail?.id ?? null,
+      appVersion: BUG_REPORT_APP_VERSION,
+      windowWidth,
+      windowHeight,
+    };
+
+    try {
+      await submitBugReportToSupabase({
+        location,
+        summary,
+        steps,
+        severity: bugReportForm.severity,
+        context: reportContext,
+        screenshot: bugReportForm.screenshot,
+      });
+
+      setBugReportForm(EMPTY_BUG_REPORT_FORM);
+      setBugReportSuccess('Dank je! Je melding is verstuurd.');
+    } catch (_error) {
+      try {
+        const storedReports = await AsyncStorage.getItem(BUG_REPORT_STORAGE_KEY);
+        const parsedReports = storedReports ? JSON.parse(storedReports) : [];
+        const reports = Array.isArray(parsedReports) ? parsedReports : [];
+        const nextReport = {
+          id: `bug-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          status: 'pending_sync',
+          location,
+          summary,
+          steps,
+          severity: bugReportForm.severity,
+          screenshot: bugReportForm.screenshot
+            ? {
+                uri: bugReportForm.screenshot.uri,
+                fileName: bugReportForm.screenshot.fileName ?? null,
+                mimeType: bugReportForm.screenshot.mimeType ?? null,
+                fileSize: bugReportForm.screenshot.fileSize ?? null,
+              }
+            : null,
+          context: reportContext,
+        };
+
+        await AsyncStorage.setItem(
+          BUG_REPORT_STORAGE_KEY,
+          JSON.stringify([nextReport, ...reports].slice(0, 25))
+        );
+
+        setBugReportForm(EMPTY_BUG_REPORT_FORM);
+        setBugReportSuccess('Geen verbinding. Je melding is lokaal bewaard.');
+      } catch {
+        setBugReportError('Opslaan lukt nu niet. Probeer het zo opnieuw.');
+      }
+    } finally {
+      setBugReportSubmitting(false);
+    }
+  };
+
   const openSkinInspect = (inspection) => {
     void Haptics.selectionAsync();
+    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
     setSkinInspection(inspection);
     skinInspectProgress.stopAnimation();
     skinInspectProgress.setValue(0);
@@ -2109,9 +2537,16 @@ export default function HomeScreen({ navigation, route }) {
     }
 
     isNavigatingRef.current = true;
-    triggerLightJumpHaptic();
+    setTimeout(() => {
+      void playSoundEffect(PLAY_HORN_SOUND, settings);
+    }, PRESS_THEN_HORN_DELAY_MS);
+    PLAY_HORN_JUMP_DELAYS.forEach((delay) => {
+      setTimeout(() => {
+        triggerLightJumpHaptic();
+      }, PRESS_THEN_HORN_DELAY_MS + delay);
+    });
 
-    buildPlayMeepJumpAnimation().start(({ finished }) => {
+    buildPlayHornJumpAnimation().start(({ finished }) => {
       if (!finished) {
         isNavigatingRef.current = false;
         return;
@@ -2147,7 +2582,7 @@ export default function HomeScreen({ navigation, route }) {
     pendingOnlineJumpTimeoutRef.current = setTimeout(() => {
       pendingOnlineJumpTimeoutRef.current = null;
       runOnlineCarJumpSequence({ withHaptics: true });
-    }, PRESS_THEN_MEEP_DELAY_MS);
+    }, PRESS_THEN_HORN_DELAY_MS);
     openOnlineMenu();
   };
 
@@ -2171,7 +2606,7 @@ export default function HomeScreen({ navigation, route }) {
     void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
 
     if (!isPremium) {
-      openPremiumModal('host');
+      void openPremiumModal('host');
       return;
     }
 
@@ -2197,6 +2632,9 @@ export default function HomeScreen({ navigation, route }) {
     }
 
     void Haptics.selectionAsync();
+    void playSoundEffect(NAV_TAB_SWITCH_SOUND, settings, {
+      volumeMultiplier: NAV_TAB_SWITCH_VOLUME_MULTIPLIER,
+    });
 
     if (isOnlineMenuVisible) {
       closeOnlineMenu();
@@ -2218,8 +2656,10 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const handleRoadThemePress = (theme, origin) => {
+    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
+
     if (theme.premium && !isPremium) {
-      openPremiumModal('theme');
+      void openPremiumModal('theme');
       return;
     }
 
@@ -2228,7 +2668,6 @@ export default function HomeScreen({ navigation, route }) {
     setPendingThemeDetail(theme);
     setThemeRevealState({
       covering: true,
-      uncovering: false,
       color: theme.cardOutline ?? theme.cardBorder ?? theme.bg ?? '#1A5EA8',
       origin,
     });
@@ -2248,7 +2687,6 @@ export default function HomeScreen({ navigation, route }) {
     pendingThemeBackRef.current = true;
     setThemeRevealState({
       covering: true,
-      uncovering: false,
       color: theme.cardOutline ?? theme.cardBorder ?? theme.bg ?? '#1A5EA8',
       origin: origin ?? { x: windowWidth / 2, y: 76 },
     });
@@ -2262,14 +2700,17 @@ export default function HomeScreen({ navigation, route }) {
     if (pendingThemeBackRef.current) {
       pendingThemeBackRef.current = false;
 
-      await new Promise((resolve) => setTimeout(resolve, 180));
+      try {
+        await preloadImageAssets(HOME_ASSETS);
+      } catch (_error) {
+        // De homepagina mag alsnog terugkomen als een cache-warmup faalt.
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 220));
 
       setSelectedThemeDetail(null);
-      setThemeRevealState((current) => ({
-        ...current,
-        covering: false,
-        uncovering: true,
-      }));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      setThemeRevealState((current) => ({ ...current, covering: false }));
       return;
     }
 
@@ -2281,21 +2722,19 @@ export default function HomeScreen({ navigation, route }) {
     }
 
     try {
-      await Asset.loadAsync([
-        ...(theme.previewImage ? [theme.previewImage] : []),
-        ...(theme.id === 'winter' ? [] : getThemeIcons(theme.id)),
-      ]);
+      await preloadImageAssets(getThemeDetailAssets(
+        theme.id,
+        theme.previewImage ? [theme.previewImage] : []
+      ));
     } catch (_error) {
       // Als preload faalt, tonen we de detailpagina alsnog.
     }
 
     setSelectedThemeDetail(theme);
     setPendingThemeDetail(null);
-    setThemeRevealState((current) => ({
-      ...current,
-      covering: false,
-      uncovering: true,
-    }));
+    await new Promise((resolve) => setTimeout(resolve, 280));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    setThemeRevealState((current) => ({ ...current, covering: false }));
   };
 
   const tabSwipeResponder = useMemo(() => {
@@ -2396,9 +2835,47 @@ export default function HomeScreen({ navigation, route }) {
       onPanResponderTerminate: springBackToActiveTab,
     });
   }, [activeTab, activeTabTranslateX, handleTabPress, isJoinPlateVisible, selectedThemeDetail, tabPageTranslateX, tabWidth, windowWidth]);
+  const handleHomeWarmupReady = useCallback(() => {
+    setHomeAssetsReady(true);
+  }, []);
+  const themeWarmupAssets = useMemo(() => {
+    const theme = pendingThemeDetail ?? selectedThemeDetail;
+
+    if (!theme?.id) {
+      return [];
+    }
+
+    return getThemeDetailAssets(
+      theme.id,
+      theme.previewImage ? [theme.previewImage] : []
+    );
+  }, [pendingThemeDetail, selectedThemeDetail]);
 
   return (
-    <View style={styles.background}>
+    <View
+      style={styles.background}
+      onLayout={() => setHomeLayoutReady(true)}
+    >
+      <WarmupImages
+        assets={HOME_CRITICAL_ASSETS}
+        timeoutMs={null}
+        imageSize={128}
+        batchSize={16}
+        onReady={handleHomeWarmupReady}
+      />
+      <WarmupImages
+        assets={HOME_ASSETS}
+        timeoutMs={null}
+        imageSize={96}
+        batchSize={16}
+      />
+      <WarmupImages
+        assets={themeWarmupAssets}
+        active={Boolean(themeWarmupAssets.length)}
+        timeoutMs={null}
+        imageSize={128}
+        batchSize={16}
+      />
       <View style={styles.tabPagesViewport} {...tabSwipeResponder.panHandlers}>
         <Animated.View
           style={[
@@ -2422,13 +2899,18 @@ export default function HomeScreen({ navigation, route }) {
               source={require('../assets/homepage.png')}
               resizeMode="cover"
               style={StyleSheet.absoluteFill}
+              fadeDuration={0}
+              onLoadEnd={() => markHomeCriticalImageLoaded('background')}
             />
             <View style={styles.overlay}>
               <Animated.Image
                 source={require('../assets/logo.png')}
                 resizeMode="contain"
+                fadeDuration={0}
+                onLoadEnd={() => markHomeCriticalImageLoaded('logo')}
                 style={[
                   styles.logo,
+                  compactHomeChrome && styles.logoCompactHomeChrome,
                   isTablet && {
                     height: 520,
                     marginTop: -18,
@@ -2625,6 +3107,8 @@ export default function HomeScreen({ navigation, route }) {
                         <Animated.Image
                           source={PLAY_BUTTON_IMAGE}
                           resizeMode="contain"
+                          fadeDuration={0}
+                          onLoadEnd={() => markHomeCriticalImageLoaded('play')}
                           style={[
                             styles.playActionImage,
                             {
@@ -2643,7 +3127,7 @@ export default function HomeScreen({ navigation, route }) {
                         heightOverride={actionButtonHeight}
                         labelFontScale={isTablet ? 1.18 : 1}
                         hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
-                        soundEffectName={PLAY_MEEP_SOUND}
+                        soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
                         onPressIn={(event) => {
                           latestPressPointRef.current = {
                             x: event.nativeEvent.pageX,
@@ -2773,24 +3257,24 @@ export default function HomeScreen({ navigation, route }) {
                                 },
                               ]}
                             >
-                              <Pressable
+                              <AnimatedPressable
                                 ref={joinOptionRef}
                                 collapsable={false}
                                 style={[
                                   styles.onlinePanelChoice,
                                   isTablet && { height: 72 },
+                                  getOnlineMiniButtonPressStyle(joinOptionPress),
                                 ]}
                                 onPressIn={(event) => {
-                                  latestPressPointRef.current = {
-                                    x: event.nativeEvent.pageX,
-                                    y: event.nativeEvent.pageY,
-                                  };
+                                  pressOnlineMiniButtonIn(joinOptionPress, event);
                                 }}
+                                onPressOut={() => pressOnlineMiniButtonOut(joinOptionPress)}
                                 onPress={openJoinPlate}
                               >
-                                <View
+                                <Animated.View
                                   style={[
                                     styles.onlinePanelMiniButtonOutline,
+                                    getOnlineMiniButtonOutlinePressStyle(joinOptionPress),
                                     isTablet && {
                                       height: 64,
                                       borderRadius: 16,
@@ -2822,26 +3306,26 @@ export default function HomeScreen({ navigation, route }) {
                                       Join
                                     </Text>
                                   </LinearGradient>
-                                </View>
-                              </Pressable>
-                              <Pressable
+                                </Animated.View>
+                              </AnimatedPressable>
+                              <AnimatedPressable
                                 ref={hostOptionRef}
                                 collapsable={false}
                                 style={[
                                   styles.onlinePanelChoice,
                                   isTablet && { height: 72 },
+                                  getOnlineMiniButtonPressStyle(hostOptionPress),
                                 ]}
                                 onPressIn={(event) => {
-                                  latestPressPointRef.current = {
-                                    x: event.nativeEvent.pageX,
-                                    y: event.nativeEvent.pageY,
-                                  };
+                                  pressOnlineMiniButtonIn(hostOptionPress, event);
                                 }}
+                                onPressOut={() => pressOnlineMiniButtonOut(hostOptionPress)}
                                 onPress={handleHostOptionPress}
                               >
-                                <View
+                                <Animated.View
                                   style={[
                                     styles.onlinePanelMiniButtonOutline,
+                                    getOnlineMiniButtonOutlinePressStyle(hostOptionPress),
                                     isTablet && {
                                       height: 64,
                                       borderRadius: 16,
@@ -2901,8 +3385,8 @@ export default function HomeScreen({ navigation, route }) {
                                       </View>
                                     ) : null}
                                   </LinearGradient>
-                                </View>
-                              </Pressable>
+                                </Animated.View>
+                              </AnimatedPressable>
                             </Animated.View>
                             <Animated.Text
                               numberOfLines={1}
@@ -2955,32 +3439,92 @@ export default function HomeScreen({ navigation, route }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open Premium"
-              style={[
-                styles.mainMenuPremiumButton,
-                isTablet && {
-                  top: 24,
-                  left: 24,
-                  width: 54 * tabletScale,
-                  height: 54 * tabletScale,
-                },
-              ]}
+          style={[
+            styles.mainMenuPremiumButton,
+            {
+              top: homeMenuButtonTop,
+              left: homeMenuButtonLeft,
+              width: homeMenuButtonSize,
+              height: homeMenuButtonSize,
+            },
+            isTablet && {
+              top: 24,
+              left: 24,
+              width: 54 * tabletScale,
+              height: 54 * tabletScale,
+            },
+          ]}
+          onPressIn={pressPremiumButtonIn}
+          onPressOut={pressPremiumButtonOut}
           onPress={() => {
             triggerLightJumpHaptic();
-            openPremiumModal('menu');
+            void openPremiumModal('menu');
           }}
         >
           <Animated.Image
             source={MAIN_MENU_PREMIUM_CROWN_IMAGE}
             resizeMode="contain"
+            fadeDuration={0}
             style={[
               styles.mainMenuPremiumButtonImage,
+              {
+                width: homeMenuButtonSize,
+                height: homeMenuButtonSize,
+              },
               isTablet && {
                 width: 54 * tabletScale,
                 height: 54 * tabletScale,
               },
+              premiumButtonPressStyle,
+            ]}
+          />
+        </Pressable>
+      ) : null}
+
+      {showMainMenuBugReportButton ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Meld een bug"
+          style={[
+            styles.mainMenuBugReportButton,
+            {
+              top: showMainMenuPremiumButton
+                ? homeMenuButtonTop + homeMenuButtonSize + homeMenuButtonGap
+                : homeMenuButtonTop,
+              left: homeMenuButtonLeft,
+              width: homeMenuButtonSize,
+              height: homeMenuButtonSize,
+            },
+            isTablet && {
+              top: showMainMenuPremiumButton ? 24 + 64 * tabletScale : 24,
+              left: 24,
+              width: 54 * tabletScale,
+              height: 54 * tabletScale,
+            },
+          ]}
+          onPressIn={pressBugReportButtonIn}
+          onPressOut={pressBugReportButtonOut}
+          onPress={() => {
+            triggerLightJumpHaptic();
+            void playSoundEffect(SETTINGS_GEAR_SOUND, settings);
+            void openBugReportModal();
+          }}
+        >
+          <Animated.Image
+            source={BUG_REPORT_BUTTON_IMAGE}
+            resizeMode="contain"
+            fadeDuration={0}
+            style={[
+              styles.mainMenuBugReportButtonImage,
               {
-                transform: [{ scale: premiumCrownPulse }],
+                width: homeMenuButtonSize,
+                height: homeMenuButtonSize,
               },
+              isTablet && {
+                width: 54 * tabletScale,
+                height: 54 * tabletScale,
+              },
+              bugReportPressStyle,
             ]}
           />
         </Pressable>
@@ -3055,7 +3599,9 @@ export default function HomeScreen({ navigation, route }) {
                 originX: windowWidth / 2,
                 originY: windowHeight / 2,
                 routeName,
-                pauseMs: 280,
+                pauseMs: 80,
+                minSolidMs: 420,
+                settleMs: 160,
                 transitionKey: `${routeName}-${Date.now()}`,
               },
             });
@@ -3074,23 +3620,65 @@ export default function HomeScreen({ navigation, route }) {
             onComplete={handleThemeCoverComplete}
           />
         ) : null}
-        {themeRevealState.uncovering ? (
-          <CircularReveal
-            key={`theme-uncover-${selectedThemeDetail?.id ?? 'detail'}`}
-            ref={themeUncoverRevealRef}
-            color={themeRevealState.color}
-            originX={windowWidth / 2}
-            originY={windowHeight / 2}
-            initiallyVisible
-            initialProgress={0}
-            mode="uncover"
-            onComplete={() => {
-              setThemeRevealState((current) => ({
-                ...current,
-                uncovering: false,
-              }));
-            }}
-          />
+        {driverWarningVisible ? (
+          <Animated.View style={[styles.driverWarningBackdrop, { opacity: driverWarningFade }]}>
+            <ImageBackground
+              source={DRIVER_WARNING_MENU_IMAGE}
+              resizeMode="contain"
+              style={styles.driverWarningMenu}
+              imageStyle={styles.driverWarningMenuImage}
+            >
+              <Text style={[styles.driverWarningTitle, { fontFamily: 'FredokaOne_400Regular' }]}>
+                Rij veilig!
+              </Text>
+              <View style={styles.driverWarningBody}>
+                <Text style={[styles.driverWarningText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                  Gebruik AutoBingo niet als bestuurder
+                </Text>
+                <Image
+                  source={DRIVER_WARNING_ICON_IMAGE}
+                  resizeMode="contain"
+                  style={[
+                    styles.driverWarningIcon,
+                    {
+                      width: driverWarningIconSize,
+                      height: driverWarningIconSize,
+                    },
+                  ]}
+                />
+                <Text style={[styles.driverWarningFooterText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                  De app is bedoeld voor passagiers
+                </Text>
+              </View>
+              <Animated.View
+                pointerEvents={driverWarningButtonReady ? 'box-none' : 'none'}
+                style={[
+                  styles.driverWarningButtonWrap,
+                  {
+                    opacity: driverWarningButtonFade,
+                    transform: [
+                      {
+                        translateY: driverWarningButtonFade.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [8, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <GlossyButton
+                  label="Ik ben geen bestuurder"
+                  variant="green"
+                  heightOverride={54}
+                  horizontalPadding={22}
+                  labelFontScale={0.78}
+                  disabled={!driverWarningButtonReady}
+                  onPress={completeDriverWarning}
+                />
+              </Animated.View>
+            </ImageBackground>
+          </Animated.View>
         ) : null}
         <PremiumPaywallModal
           visible={premiumModalVisible}
@@ -3135,6 +3723,179 @@ export default function HomeScreen({ navigation, route }) {
             >
               {lobbyExitMessage}
             </PopupPanel>
+          </View>
+        </Modal>
+        <Modal
+          visible={bugReportModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={closeBugReportModal}
+        >
+          <View style={styles.lobbyNoticeBackdrop}>
+            <ImageBackground
+              source={BUG_REPORT_MENU_IMAGE}
+              resizeMode="contain"
+              style={styles.bugReportMenu}
+              imageStyle={styles.bugReportMenuImage}
+              fadeDuration={0}
+            >
+              <Text style={[styles.bugReportMenuTitle, { fontFamily: 'FredokaOne_400Regular' }]}>
+                Bug melden
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sluit bugmelding"
+                hitSlop={10}
+                style={styles.bugReportCloseIconButton}
+                onPress={closeBugReportModal}
+              >
+                <Image
+                  source={BUG_REPORT_CLOSE_IMAGE}
+                  resizeMode="contain"
+                  style={styles.bugReportCloseIcon}
+                  fadeDuration={0}
+                />
+              </Pressable>
+              <View style={styles.bugReportMenuBody}>
+                <ScrollView
+                  style={styles.bugReportBodyScrollView}
+                  indicatorStyle="black"
+                  showsVerticalScrollIndicator
+                  contentContainerStyle={styles.bugReportBodyScroll}
+                >
+                  <Text style={[styles.bugReportIntroText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                    Heb je een bug gevonden? Vul hieronder kort in wat er gebeurde. Zo kunnen we het probleem serieus oplossen.
+                  </Text>
+                  <View style={styles.bugReportSection}>
+                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Waar gebeurde het?</Text>
+                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                      Bijvoorbeeld: home, lobby, kaart, premium of instellingen.
+                    </Text>
+                    <TextInput
+                      value={bugReportForm.location}
+                      onChangeText={(value) => updateBugReportForm('location', value)}
+                      placeholder="Scherm of onderdeel"
+                      placeholderTextColor="#719649"
+                      maxLength={80}
+                      style={[styles.bugReportInput, styles.bugReportSingleLineInput, { fontFamily: 'FredokaOne_400Regular' }]}
+                    />
+                  </View>
+                  <View style={styles.bugReportSection}>
+                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Wat ging er mis?</Text>
+                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                      Beschrijf wat je zag, hoorde of wat niet werkte.
+                    </Text>
+                    <TextInput
+                      value={bugReportForm.summary}
+                      onChangeText={(value) => updateBugReportForm('summary', value)}
+                      placeholder="De knop reageerde niet..."
+                      placeholderTextColor="#719649"
+                      multiline
+                      maxLength={220}
+                      style={[styles.bugReportInput, styles.bugReportSummaryInput, { fontFamily: 'FredokaOne_400Regular' }]}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                  <View style={styles.bugReportSection}>
+                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Hoe kunnen we het nadoen?</Text>
+                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                      Noem de stappen vanaf het moment dat alles nog goed ging.
+                    </Text>
+                    <TextInput
+                      value={bugReportForm.steps}
+                      onChangeText={(value) => updateBugReportForm('steps', value)}
+                      placeholder="1. Open... 2. Tik op..."
+                      placeholderTextColor="#719649"
+                      multiline
+                      maxLength={320}
+                      style={[styles.bugReportInput, styles.bugReportStepsInput, { fontFamily: 'FredokaOne_400Regular' }]}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                  <View style={styles.bugReportSection}>
+                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Hoe ernstig is het?</Text>
+                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                      Kies hoe erg het spelen hierdoor werd verstoord.
+                    </Text>
+                    <View style={styles.bugReportSeverityRow}>
+                      {BUG_REPORT_SEVERITIES.map((severity) => {
+                        const selected = bugReportForm.severity === severity.value;
+                        return (
+                          <Pressable
+                            key={severity.value}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            style={[
+                              styles.bugReportSeverityChoice,
+                              selected && styles.bugReportChoiceSelected,
+                            ]}
+                            onPress={() => updateBugReportForm('severity', severity.value)}
+                          >
+                            <Text
+                              style={[
+                                styles.bugReportChoiceText,
+                                selected && styles.bugReportChoiceTextSelected,
+                                { fontFamily: 'FredokaOne_400Regular' },
+                              ]}
+                            >
+                              {severity.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                  <View style={styles.bugReportSection}>
+                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Afbeelding toevoegen?</Text>
+                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                      Optioneel: kies een screenshot uit je foto’s. Maximaal 5 MB.
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      style={styles.bugReportAttachmentBox}
+                      onPress={pickBugReportScreenshot}
+                    >
+                      <Text style={[styles.bugReportAttachmentText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                        {bugReportForm.screenshot?.fileName
+                          ?? (bugReportForm.screenshot ? 'Screenshot gekozen' : 'Screenshot kiezen')}
+                      </Text>
+                    </Pressable>
+                    {bugReportForm.screenshot ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        style={styles.bugReportRemoveAttachmentButton}
+                        onPress={() => updateBugReportForm('screenshot', null)}
+                      >
+                        <Text style={[styles.bugReportRemoveAttachmentText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                          Verwijder screenshot
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  {bugReportError ? (
+                    <Text style={[styles.bugReportErrorText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                      {bugReportError}
+                    </Text>
+                  ) : null}
+                  {bugReportSuccess ? (
+                    <Text style={[styles.bugReportSuccessText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                      {bugReportSuccess}
+                    </Text>
+                  ) : null}
+                  <View style={styles.bugReportSubmitButtonWrap}>
+                    <GlossyButton
+                      label={bugReportSubmitting ? 'Opslaan...' : 'Verstuur melding'}
+                      variant="yellow"
+                      heightOverride={48}
+                      horizontalPadding={22}
+                      labelFontScale={0.82}
+                      disabled={bugReportSubmitting}
+                      onPress={submitBugReport}
+                    />
+                  </View>
+                </ScrollView>
+              </View>
+            </ImageBackground>
           </View>
         </Modal>
         <Modal
@@ -3415,6 +4176,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: -18,
   },
+  logoCompactHomeChrome: {
+    height: 330,
+    marginTop: -6,
+  },
   logoCompact: {
     height: 220,
     marginTop: -8,
@@ -3431,6 +4196,21 @@ const styles = StyleSheet.create({
     elevation: 60,
   },
   mainMenuPremiumButtonImage: {
+    width: 54,
+    height: 54,
+  },
+  mainMenuBugReportButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    width: 54,
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 60,
+    elevation: 60,
+  },
+  mainMenuBugReportButtonImage: {
     width: 54,
     height: 54,
   },
@@ -3686,7 +4466,7 @@ const styles = StyleSheet.create({
     left: 22,
     right: 22,
     bottom: 8,
-    minHeight: 92,
+    minHeight: 122,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -3733,6 +4513,39 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#BDEFFF',
     textAlign: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  skinInspectChallengeProgressRow: {
+    width: '100%',
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  skinInspectChallengeProgressTrack: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.34)',
+  },
+  skinInspectChallengeProgressFill: {
+    height: '100%',
+    borderRadius: 6,
+    backgroundColor: '#F5C400',
+  },
+  skinInspectChallengeProgressText: {
+    minWidth: 46,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#FFF7DD',
+    textAlign: 'right',
     letterSpacing: 0,
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
@@ -4361,6 +5174,265 @@ const styles = StyleSheet.create({
   },
   lobbyNoticeButtonWrap: {
     minWidth: 132,
+  },
+  driverWarningBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    backgroundColor: 'rgba(7, 12, 18, 0.58)',
+    zIndex: 250,
+    elevation: 250,
+  },
+  driverWarningMenu: {
+    width: '96%',
+    maxWidth: 430,
+    aspectRatio: 1122 / 1402,
+    transform: [{ translateY: -58 }],
+  },
+  driverWarningMenuImage: {
+    width: '100%',
+    height: '100%',
+  },
+  driverWarningTitle: {
+    position: 'absolute',
+    top: '5.5%',
+    left: '20%',
+    right: '20%',
+    height: '10%',
+    color: '#FFFFFF',
+    fontSize: 31,
+    lineHeight: 37,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(120, 0, 0, 0.45)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 3,
+  },
+  driverWarningBody: {
+    position: 'absolute',
+    top: '16%',
+    left: '11%',
+    right: '11%',
+    bottom: '8%',
+    alignItems: 'center',
+  },
+  driverWarningText: {
+    marginTop: 10,
+    fontSize: 18,
+    lineHeight: 25,
+    color: '#111111',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  driverWarningIcon: {
+    marginTop: DRIVER_WARNING_ICON_MARGIN_TOP,
+    marginBottom: DRIVER_WARNING_ICON_MARGIN_BOTTOM,
+  },
+  driverWarningFooterText: {
+    fontSize: 18,
+    lineHeight: 24,
+    color: '#111111',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  driverWarningButtonWrap: {
+    position: 'absolute',
+    left: '9%',
+    right: '9%',
+    bottom: -64,
+    alignItems: 'center',
+    zIndex: 5,
+    elevation: 5,
+  },
+  bugReportMenu: {
+    width: '98%',
+    maxWidth: 452,
+    aspectRatio: 958 / 1642,
+  },
+  bugReportMenuImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bugReportMenuTitle: {
+    position: 'absolute',
+    top: '6.9%',
+    left: '17%',
+    right: '17%',
+    height: '9%',
+    color: '#FFFFFF',
+    fontSize: 36,
+    lineHeight: 42,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(20, 74, 18, 0.82)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 3,
+  },
+  bugReportMenuBody: {
+    position: 'absolute',
+    top: '17%',
+    left: '9%',
+    right: '7%',
+    bottom: '10.4%',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  bugReportBodyScroll: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingRight: 16,
+    paddingBottom: 34,
+  },
+  bugReportBodyScrollView: {
+    width: '100%',
+    flex: 1,
+  },
+  bugReportIntroText: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#315319',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  bugReportSection: {
+    width: '100%',
+    marginTop: 13,
+  },
+  bugReportLabel: {
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#234C11',
+    letterSpacing: 0,
+  },
+  bugReportHelpText: {
+    marginTop: 2,
+    marginBottom: 6,
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#5A7B34',
+    letterSpacing: 0,
+  },
+  bugReportInput: {
+    width: '100%',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 2,
+    borderColor: '#A7CF62',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.62)',
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#24460F',
+    letterSpacing: 0,
+  },
+  bugReportSingleLineInput: {
+    minHeight: 42,
+  },
+  bugReportSummaryInput: {
+    minHeight: 82,
+  },
+  bugReportStepsInput: {
+    minHeight: 96,
+  },
+  bugReportSeverityRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 5,
+  },
+  bugReportSeverityChoice: {
+    flex: 1,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: '#A7CF62',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.62)',
+  },
+  bugReportChoiceSelected: {
+    borderColor: '#1C7B1D',
+    backgroundColor: '#BDF05E',
+  },
+  bugReportChoiceText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#315319',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  bugReportChoiceTextSelected: {
+    color: '#173D09',
+  },
+  bugReportErrorText: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#9E1515',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  bugReportSuccessText: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#16852D',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  bugReportSubmitButtonWrap: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  bugReportAttachmentBox: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: '#A7CF62',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.36)',
+  },
+  bugReportAttachmentText: {
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#5A7B34',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  bugReportRemoveAttachmentButton: {
+    alignSelf: 'center',
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  bugReportRemoveAttachmentText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#9E1515',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  bugReportCloseIconButton: {
+    position: 'absolute',
+    top: '7.8%',
+    right: '2.8%',
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 4,
+    elevation: 4,
+  },
+  bugReportCloseIcon: {
+    width: 40,
+    height: 40,
   },
   connectionErrorActions: {
     marginTop: 8,

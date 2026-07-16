@@ -4,6 +4,8 @@ import { usePremium } from './PremiumContext';
 import { hasPremiumEntitlement } from './revenueCatClient';
 import * as Haptics from '../settings/haptics';
 import { getResponsiveMetrics } from '../utils/responsive';
+import WarmupImages from '../components/WarmupImages';
+import { PREMIUM_MODAL_ASSETS } from '../assets/preloadManifest';
 
 const PREMIUM_MENU_IMAGE = require('../../assets/images/premium/premium-menu.png');
 const NO_ADS_IMAGE = require('../../assets/images/premium/benefits/no-ads-user.png');
@@ -42,6 +44,11 @@ function formatPremiumPrice(priceString) {
   return priceString.replace(/\$/g, '€');
 }
 
+function formatPackagePrice(packageOption, fallbackLabel) {
+  const priceString = formatPremiumPrice(packageOption?.product?.priceString);
+  return priceString ?? fallbackLabel;
+}
+
 export default function PremiumPaywallModal({
   visible,
   onClose,
@@ -77,17 +84,19 @@ export default function PremiumPaywallModal({
       {
         key: 'lifetime',
         title: 'Levenslang',
-        price: lifetimePackage?.product?.priceString ? `Eenmalig ${formatPremiumPrice(lifetimePackage.product.priceString)}` : 'Eenmalig',
+        price: formatPackagePrice(lifetimePackage, loading ? 'Laden...' : 'Niet beschikbaar'),
         package: lifetimePackage,
       },
       {
         key: 'monthly',
         title: 'Maandelijks',
-        price: monthlyPackage?.product?.priceString ? `${formatPremiumPrice(monthlyPackage.product.priceString)} per maand` : 'Per maand',
+        price: monthlyPackage?.product?.priceString
+          ? `${formatPremiumPrice(monthlyPackage.product.priceString)} per maand`
+          : loading ? 'Laden...' : 'Niet beschikbaar',
         package: monthlyPackage,
       },
     ],
-    [lifetimePackage, monthlyPackage]
+    [lifetimePackage, loading, monthlyPackage]
   );
   const selectedPackage = packages.find((packageOption) => packageOption.key === selectedPackageKey && packageOption.package)
     ?? packages.find((packageOption) => packageOption.package)
@@ -196,9 +205,17 @@ export default function PremiumPaywallModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
+        <WarmupImages
+          assets={PREMIUM_MODAL_ASSETS}
+          active={visible}
+          timeoutMs={null}
+          imageSize={128}
+          batchSize={16}
+        />
         <ImageBackground
           source={PREMIUM_MENU_IMAGE}
           resizeMode="stretch"
+          fadeDuration={0}
           style={[
             styles.menu,
             {
@@ -224,20 +241,8 @@ export default function PremiumPaywallModal({
             onPress={onClose}
             disabled={Boolean(busyPackageId)}
           >
-            <Image source={CLOSE_IMAGE} style={styles.closeImage} resizeMode="contain" />
+            <Image source={CLOSE_IMAGE} style={styles.closeImage} resizeMode="contain" fadeDuration={0} />
           </Pressable>
-
-          {!available ? (
-            <Text style={[styles.status, styles.topStatus, { top: scaled(160), left: scaled(62), right: scaled(62), fontSize: scaled(11), lineHeight: scaled(15) }]}>
-              RevenueCat is nog niet beschikbaar in deze build. Gebruik een dev build of TestFlight om aankopen te testen.
-            </Text>
-          ) : null}
-
-          {available && !loading && !lifetimePackage && !monthlyPackage ? (
-            <Text style={[styles.status, styles.topStatus, { top: scaled(160), left: scaled(62), right: scaled(62), fontSize: scaled(11), lineHeight: scaled(15) }]}>
-              Geen premium pakketten gevonden. Check of offering `default` packages heeft.
-            </Text>
-          ) : null}
 
           <View
             style={[
@@ -296,7 +301,8 @@ export default function PremiumPaywallModal({
             ]}
           >
             {packages.map((packageOption, index) => {
-              const disabled = Boolean(busyPackageId);
+              const unavailable = !packageOption.package;
+              const disabled = Boolean(busyPackageId) || unavailable;
               const isSelected = selectedPackageKey === packageOption.key;
               return (
                 <Pressable
@@ -313,10 +319,14 @@ export default function PremiumPaywallModal({
                     },
                     index === 0 && [styles.packageRowDivider, { borderBottomWidth: scaled(2) }],
                     isSelected && styles.packageRowSelected,
-                    disabled && styles.packageRowDisabled,
+                    unavailable && styles.packageRowUnavailable,
+                    Boolean(busyPackageId) && styles.packageRowDisabled,
                     pressed && !disabled && styles.packageRowPressed,
                   ]}
                   onPress={() => {
+                    if (unavailable) {
+                      return;
+                    }
                     setSelectedPackageKey(packageOption.key);
                   }}
                   disabled={disabled}
@@ -325,11 +335,21 @@ export default function PremiumPaywallModal({
                     source={isSelected ? RADIO_SELECTED_IMAGE : RADIO_UNSELECTED_IMAGE}
                     style={[styles.radioImage, { width: scaled(26), height: scaled(26) }]}
                     resizeMode="contain"
+                    fadeDuration={0}
                   />
                   <Text style={[styles.packageTitle, { fontSize: scaled(17), lineHeight: scaled(21) }]}>
                     {packageOption.title}
                   </Text>
-                  <Text style={[styles.packagePrice, { fontSize: scaled(13), lineHeight: scaled(17) }]}>
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
+                    style={[
+                      styles.packagePrice,
+                      unavailable && styles.packagePriceUnavailable,
+                      { fontSize: scaled(13), lineHeight: scaled(17) },
+                    ]}
+                  >
                     {packageOption.price}
                   </Text>
                 </Pressable>
@@ -350,6 +370,7 @@ export default function PremiumPaywallModal({
               },
             ]}
             resizeMode="contain"
+            fadeDuration={0}
           />
 
           <Pressable
@@ -473,6 +494,9 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 1,
   },
+  packagePriceUnavailable: {
+    color: '#B06A2D',
+  },
   radioImage: {
     flexShrink: 0,
   },
@@ -486,6 +510,9 @@ const styles = StyleSheet.create({
   },
   packageRowDisabled: {
     opacity: 0.45,
+  },
+  packageRowUnavailable: {
+    opacity: 0.72,
   },
   packageRowSelected: {
     backgroundColor: 'rgba(255, 247, 202, 0.34)',
@@ -504,6 +531,9 @@ const styles = StyleSheet.create({
     textShadowRadius: 1,
   },
   topStatus: {
+    position: 'absolute',
+  },
+  bottomStatus: {
     position: 'absolute',
   },
   restoreButton: {

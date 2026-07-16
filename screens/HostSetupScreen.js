@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Image,
   ImageBackground,
+  InteractionManager,
   Modal,
   Pressable,
   SafeAreaView,
@@ -18,6 +19,7 @@ import ThemeCarousel from '../src/components/ThemeCarousel';
 import GlossyButton from '../src/components/GlossyButton';
 import PopupPanel from '../src/components/PopupPanel';
 import AnimatedRouteBackButton from '../src/components/AnimatedRouteBackButton';
+import WarmupImages from '../src/components/WarmupImages';
 import CircularReveal from '../components/CircularReveal';
 import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { usePremium } from '../src/premium/PremiumContext';
@@ -32,6 +34,7 @@ import { getResponsiveMetrics } from '../src/utils/responsive';
 import { checkOnlineConnection } from '../src/services/liveLobbyService';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
 import { playSoundEffect, preloadSoundEffect } from '../src/audio/soundEffects';
+import { HOST_ASSETS } from '../src/assets/preloadManifest';
 
 const GAME_SETUP_BACKGROUND = require('../assets/images/backgrounds/game-setup-birds-eye-background-v4.png');
 const LOBBY_ROAD_BACKGROUND_IMAGE = require('../assets/images/backgrounds/lobby-road-background.png');
@@ -64,50 +67,6 @@ const SETTINGS_WIN_TWO_LINES = require('../assets/images/settings/win-2-lines.pn
 const SETTINGS_WIN_FULL_CARD = require('../assets/images/settings/win-full-card.png');
 const SETTINGS_DIAGONAL_ON = require('../assets/images/settings/diagonal-on.png');
 const SETTINGS_DIAGONAL_OFF = require('../assets/images/settings/diagonal-off.png');
-const KLASSIEK_CARD_IMAGES = [KLASSIEK_CARD_RED, KLASSIEK_CARD_GREEN, KLASSIEK_CARD_BLUE];
-const GAME_MODE_BASE_IMAGES = [
-  KLASSIEK_GAME_MODE_BASE,
-  CLAIM_GAME_MODE_BASE,
-  COLLECTIEF_GAME_MODE_BASE,
-  KAARTCODE_GAME_MODE_BASE,
-];
-const CLAIM_CARD_IMAGES = [CLAIM_BINGO_BOARD];
-const COLLECTIEF_CARD_IMAGES = [COLLECTIEF_BINGO_BOARD];
-const KAARTCODE_CARD_IMAGES = [
-  KAARTCODE_CARD_YELLOW,
-  KAARTCODE_CARD_BLUE,
-  KAARTCODE_NO_WIFI,
-  KAARTCODE_LICENSE_PLATE,
-];
-const SETTINGS_IMAGES = [
-  SETTINGS_CROWN_ICON,
-  SETTINGS_DIAGONAL_ICON,
-  SETTINGS_RULES_PANEL_IMAGE,
-  SETTINGS_RULE_SLIDER_FRAME_WINCONDITION,
-  SETTINGS_RULE_SLIDER_FRAME_DIAGONAL,
-  SETTINGS_WIN_CONDITION_TITLE_ICON,
-  SETTINGS_DIAGONAL_TITLE_ICON,
-  SETTINGS_WIN_ONE_LINE,
-  SETTINGS_WIN_TWO_LINES,
-  SETTINGS_WIN_FULL_CARD,
-  SETTINGS_DIAGONAL_ON,
-  SETTINGS_DIAGONAL_OFF,
-];
-const HOST_SETUP_WARM_IMAGES = [
-  GAME_SETUP_BACKGROUND,
-  LOBBY_ROAD_BACKGROUND_IMAGE,
-  LOBBY_PARKING_GRID_IMAGE,
-  WIFI_REQUIRED_IMAGE,
-  WIFI_NOT_REQUIRED_IMAGE,
-  ...GAME_MODE_BASE_IMAGES,
-  ...KLASSIEK_CARD_IMAGES,
-  ...CLAIM_CARD_IMAGES,
-  ...COLLECTIEF_CARD_IMAGES,
-  ...KAARTCODE_CARD_IMAGES,
-  ...SETTINGS_IMAGES,
-  ...Object.values(THEME_CARD_IMAGES),
-  THEME_LOCK_OVERLAY_IMAGE,
-];
 const CREATE_LOBBY_REVEAL_BLUE = '#1A7BD4';
 const CONFIRM_CREATE_LOBBY_REVEAL_GREEN = '#159B3B';
 
@@ -160,7 +119,11 @@ function getEmbeddedThemeTitleScale(themeId) {
     return 0.64;
   }
 
-  return themeId === 'voertuigen' ? 0.8 : 1;
+  if (themeId === 'voertuigen') {
+    return 0.8;
+  }
+
+  return themeId === 'platteland' ? 0.93 : 1;
 }
 
 const THEME_CARDS = THEMES.map((theme) => ({
@@ -258,6 +221,8 @@ export default function HostSetupScreen({ navigation }) {
   const [connectionErrorVisible, setConnectionErrorVisible] = useState(false);
   const [createLobbyReveal, setCreateLobbyReveal] = useState(null);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
+  const [hostLayoutReady, setHostLayoutReady] = useState(false);
+  const [hostAssetsReady, setHostAssetsReady] = useState(false);
 
   const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.88, isTablet ? 1.34 : 1.18);
   const collapsedPanelHeight = Math.round(clamp(screenHeight * (isTablet ? 0.09 : 0.078), 66, isTablet ? 118 : 88));
@@ -364,14 +329,31 @@ export default function HostSetupScreen({ navigation }) {
     inputRange: [0, 1],
     outputRange: [30, 0],
   });
-  useEffect(() => {
-    HOST_SETUP_WARM_IMAGES.forEach((source) => {
-      const uri = Image.resolveAssetSource(source)?.uri;
-      if (uri) {
-        Image.prefetch(uri);
-      }
-    });
+  const handleHostWarmupReady = useCallback(() => {
+    setHostAssetsReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!hostLayoutReady || !hostAssetsReady) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) {
+            navigation.markRouteReady?.();
+          }
+        });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hostAssetsReady, hostLayoutReady, navigation]);
 
   useEffect(() => {
     if (!createLobbyConfirmVisible) {
@@ -615,6 +597,11 @@ export default function HostSetupScreen({ navigation }) {
       return;
     }
 
+    if (nextIndex === selectedGameModeIndex) {
+      closeGameModePicker(true);
+      return;
+    }
+
     void Haptics.selectionAsync();
     setGameModePickerExiting(true);
 
@@ -724,23 +711,22 @@ export default function HostSetupScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.safeArea}>
+    <View
+      style={styles.safeArea}
+      onLayout={() => setHostLayoutReady(true)}
+    >
+      <WarmupImages
+        assets={HOST_ASSETS}
+        timeoutMs={null}
+        imageSize={128}
+        batchSize={16}
+        onReady={handleHostWarmupReady}
+      />
       <ImageBackground
         source={GAME_SETUP_BACKGROUND}
         resizeMode="cover"
         style={styles.background}
       >
-        <View pointerEvents="none" style={styles.hiddenImageWarmCache}>
-          {HOST_SETUP_WARM_IMAGES.map((source, index) => (
-            <Image
-              key={`host-setup-warm-cache:${index}`}
-              source={source}
-              resizeMode="contain"
-              fadeDuration={0}
-              style={styles.hiddenWarmCacheImage}
-            />
-          ))}
-        </View>
         <SafeAreaView style={styles.safeAreaContent}>
           <AnimatedRouteBackButton
             navigation={navigation}
@@ -1042,6 +1028,8 @@ export default function HostSetupScreen({ navigation }) {
                     originY: screenHeight / 2,
                     routeName: 'Lobby',
                     pauseMs: 0,
+                    minSolidMs: 260,
+                    settleMs: 120,
                     preloaded: true,
                     transitionKey: createLobbyReveal.transitionKey,
                   },
@@ -1971,19 +1959,6 @@ const styles = StyleSheet.create({
   },
   background: {
     flex: 1,
-  },
-  hiddenImageWarmCache: {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    left: -100,
-    top: -100,
-    opacity: 0.01,
-    overflow: 'hidden',
-  },
-  hiddenWarmCacheImage: {
-    width: 1,
-    height: 1,
   },
   safeAreaContent: {
     flex: 1,

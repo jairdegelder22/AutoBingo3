@@ -33,6 +33,7 @@ import {
   preloadPooledSoundEffect,
   preloadSoundEffect,
 } from '../src/audio/soundEffects';
+import { stopGameBackgroundMusicForBingo } from '../src/audio/backgroundMusic';
 
 const STANDARD_GRID_SIZE = 4;
 const CLAIM_GRID_SIZE = 4;
@@ -51,6 +52,20 @@ const CLAIM_PODIUM_ASSETS = {
   roze: require('../assets/images/claim-results/podium-roze.png'),
   wit: require('../assets/images/claim-results/podium-wit.png'),
   zwart: require('../assets/images/claim-results/podium-zwart.png'),
+  regenboog: require('../assets/images/claim-results/podium-regenboog.png'),
+  koe: require('../assets/images/claim-results/podium-koe.png'),
+  kerst: require('../assets/images/claim-results/podium-kerst.png'),
+  politie: require('../assets/images/claim-results/podium-politie.png'),
+  ambulance: require('../assets/images/claim-results/podium-ambulance.png'),
+  brandweer: require('../assets/images/claim-results/podium-brandweer.png'),
+  brons: require('../assets/images/claim-results/podium-brons.png'),
+  zilver: require('../assets/images/claim-results/podium-zilver.png'),
+  goud: require('../assets/images/claim-results/podium-goud.png'),
+  kat: require('../assets/images/claim-results/podium-kat.png'),
+  hond: require('../assets/images/claim-results/podium-hond.png'),
+  hartjes: require('../assets/images/claim-results/podium-hartjes.png'),
+  taxi: require('../assets/images/claim-results/podium-taxi.png'),
+  vlammen: require('../assets/images/claim-results/podium-vlammen.png'),
 };
 const BINGO_BOARD_IMAGES = {
   blauw: require('../assets/images/bingo-boards/board-blauw.png'),
@@ -63,17 +78,33 @@ const BINGO_BOARD_IMAGES = {
   roze: require('../assets/images/bingo-boards/board-roze.png'),
   wit: require('../assets/images/bingo-boards/board-wit.png'),
   zwart: require('../assets/images/bingo-boards/board-zwart.png'),
+  regenboog: require('../assets/images/bingo-boards/board-regenboog.png'),
+  koe: require('../assets/images/bingo-boards/board-koe.png'),
+  kerst: require('../assets/images/bingo-boards/board-kerst.png'),
+  politie: require('../assets/images/bingo-boards/board-politie.png'),
+  ambulance: require('../assets/images/bingo-boards/board-ambulance.png'),
+  brandweer: require('../assets/images/bingo-boards/board-brandweer.png'),
+  brons: require('../assets/images/bingo-boards/board-brons.png'),
+  zilver: require('../assets/images/bingo-boards/board-zilver.png'),
+  goud: require('../assets/images/bingo-boards/board-goud.png'),
+  kat: require('../assets/images/bingo-boards/board-kat.png'),
+  hond: require('../assets/images/bingo-boards/board-hond.png'),
+  hartjes: require('../assets/images/bingo-boards/board-hartjes.png'),
+  taxi: require('../assets/images/bingo-boards/board-taxi.png'),
+  vlammen: require('../assets/images/bingo-boards/board-vlammen.png'),
   neutral: require('../assets/images/bingo-boards/board-neutral.png'),
 };
 const GAME_BACK_CONFIRM_REVEAL_COLOR = '#159B3B';
 const OUTER_PADDING = 12;
 const TOP_CONTROLS_HEIGHT = 12;
-const SECTION_GAP = 12;
+const TWO_PLAYER_MIDDLE_ROW_HEIGHT = 62;
+const TWO_PLAYER_VERTICAL_RESERVE = TOP_CONTROLS_HEIGHT + OUTER_PADDING + 58;
 const BINGO_LINE_DRAW_DURATION_MS = 1450;
 const BINGO_CHEER_SOUND = 'bingoCheer';
 const BINGO_ITEM_CHECK_SOUND = 'bingoItemCheck';
 const BINGO_ITEM_CHECK_SOUND_POOL_SIZE = 16;
 const BINGO_LINE_PITCH_STEP = Math.pow(2, 1 / 12);
+const COLOR_BINGO_SPLASH_IMAGE_LIFT_Y = IS_TABLET_GAME ? -28 : -22;
 const UNCHECK_HOLD_DURATION_MS = 3000;
 const COLLECTIVE_COLOR_HOLD_RATIO = 0.34;
 const COLLECTIVE_COLOR_SEGMENT_MS = 4300;
@@ -85,7 +116,7 @@ const BINGO_BOARD_PLAY_AREA = {
   height: 0.815,
   gap: 4,
   padding: IS_TABLET_GAME ? 7 : 5,
-  gridScale: IS_TABLET_GAME ? 0.94 : 0.98,
+  gridScale: IS_TABLET_GAME ? 0.96 : 1,
   boardScale: 1.14,
 };
 const BINGO_BOARD_SCALE_BY_SKIN = {
@@ -97,11 +128,14 @@ const BINGO_BOARD_SCALE_BY_SKIN = {
 function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default') {
   const availableWidth = width - (compact ? OUTER_PADDING * 2 : 4);
   const availableHeight = compact
-    ? ((height - TOP_CONTROLS_HEIGHT - SECTION_GAP - OUTER_PADDING * 2) / 2) - 12
+    ? (height - TWO_PLAYER_VERTICAL_RESERVE - TWO_PLAYER_MIDDLE_ROW_HEIGHT) / 2
     : height - TOP_CONTROLS_HEIGHT - 4;
-  const boardSize = Math.floor(Math.max(240, Math.min(availableWidth, availableHeight)));
   const boardPlayArea = BINGO_BOARD_PLAY_AREA;
   const boardScale = BINGO_BOARD_SCALE_BY_SKIN[skin] ?? BINGO_BOARD_SCALE_BY_SKIN.default;
+  const maxDisplayBoardSize = Math.max(compact ? 218 : 240, Math.min(availableWidth, availableHeight));
+  const boardSize = compact
+    ? Math.floor(maxDisplayBoardSize / boardScale)
+    : Math.floor(maxDisplayBoardSize);
   const displayBoardSize = Math.floor(boardSize * boardScale);
   const playArea = {
     left: displayBoardSize * boardPlayArea.left,
@@ -122,7 +156,38 @@ function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default') {
     padding,
     gridPixelSize,
     gridLeft: playArea.left + (playArea.width - gridPixelSize) / 2,
-    gridTop: playArea.top + (playArea.height - gridPixelSize) / 2,
+    gridTop: playArea.top + (playArea.height - gridPixelSize) / 2 + (compact ? 3 : 4),
+  };
+}
+
+function getClaimBingoBoardImageLayout(gridSize) {
+  const availableWidth = width - 4;
+  const availableHeight = height - TOP_CONTROLS_HEIGHT - OUTER_PADDING - (IS_TABLET_GAME ? 360 : 300);
+  const boardPlayArea = BINGO_BOARD_PLAY_AREA;
+  const boardScale = BINGO_BOARD_SCALE_BY_SKIN.neutral ?? BINGO_BOARD_SCALE_BY_SKIN.default;
+  const maxDisplayBoardSize = Math.max(260, Math.min(availableWidth, availableHeight));
+  const boardSize = Math.floor(maxDisplayBoardSize / boardScale);
+  const displayBoardSize = Math.floor(boardSize * boardScale);
+  const playArea = {
+    left: displayBoardSize * boardPlayArea.left,
+    top: displayBoardSize * boardPlayArea.top,
+    width: displayBoardSize * boardPlayArea.width,
+    height: displayBoardSize * boardPlayArea.height,
+  };
+  const gap = boardPlayArea.gap ?? 5;
+  const padding = boardPlayArea.padding ?? 5;
+  const targetGridSize = Math.floor(Math.min(playArea.width, playArea.height) * (boardPlayArea.gridScale ?? 1));
+  const cellSize = Math.floor((targetGridSize - padding * 2 - gap * (gridSize - 1)) / gridSize);
+  const gridPixelSize = gridSize * cellSize + (gridSize - 1) * gap + padding * 2;
+
+  return {
+    boardSize: displayBoardSize,
+    cellSize,
+    gap,
+    padding,
+    gridPixelSize,
+    gridLeft: playArea.left + (playArea.width - gridPixelSize) / 2,
+    gridTop: playArea.top + (playArea.height - gridPixelSize) / 2 + 3,
   };
 }
 
@@ -1149,6 +1214,7 @@ function BingoCell({
             },
           ]}
           resizeMode="contain"
+          fadeDuration={0}
         />
         <CellFlash
           progress={sparkProgress}
@@ -1364,6 +1430,20 @@ const PURPLE_BINGO_SPLASH = require('../assets/logo (bingo-paars).png');
 const PINK_BINGO_SPLASH = require('../assets/logo (bingo-roze).png');
 const WHITE_BINGO_SPLASH = require('../assets/logo (bingo-wit).png');
 const BLACK_BINGO_SPLASH = require('../assets/logo (bingo-zwart).png');
+const RAINBOW_BINGO_SPLASH = require('../assets/logo (bingo-regenboog).png');
+const DOG_BINGO_SPLASH = require('../assets/logo (bingo-hond).png');
+const TAXI_BINGO_SPLASH = require('../assets/logo (bingo-taxi).png');
+const FLAMES_BINGO_SPLASH = require('../assets/logo (bingo-vlammen).png');
+const COW_BINGO_SPLASH = require('../assets/logo (bingo-koe).png');
+const CAT_BINGO_SPLASH = require('../assets/logo (bingo-kat).png');
+const HEARTS_BINGO_SPLASH = require('../assets/logo (bingo-hartjes).png');
+const CHRISTMAS_BINGO_SPLASH = require('../assets/logo (bingo-kerst).png');
+const GOLD_BINGO_SPLASH = require('../assets/logo (bingo-goud).png');
+const SILVER_BINGO_SPLASH = require('../assets/logo (bingo-zilver).png');
+const BRONZE_BINGO_SPLASH = require('../assets/logo (bingo-brons).png');
+const POLICE_BINGO_SPLASH = require('../assets/logo (bingo-politie).png');
+const FIRETRUCK_BINGO_SPLASH = require('../assets/logo (bingo-brandweer).png');
+const AMBULANCE_BINGO_SPLASH = require('../assets/logo (bingo-ambulance).png');
 const BINGO_LIGHT_LOTTIE = require('../assets/animations/bingo-light.json');
 const BINGO_SPLASH_BY_SKIN = {
   geel: YELLOW_BINGO_SPLASH,
@@ -1376,12 +1456,60 @@ const BINGO_SPLASH_BY_SKIN = {
   roze: PINK_BINGO_SPLASH,
   wit: WHITE_BINGO_SPLASH,
   zwart: BLACK_BINGO_SPLASH,
+  regenboog: RAINBOW_BINGO_SPLASH,
+  hond: DOG_BINGO_SPLASH,
+  taxi: TAXI_BINGO_SPLASH,
+  vlammen: FLAMES_BINGO_SPLASH,
+  koe: COW_BINGO_SPLASH,
+  kat: CAT_BINGO_SPLASH,
+  hartjes: HEARTS_BINGO_SPLASH,
+  kerst: CHRISTMAS_BINGO_SPLASH,
+  goud: GOLD_BINGO_SPLASH,
+  zilver: SILVER_BINGO_SPLASH,
+  brons: BRONZE_BINGO_SPLASH,
+  politie: POLICE_BINGO_SPLASH,
+  brandweer: FIRETRUCK_BINGO_SPLASH,
+  ambulance: AMBULANCE_BINGO_SPLASH,
+};
+const COLOR_BINGO_SPLASH_LAYOUT = { imageOffsetY: COLOR_BINGO_SPLASH_IMAGE_LIFT_Y };
+const CENTERED_BINGO_SPLASH_LAYOUT = {
+  widthMultiplier: 3.96,
+  compactWidthMultiplier: 3.08,
+  marginBottom: IS_TABLET_GAME ? -124 : -96,
+  imageOffsetY: 0,
+};
+const BINGO_SPLASH_LAYOUT_BY_SKIN = {
+  geel: COLOR_BINGO_SPLASH_LAYOUT,
+  rood: COLOR_BINGO_SPLASH_LAYOUT,
+  blauw: COLOR_BINGO_SPLASH_LAYOUT,
+  groen: COLOR_BINGO_SPLASH_LAYOUT,
+  lichtblauw: COLOR_BINGO_SPLASH_LAYOUT,
+  oranje: COLOR_BINGO_SPLASH_LAYOUT,
+  paars: COLOR_BINGO_SPLASH_LAYOUT,
+  roze: COLOR_BINGO_SPLASH_LAYOUT,
+  wit: COLOR_BINGO_SPLASH_LAYOUT,
+  zwart: COLOR_BINGO_SPLASH_LAYOUT,
+  kerst: COLOR_BINGO_SPLASH_LAYOUT,
+  zilver: COLOR_BINGO_SPLASH_LAYOUT,
+  brons: COLOR_BINGO_SPLASH_LAYOUT,
+  regenboog: CENTERED_BINGO_SPLASH_LAYOUT,
+  hond: CENTERED_BINGO_SPLASH_LAYOUT,
+  taxi: CENTERED_BINGO_SPLASH_LAYOUT,
+  vlammen: CENTERED_BINGO_SPLASH_LAYOUT,
+  koe: CENTERED_BINGO_SPLASH_LAYOUT,
+  kat: CENTERED_BINGO_SPLASH_LAYOUT,
+  hartjes: CENTERED_BINGO_SPLASH_LAYOUT,
+  goud: CENTERED_BINGO_SPLASH_LAYOUT,
+  politie: CENTERED_BINGO_SPLASH_LAYOUT,
+  brandweer: CENTERED_BINGO_SPLASH_LAYOUT,
+  ambulance: CENTERED_BINGO_SPLASH_LAYOUT,
 };
 
-function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = false }) {
+function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = false, screenOverlay = false }) {
   const entrance = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(1)).current;
   const logoSplash = BINGO_SPLASH_BY_SKIN[skin] ?? null;
+  const splashLayout = BINGO_SPLASH_LAYOUT_BY_SKIN[skin] ?? null;
 
   useEffect(() => {
     let pulseAnimation = null;
@@ -1435,14 +1563,25 @@ function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = fal
   });
 
   if (logoSplash) {
+    const logoWidthMultiplier = screenOverlay
+      ? splashLayout?.widthMultiplier ?? 3.96
+      : compact
+        ? splashLayout?.compactWidthMultiplier ?? 3.36
+        : splashLayout?.widthMultiplier ?? 3.96;
+    const logoImageOffsetY = splashLayout?.imageOffsetY ?? 0;
+
     return (
       <Animated.View
         pointerEvents="none"
         style={[
-          styles.bingoLogoBanner,
-          compact && styles.bingoLogoBannerCompact,
+          screenOverlay
+            ? styles.bingoLogoBannerScreen
+            : compact
+              ? styles.bingoLogoBannerCompact
+              : styles.bingoLogoBanner,
           {
-            width: width * (compact ? 3.36 : 3.96),
+            width: width * logoWidthMultiplier,
+            marginBottom: screenOverlay || compact ? 0 : splashLayout?.marginBottom ?? styles.bingoLogoBanner.marginBottom,
             opacity,
             transform: [{ translateY }, { scale }],
           },
@@ -1459,7 +1598,7 @@ function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = fal
             compact && styles.bingoLogoLightCompact,
           ]}
         />
-        <Animated.View style={[styles.bingoLogoPulseWrap, { transform: [{ scale: pulse }] }]}>
+        <Animated.View style={[styles.bingoLogoPulseWrap, { transform: [{ translateY: logoImageOffsetY }, { scale: pulse }] }]}>
           <Image
             source={logoSplash}
             resizeMode="contain"
@@ -1659,6 +1798,7 @@ function WinnerActionOverlay({
             mirrorCar && styles.winnerCarImageMirrored,
           ]}
           resizeMode="contain"
+          fadeDuration={0}
         />
       </Animated.View>
 
@@ -1927,6 +2067,99 @@ function ClaimScoreCard({
       >
         {player.tileCount}
       </Animated.Text>
+    </View>
+  );
+}
+
+function MiddlePlayerCar({ skin, mirrored = false, feedbackKey = 0 }) {
+  const playerColor = PLAYER_HEX[skin] ?? '#2E8B3F';
+  const carScale = useRef(new Animated.Value(1)).current;
+  const carLift = useRef(new Animated.Value(0)).current;
+  const sparkProgress = useRef(new Animated.Value(0)).current;
+  const [sparksVisible, setSparksVisible] = useState(false);
+  const [sparkSeed, setSparkSeed] = useState(1);
+
+  useEffect(() => {
+    if (!feedbackKey) {
+      return undefined;
+    }
+
+    carScale.setValue(1);
+    carLift.setValue(0);
+    sparkProgress.setValue(0);
+    setSparkSeed((current) => current + 1);
+    setSparksVisible(true);
+
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(carLift, {
+          toValue: -5,
+          duration: 95,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(carLift, {
+          toValue: 0,
+          friction: 7,
+          tension: 115,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.timing(carScale, {
+          toValue: 1.13,
+          duration: 105,
+          easing: Easing.out(Easing.back(1.2)),
+          useNativeDriver: true,
+        }),
+        Animated.spring(carScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.timing(sparkProgress, {
+        toValue: 1,
+        duration: 430,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const hideTimeout = setTimeout(() => {
+      setSparksVisible(false);
+    }, 470);
+
+    return () => clearTimeout(hideTimeout);
+  }, [carLift, carScale, feedbackKey, sparkProgress]);
+
+  const carTransform = [
+    { translateY: carLift },
+    ...(mirrored ? [{ scaleX: -1 }] : []),
+    { scale: carScale },
+  ];
+
+  return (
+    <View style={styles.middlePlayerCarWrap}>
+      <Animated.Image
+        source={PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.groen}
+        style={[
+          styles.middlePlayerCar,
+          {
+            transform: carTransform,
+          },
+        ]}
+        resizeMode="contain"
+      />
+      <ClaimSparkBurst
+        progress={sparkProgress}
+        color={mixHex(playerColor, '#ffffff', 0.18)}
+        visible={sparksVisible}
+        seed={sparkSeed}
+        width={170}
+        height={114}
+      />
     </View>
   );
 }
@@ -2899,6 +3132,9 @@ export default function BingoCardScreen({
   const [playerWinLines, setPlayerWinLines] = useState(() =>
     Array.from({ length: resolvedPlayerCount }, () => [])
   );
+  const [middleCarFeedbackKeys, setMiddleCarFeedbackKeys] = useState(() =>
+    Array.from({ length: resolvedPlayerCount }, () => 0)
+  );
   const [winnerColor, setWinnerColor] = useState(null);
   const [winnerIndex, setWinnerIndex] = useState(null);
   const [winnerModalVisible, setWinnerModalVisible] = useState(false);
@@ -2930,6 +3166,14 @@ export default function BingoCardScreen({
   const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
   const claimChecked = playerChecked[0] ?? Array(boardCellCount).fill(false);
   const claimOwners = playerClaimOwners[0] ?? Array(boardCellCount).fill(null);
+  const bingoInputLocked = !isClaimMode && (
+    winnerModalVisible
+    || Boolean(winnerColor)
+    || Boolean(pendingWinnerModalKey)
+    || celebrationSplashVisible
+    || celebrationConfettiVisible
+    || lineCelebrations.length > 0
+  );
   const claimScores = useMemo(() => {
     const scoreMap = new Map(displayPlayers.map((player) => [player.playerId, 0]));
 
@@ -2958,6 +3202,12 @@ export default function BingoCardScreen({
   );
   const claimGameFinished = isClaimMode && claimedTileCount === boardCellCount;
   const activeClaimPlayer = resolvedPlayers[0] ?? null;
+  const twoPlayerBingoSplashSkin = compactTwoPlayerLayout && celebrationSplashVisible && winnerIndex != null
+    ? resolvedPlayerColors[winnerIndex] ?? 'groen'
+    : null;
+  const twoPlayerBingoSplashLayout = twoPlayerBingoSplashSkin
+    ? getBingoBoardImageLayout(boardGridSize, false, twoPlayerBingoSplashSkin)
+    : null;
   const botClaimPlayers = useMemo(
     () => claimScores.filter((player) => isBotPlayer(player)),
     [claimScores]
@@ -3016,6 +3266,10 @@ export default function BingoCardScreen({
   function stopWinnerCelebrationForAction() {
     suppressWinnerCelebrationRestartRef.current = true;
     resetWinnerCelebrationState();
+  }
+
+  function keepWinnerOverlayForRouteAction() {
+    suppressWinnerCelebrationRestartRef.current = true;
   }
 
   function startWinnerRouteReveal(action, origin = {}, color = '#E03030') {
@@ -3475,7 +3729,18 @@ export default function BingoCardScreen({
   }
 
   function playBingoCheerSound() {
+    void stopGameBackgroundMusicForBingo();
     void playSoundEffect(BINGO_CHEER_SOUND, settings);
+  }
+
+  function triggerMiddleCarFeedback(playerIndex) {
+    if (!compactTwoPlayerLayout) {
+      return;
+    }
+
+    setMiddleCarFeedbackKeys((current) => current.map((key, index) => (
+      index === playerIndex ? key + 1 : key
+    )));
   }
 
   async function handlePress(playerIndex, index) {
@@ -3532,7 +3797,7 @@ export default function BingoCardScreen({
       return;
     }
 
-    if (winnerModalVisible) return;
+    if (bingoInputLocked) return;
 
     const sharedPlayerIndex = isCollectiveMode ? 0 : playerIndex;
     const currentBoardState = playerCheckedRef.current?.[sharedPlayerIndex] ?? [];
@@ -3574,6 +3839,10 @@ export default function BingoCardScreen({
 
     if (nextCheckedValue && !createsBingoLine) {
       playItemCheckSound();
+    }
+
+    if (nextCheckedValue) {
+      triggerMiddleCarFeedback(playerIndex);
     }
 
     setPlayerChecked((current) => {
@@ -3637,7 +3906,7 @@ export default function BingoCardScreen({
   }
 
   function handleUndo(playerIndex, index) {
-    if (winnerModalVisible) {
+    if (bingoInputLocked) {
       return;
     }
     if (liveSyncEnabled && liveConnectionOffline) {
@@ -3939,7 +4208,7 @@ export default function BingoCardScreen({
           compactTwoPlayerLayout && styles.playerSectionCompact,
         ]}
       >
-        {!isClaimMode && winLines.length > 0 && celebrationSplashVisible && winnerIndex === playerIndex && (
+        {!isClaimMode && !compactTwoPlayerLayout && winLines.length > 0 && celebrationSplashVisible && winnerIndex === playerIndex && (
           <BingoSplash
             color={checkedColor}
             fontFamily={fredoka}
@@ -3954,6 +4223,7 @@ export default function BingoCardScreen({
           <ImageBackground
             source={boardImage}
             resizeMode="contain"
+            fadeDuration={0}
             style={[
               styles.bingoBoardImageFrame,
               {
@@ -3988,9 +4258,9 @@ export default function BingoCardScreen({
     const fallbackSkin = activeClaimPlayer?.skin ?? resolvedPlayerColors[0] ?? 'groen';
     const fallbackColor = PLAYER_HEX[fallbackSkin] ?? '#2E8B3F';
     const boardImage = BINGO_BOARD_IMAGES.neutral;
-    const boardLayout = getBingoBoardImageLayout(boardGridSize, true, 'neutral');
+    const boardLayout = getClaimBingoBoardImageLayout(boardGridSize);
     const claimPlayerCount = Math.max(1, claimScores.length);
-    const claimColumns = claimPlayerCount >= 5 ? 3 : claimPlayerCount >= 3 ? 3 : claimPlayerCount;
+    const claimColumns = claimPlayerCount >= 5 ? 3 : claimPlayerCount === 4 ? 2 : claimPlayerCount >= 3 ? 3 : claimPlayerCount;
     const claimScoreGap = claimPlayerCount >= 5 ? 2 : 8;
     const claimScoreboardWidth = Math.min(width - OUTER_PADDING * 2, 430);
     const claimCardWidth = Math.floor((claimScoreboardWidth - claimScoreGap * (claimColumns - 1)) / claimColumns);
@@ -4033,6 +4303,7 @@ export default function BingoCardScreen({
           <ImageBackground
             source={boardImage}
             resizeMode="contain"
+            fadeDuration={0}
             style={[
               styles.bingoBoardImageFrame,
               styles.claimBoardImageFrame,
@@ -4150,6 +4421,7 @@ export default function BingoCardScreen({
     <ImageBackground
       source={require('../assets/images/backgrounds/bingo-original-background.png')}
       resizeMode="cover"
+      fadeDuration={0}
       style={styles.container}
     >
       <View style={styles.backgroundWash} />
@@ -4236,15 +4508,14 @@ export default function BingoCardScreen({
           <View style={styles.twoPlayerStack}>
             {renderBoard(0)}
             <View style={styles.middleControlRow}>
-              <Image
-                source={PLAYER_IMAGES[resolvedPlayerColors[0]] ?? PLAYER_IMAGES.groen}
-                style={[styles.middlePlayerCar, styles.middlePlayerCarMirrored]}
-                resizeMode="contain"
+              <MiddlePlayerCar
+                skin={resolvedPlayerColors[0] ?? 'groen'}
+                mirrored
+                feedbackKey={middleCarFeedbackKeys[0] ?? 0}
               />
-              <Image
-                source={PLAYER_IMAGES[resolvedPlayerColors[1]] ?? PLAYER_IMAGES.blauw}
-                style={styles.middlePlayerCar}
-                resizeMode="contain"
+              <MiddlePlayerCar
+                skin={resolvedPlayerColors[1] ?? 'blauw'}
+                feedbackKey={middleCarFeedbackKeys[1] ?? 0}
               />
             </View>
             {renderBoard(1)}
@@ -4255,6 +4526,18 @@ export default function BingoCardScreen({
           </View>
         )}
       </View>
+      {twoPlayerBingoSplashSkin && twoPlayerBingoSplashLayout ? (
+        <View pointerEvents="none" style={styles.twoPlayerBingoSplashLayer}>
+          <BingoSplash
+            color={PLAYER_HEX[twoPlayerBingoSplashSkin] ?? '#2E8B3F'}
+            fontFamily={fredoka}
+            skin={twoPlayerBingoSplashSkin}
+            visibleKey={`two-player:${winnerIndex}:${twoPlayerBingoSplashSkin}`}
+            width={twoPlayerBingoSplashLayout.gridPixelSize}
+            screenOverlay
+          />
+        </View>
+      ) : null}
       {winnerModalVisible && !isClaimMode ? (
         <WinnerFocusBackdrop />
       ) : null}
@@ -4272,17 +4555,19 @@ export default function BingoCardScreen({
             canReplay={canReplay}
             settingsLabel={settingsLabel}
             onReplay={() => {
-              stopWinnerCelebrationForAction();
-              onReplay?.();
+              keepWinnerOverlayForRouteAction();
+              startWinnerRouteReveal((revealOrigin) => {
+                onReplay?.(revealOrigin);
+              }, { x: width / 2, y: height / 2 }, GAME_BACK_CONFIRM_REVEAL_COLOR);
             }}
             onSettings={(origin) => {
-              stopWinnerCelebrationForAction();
+              keepWinnerOverlayForRouteAction();
               startWinnerRouteReveal((revealOrigin) => {
                 onSettings?.(revealOrigin);
               }, origin, '#1A7BD4');
             }}
             onMenu={(origin) => {
-              stopWinnerCelebrationForAction();
+              keepWinnerOverlayForRouteAction();
               startWinnerRouteReveal((revealOrigin) => {
                 onMenu?.(revealOrigin);
               }, origin, '#F5C400');
@@ -4352,6 +4637,7 @@ const styles = StyleSheet.create({
   twoPlayerStack: {
     flex: 1,
     justifyContent: 'center',
+    paddingBottom: 4,
   },
   singlePlayerStack: {
     flex: 1,
@@ -4464,7 +4750,7 @@ const styles = StyleSheet.create({
   },
   playerSectionCompact: {
     justifyContent: 'center',
-    marginBottom: -6,
+    marginBottom: -4,
   },
   boardShell: {
     alignItems: 'center',
@@ -4508,9 +4794,23 @@ const styles = StyleSheet.create({
     zIndex: 40,
     elevation: 40,
   },
+  bingoLogoBannerScreen: {
+    height: IS_TABLET_GAME ? Math.round(430 * Math.min(GAME_TABLET_SCALE, 1.18)) : 354,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    zIndex: 40,
+    elevation: 40,
+  },
   bingoLogoBannerCompact: {
-    height: IS_TABLET_GAME ? 292 : 228,
-    marginBottom: IS_TABLET_GAME ? -64 : -42,
+    position: 'absolute',
+    top: IS_TABLET_GAME ? -34 : -24,
+    height: IS_TABLET_GAME ? 248 : 192,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    zIndex: 40,
+    elevation: 40,
   },
   bingoLogoPulseWrap: {
     width: '100%',
@@ -4560,22 +4860,36 @@ const styles = StyleSheet.create({
     fontSize: 35,
     lineHeight: 42,
   },
+  twoPlayerBingoSplashLayer: {
+    position: 'absolute',
+    top: IS_TABLET_GAME ? 40 : 28,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 34,
+    elevation: 34,
+  },
   middleControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 18,
-    minHeight: 52,
-    marginTop: -8,
-    marginBottom: -12,
+    gap: 14,
+    height: TWO_PLAYER_MIDDLE_ROW_HEIGHT,
+    marginTop: 3,
+    marginBottom: 3,
+  },
+  middlePlayerCarWrap: {
+    width: 170,
+    height: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    transform: [{ translateY: 7 }],
   },
   middlePlayerCar: {
-    width: 104,
-    height: 76,
-    marginTop: 10,
-  },
-  middlePlayerCarMirrored: {
-    transform: [{ scaleX: -1 }],
+    width: 170,
+    height: 114,
   },
   gridWrapper: {
     flexDirection: 'row',

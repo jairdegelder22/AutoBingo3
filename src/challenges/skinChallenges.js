@@ -45,7 +45,7 @@ export const SKIN_CHALLENGES = {
   koe: {
     skin: 'koe',
     title: 'Koe',
-    description: 'Spot in totaal 3 keer een koe in platteland-potten.',
+    description: 'Spot in totaal 3 keer een koe (thema: Platteland).',
     target: 3,
     kind: 'count',
   },
@@ -59,21 +59,21 @@ export const SKIN_CHALLENGES = {
   politie: {
     skin: 'politie',
     title: 'Politie',
-    description: 'Spot in totaal 3 keer een politieauto in stad-potten.',
+    description: 'Spot in totaal 3 keer een politieauto (thema: Stad).',
     target: 3,
     kind: 'count',
   },
   ambulance: {
     skin: 'ambulance',
     title: 'Ambulance',
-    description: 'Spot in totaal 3 keer een ambulance in stad-potten.',
+    description: 'Spot in totaal 3 keer een ambulance (thema: Stad).',
     target: 3,
     kind: 'count',
   },
   brandweer: {
     skin: 'brandweer',
     title: 'Brandweer',
-    description: 'Spot in totaal 3 keer een brandweerauto in stad-potten.',
+    description: 'Spot in totaal 3 keer een brandweerauto (thema: Stad).',
     target: 3,
     kind: 'count',
   },
@@ -101,21 +101,21 @@ export const SKIN_CHALLENGES = {
   kat: {
     skin: 'kat',
     title: 'Kat',
-    description: 'Spot in totaal 3 keer een kat in platteland-potten.',
+    description: 'Spot in totaal 3 keer een kat (thema: Platteland).',
     target: 3,
     kind: 'count',
   },
   hond: {
     skin: 'hond',
     title: 'Hond',
-    description: 'Spot in totaal 3 keer een hond in platteland-potten.',
+    description: 'Spot in totaal 3 keer een hond (thema: Platteland).',
     target: 3,
     kind: 'count',
   },
   hartjes: {
     skin: 'hartjes',
     title: 'Hartjes',
-    description: 'Speel 1 lokale pot met 2 spelers.',
+    description: 'Speel 1 bingo potje met 2 spelers op 1 apparaat.',
     target: 1,
     kind: 'count',
   },
@@ -202,6 +202,18 @@ export async function saveSkinChallengeProgress(progress) {
   const normalizedProgress = normalizeProgress(progress);
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedProgress));
   return normalizedProgress;
+}
+
+export async function unlockAllSkinChallenges() {
+  const nextProgress = createDefaultProgress();
+
+  Object.values(SKIN_CHALLENGES).forEach((challenge) => {
+    nextProgress.challenges[challenge.skin] = challenge.kind === 'set'
+      ? { completed: [...RAINBOW_COLORS] }
+      : { count: challenge.target };
+  });
+
+  return saveSkinChallengeProgress(nextProgress);
 }
 
 export function getChallengeProgressValue(progress, skin) {

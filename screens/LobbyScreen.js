@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
   Easing,
   Image,
   ImageBackground,
+  InteractionManager,
   Modal,
   PanResponder,
   Pressable,
@@ -37,11 +38,13 @@ import { getPlayerSurfaceColors } from '../src/utils/playerColorStyles';
 import GlossyButton from '../src/components/GlossyButton';
 import PopupPanel from '../src/components/PopupPanel';
 import CircularReveal from '../components/CircularReveal';
+import WarmupImages from '../src/components/WarmupImages';
 import { getThemeCardImage } from '../assets/images/theme-cards/themeCardImages';
 import { THEMES } from './themeCatalog';
 import { getResponsiveMetrics } from '../src/utils/responsive';
 import useOnlineConnectionStatus from '../src/hooks/useOnlineConnectionStatus';
 import ConnectionWarningOverlay from '../src/components/ConnectionWarningOverlay';
+import { WAITING_ROOM_ASSETS } from '../src/assets/preloadManifest';
 import {
   SKIN_CHALLENGES,
   getChallengeProgressValue,
@@ -782,6 +785,10 @@ function SkinCarouselModal({
             containerStyle={styles.carouselWrap}
             flatListProps={{ initialScrollIndex: 0 }}
             renderCard={({ item, isFocused }) => (
+              (() => {
+                const itemLocked = isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item);
+
+                return (
               <View
                 style={[
                   styles.carouselCardShell,
@@ -795,8 +802,10 @@ function SkinCarouselModal({
                     takenSkins.includes(item) && item !== selectedSkin ? styles.carouselCardTaken : null,
                   ]}
                 >
-                  <PlayerAvatar skin={item} size={isTablet ? 318 : CAROUSEL_CAR_SIZE} />
-                  {isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item) ? (
+                  <View style={itemLocked ? styles.challengeSkinLockedCar : null}>
+                    <PlayerAvatar skin={item} size={isTablet ? 318 : CAROUSEL_CAR_SIZE} />
+                  </View>
+                  {itemLocked ? (
                     <Image
                       source={CHALLENGE_SKIN_LOCK_IMAGE}
                       style={styles.challengeSkinLock}
@@ -805,6 +814,8 @@ function SkinCarouselModal({
                   ) : null}
                 </View>
               </View>
+                );
+              })()
             )}
           />
 
@@ -988,6 +999,8 @@ export default function LobbyScreen({ navigation, route }) {
   const [startConfirmVisible, setStartConfirmVisible] = useState(false);
   const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
   const [gameSettingsVisible, setGameSettingsVisible] = useState(false);
+  const [lobbyLayoutReady, setLobbyLayoutReady] = useState(false);
+  const [lobbyAssetsReady, setLobbyAssetsReady] = useState(false);
   const [draftGameSettings, setDraftGameSettings] = useState(() => ({
     thema: config?.thema ?? 'snelweg',
     modus: config?.modus ?? 'klassiek',
@@ -995,6 +1008,31 @@ export default function LobbyScreen({ navigation, route }) {
     diagonaal: typeof config?.diagonaal === 'boolean' ? config.diagonaal : true,
     kaartOpzet: config?.kaartOpzet ?? 'zelfde',
   }));
+  const handleLobbyWarmupReady = useCallback(() => {
+    setLobbyAssetsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!lobbyLayoutReady || !lobbyAssetsReady) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!cancelled) {
+            navigation.markRouteReady?.();
+          }
+        });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lobbyAssetsReady, lobbyLayoutReady, navigation]);
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState(null);
   const [skinPickerMounted, setSkinPickerMounted] = useState(false);
@@ -1843,7 +1881,10 @@ export default function LobbyScreen({ navigation, route }) {
         originX: screenWidth / 2,
         originY: screenHeight / 2,
         routeName: 'Spel',
-        pauseMs: 220,
+        pauseMs: 80,
+        minSolidMs: 360,
+        settleMs: 120,
+        routeReadySettleMs: 160,
         transitionKey,
       },
     });
@@ -1874,7 +1915,10 @@ export default function LobbyScreen({ navigation, route }) {
         originX: screenWidth / 2,
         originY: screenHeight / 2,
         routeName: 'Spel',
-        pauseMs: 220,
+        pauseMs: 80,
+        minSolidMs: 360,
+        settleMs: 120,
+        routeReadySettleMs: 160,
         transitionKey,
       },
     });
@@ -1998,10 +2042,19 @@ export default function LobbyScreen({ navigation, route }) {
 
   return (
     <>
+      <WarmupImages
+        assets={WAITING_ROOM_ASSETS}
+        timeoutMs={null}
+        imageSize={128}
+        batchSize={16}
+        onReady={handleLobbyWarmupReady}
+      />
       <ScreenLayout
+        onLayout={() => setLobbyLayoutReady(true)}
         title=""
         scroll={false}
         backgroundImage={LOBBY_ROAD_BACKGROUND_IMAGE}
+        footerTransparent
         footer={(
           <View style={styles.lobbyActionStack}>
             <GlossyButton
@@ -2574,10 +2627,16 @@ const styles = StyleSheet.create({
   },
   challengeSkinLock: {
     position: 'absolute',
-    right: 18,
-    bottom: 18,
-    width: 54,
-    height: 54,
+    left: '50%',
+    top: '50%',
+    width: 96,
+    height: 96,
+    marginLeft: -48,
+    marginTop: -48,
+    zIndex: 4,
+  },
+  challengeSkinLockedCar: {
+    opacity: 0.34,
   },
   carouselCardTaken: {
     opacity: 0.32,
