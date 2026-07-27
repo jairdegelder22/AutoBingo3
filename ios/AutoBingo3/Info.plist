@@ -5,9 +5,13 @@
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
     <key>CFBundleDevelopmentRegion</key>
-    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <string>nl</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+      <string>nl</string>
+    </array>
     <key>CFBundleDisplayName</key>
-    <string>AutoBingo3</string>
+    <string>AutoBingo</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>

@@ -1,4 +1,4 @@
-import { Alert, Animated, Image, ImageBackground, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, Image, ImageBackground, Linking, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePremium } from './PremiumContext';
 import { hasPremiumEntitlement } from './revenueCatClient';
@@ -6,6 +6,7 @@ import * as Haptics from '../settings/haptics';
 import { getResponsiveMetrics } from '../utils/responsive';
 import WarmupImages from '../components/WarmupImages';
 import { PREMIUM_MODAL_ASSETS } from '../assets/preloadManifest';
+import { LEGAL_URLS } from '../legal/legalConfig';
 
 const PREMIUM_MENU_IMAGE = require('../../assets/images/premium/premium-menu.png');
 const NO_ADS_IMAGE = require('../../assets/images/premium/benefits/no-ads-user.png');
@@ -199,6 +200,14 @@ export default function PremiumPaywallModal({
       showPurchaseMessage('Herstellen lukt nu niet. Probeer het zo opnieuw.');
     } finally {
       setBusyPackageId(null);
+    }
+  }
+
+  async function openLegalUrl(url) {
+    try {
+      await Linking.openURL(url);
+    } catch (_error) {
+      Alert.alert('Link openen lukt niet', 'Probeer het later opnieuw.');
     }
   }
 
@@ -399,7 +408,7 @@ export default function PremiumPaywallModal({
             style={({ pressed }) => [
               styles.restoreButton,
               {
-                top: scaled(620),
+                top: scaled(610),
                 left: scaled(106),
                 right: scaled(106),
                 paddingHorizontal: scaled(12),
@@ -414,6 +423,38 @@ export default function PremiumPaywallModal({
               {busyPackageId === 'restore' ? 'Laden...' : 'Aankoop herstellen'}
             </Text>
           </Pressable>
+
+          <View
+            style={[
+              styles.legalLinks,
+              {
+                top: scaled(636),
+                left: scaled(82),
+                right: scaled(82),
+                gap: scaled(8),
+              },
+            ]}
+          >
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                void openLegalUrl(LEGAL_URLS.terms);
+              }}
+              hitSlop={6}
+            >
+              <Text style={[styles.legalLinkText, { fontSize: scaled(8) }]}>Voorwaarden</Text>
+            </Pressable>
+            <Text style={[styles.legalLinkSeparator, { fontSize: scaled(8) }]}>•</Text>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                void openLegalUrl(LEGAL_URLS.privacy);
+              }}
+              hitSlop={6}
+            >
+              <Text style={[styles.legalLinkText, { fontSize: scaled(8) }]}>Privacybeleid</Text>
+            </Pressable>
+          </View>
         </ImageBackground>
       </View>
     </Modal>
@@ -551,6 +592,25 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255, 238, 185, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 1,
+  },
+  legalLinks: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legalLinkText: {
+    color: '#8C3A00',
+    fontFamily: 'FredokaOne_400Regular',
+    letterSpacing: 0,
+    textDecorationLine: 'underline',
+    textShadowColor: 'rgba(255, 238, 185, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  legalLinkSeparator: {
+    color: '#8C3A00',
+    fontFamily: 'FredokaOne_400Regular',
   },
   ctaButton: {
     position: 'absolute',

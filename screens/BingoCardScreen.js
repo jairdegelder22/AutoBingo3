@@ -32,6 +32,7 @@ import {
   playSoundEffect,
   preloadPooledSoundEffect,
   preloadSoundEffect,
+  stopSoundEffect,
 } from '../src/audio/soundEffects';
 import { stopGameBackgroundMusicForBingo } from '../src/audio/backgroundMusic';
 
@@ -102,6 +103,8 @@ const TWO_PLAYER_VERTICAL_RESERVE = TOP_CONTROLS_HEIGHT + OUTER_PADDING + 58;
 const BINGO_LINE_DRAW_DURATION_MS = 1450;
 const BINGO_CHEER_SOUND = 'bingoCheer';
 const BINGO_ITEM_CHECK_SOUND = 'bingoItemCheck';
+const HOLD_DOWN_TICKING_SOUND = 'holdDownTicking';
+const HOLD_DOWN_TICKING_VOLUME_MULTIPLIER = 0.55;
 const BINGO_ITEM_CHECK_SOUND_POOL_SIZE = 16;
 const BINGO_LINE_PITCH_STEP = Math.pow(2, 1 / 12);
 const COLOR_BINGO_SPLASH_IMAGE_LIFT_Y = IS_TABLET_GAME ? -28 : -22;
@@ -758,6 +761,7 @@ function BingoCell({
   suppressCheckPulseKey,
   checkedFillInset = 1.5,
 }) {
+  const { settings } = useAppSettings();
   const scale = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
   const sparkProgress = useRef(new Animated.Value(0)).current;
@@ -765,6 +769,7 @@ function BingoCell({
   const undoProgress = useRef(new Animated.Value(0)).current;
   const [sparksVisible, setSparksVisible] = useState(false);
   const [undoVisible, setUndoVisible] = useState(false);
+  const [undoCompleted, setUndoCompleted] = useState(false);
   const previousChecked = useRef(checked);
   const previousCelebrationPulseKey = useRef(null);
   const previousSuppressCheckPulseKey = useRef(null);
@@ -860,6 +865,7 @@ function BingoCell({
 
   useEffect(() => {
     if (!previousChecked.current && checked) {
+      setUndoCompleted(false);
       const shouldSuppressCheckPulse = Boolean(suppressCheckPulseKey)
         && suppressCheckPulseKey !== previousSuppressCheckPulseKey.current;
 
@@ -880,6 +886,7 @@ function BingoCell({
         runCelebrationPulse({ scalePeak: 1.12, triggerHaptic: false });
       }
     } else if (!checked) {
+      setUndoCompleted(false);
       fillRevealProgress.stopAnimation();
       fillRevealProgress.setValue(0);
     }
@@ -910,6 +917,7 @@ function BingoCell({
       clearInterval(undoPulseIntervalRef.current);
       undoPulseIntervalRef.current = null;
     }
+    void stopSoundEffect(HOLD_DOWN_TICKING_SOUND);
     scale.setValue(1);
     rotate.setValue(0);
     fillRevealProgress.stopAnimation();
@@ -961,8 +969,10 @@ function BingoCell({
       clearInterval(undoPulseIntervalRef.current);
       undoPulseIntervalRef.current = null;
     }
+    void stopSoundEffect(HOLD_DOWN_TICKING_SOUND);
 
     if (reset) {
+      setUndoCompleted(false);
       undoProgress.stopAnimation();
       Animated.timing(undoProgress, {
         toValue: 0,
@@ -988,7 +998,11 @@ function BingoCell({
     rotate.setValue(0);
     undoProgress.stopAnimation();
     undoProgress.setValue(0);
+    setUndoCompleted(false);
     setUndoVisible(true);
+    void playSoundEffect(HOLD_DOWN_TICKING_SOUND, settings, {
+      volumeMultiplier: HOLD_DOWN_TICKING_VOLUME_MULTIPLIER,
+    });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Animated.spring(scale, {
       toValue: 1.055,
@@ -1044,12 +1058,14 @@ function BingoCell({
         clearInterval(undoPulseIntervalRef.current);
         undoPulseIntervalRef.current = null;
       }
+      void stopSoundEffect(HOLD_DOWN_TICKING_SOUND, { reset: false });
 
       if (!finished) {
         return;
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setUndoCompleted(true);
       setUndoVisible(false);
       undoProgress.setValue(0);
       Animated.sequence([
@@ -1178,13 +1194,13 @@ function BingoCell({
           cellSize={cellSize}
           borderRadius={checkedFillBorderRadius}
           inset={checkedFillInset}
-          visible={checked && !checkedGradient}
+          visible={checked && !checkedGradient && !undoCompleted}
         />
         <ActiveCollectiveCellGradient
           gradient={checkedGradient}
           cellSize={cellSize}
           borderRadius={cellBorderRadius}
-          visible={Boolean(checked && checkedGradient)}
+          visible={Boolean(checked && checkedGradient && !undoCompleted)}
         />
         {undoVisible ? (
           <View
@@ -3653,6 +3669,7 @@ export default function BingoCardScreen({
   useEffect(() => {
     preloadPooledSoundEffect(BINGO_ITEM_CHECK_SOUND, BINGO_ITEM_CHECK_SOUND_POOL_SIZE);
     preloadSoundEffect(BINGO_CHEER_SOUND);
+    preloadSoundEffect(HOLD_DOWN_TICKING_SOUND);
   }, []);
 
   useEffect(() => {

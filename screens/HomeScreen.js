@@ -1540,10 +1540,12 @@ export default function HomeScreen({
     origin: { x: windowWidth / 2, y: 360 },
   });
   const tabWidth = windowWidth / NAV_ITEMS.length;
-  const driverWarningIconSize = Math.min(
-    DRIVER_WARNING_ICON_MAX_SIZE,
-    windowWidth * DRIVER_WARNING_ICON_WIDTH_RATIO
-  );
+  const driverWarningIconSize = isTablet
+    ? Math.min(372, Math.max(326, windowWidth * 0.395))
+    : Math.min(
+        DRIVER_WARNING_ICON_MAX_SIZE,
+        windowWidth * DRIVER_WARNING_ICON_WIDTH_RATIO
+      );
   const navMetrics = {
     navHeight: isTablet ? 154 : 118,
     navHighlightHeight: isTablet ? 176 : 136,
@@ -3070,7 +3072,7 @@ export default function HomeScreen({
                     styles.actionsArea,
                     {
                       height: actionExpandedHeight,
-                      transform: [{ translateY: isTablet ? -52 : -80 }],
+                      transform: [{ translateY: isTablet ? -92 : -80 }],
                     },
                   ]}
                 >
@@ -3100,7 +3102,7 @@ export default function HomeScreen({
                           styles.actionImageBadge,
                           isTablet && {
                             top: 8,
-                            transform: [{ scale: Math.min(tabletScale, 1.18) }],
+                            transform: [{ scale: Math.min(tabletScale, 1.34) }],
                           },
                         ]}
                       >
@@ -3159,7 +3161,7 @@ export default function HomeScreen({
                             transform: isTablet
                               ? [
                                   { translateY: onlineCarsTranslateY },
-                                  { scale: Math.min(tabletScale, 1.16) },
+                                  { scale: Math.min(tabletScale, 1.32) },
                                 ]
                               : [{ translateY: onlineCarsTranslateY }],
                           },
@@ -3625,14 +3627,14 @@ export default function HomeScreen({
             <ImageBackground
               source={DRIVER_WARNING_MENU_IMAGE}
               resizeMode="contain"
-              style={styles.driverWarningMenu}
+              style={[styles.driverWarningMenu, isTablet && styles.driverWarningMenuTablet]}
               imageStyle={styles.driverWarningMenuImage}
             >
-              <Text style={[styles.driverWarningTitle, { fontFamily: 'FredokaOne_400Regular' }]}>
+              <Text style={[styles.driverWarningTitle, isTablet && styles.driverWarningTitleTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
                 Rij veilig!
               </Text>
-              <View style={styles.driverWarningBody}>
-                <Text style={[styles.driverWarningText, { fontFamily: 'FredokaOne_400Regular' }]}>
+              <View style={[styles.driverWarningBody, isTablet && styles.driverWarningBodyTablet]}>
+                <Text style={[styles.driverWarningText, isTablet && styles.driverWarningTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
                   Gebruik AutoBingo niet als bestuurder
                 </Text>
                 <Image
@@ -3640,13 +3642,14 @@ export default function HomeScreen({
                   resizeMode="contain"
                   style={[
                     styles.driverWarningIcon,
+                    isTablet && styles.driverWarningIconTablet,
                     {
                       width: driverWarningIconSize,
                       height: driverWarningIconSize,
                     },
                   ]}
                 />
-                <Text style={[styles.driverWarningFooterText, { fontFamily: 'FredokaOne_400Regular' }]}>
+                <Text style={[styles.driverWarningFooterText, isTablet && styles.driverWarningFooterTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
                   De app is bedoeld voor passagiers
                 </Text>
               </View>
@@ -3670,9 +3673,9 @@ export default function HomeScreen({
                 <GlossyButton
                   label="Ik ben geen bestuurder"
                   variant="green"
-                  heightOverride={54}
-                  horizontalPadding={22}
-                  labelFontScale={0.78}
+                  heightOverride={isTablet ? 66 : 54}
+                  horizontalPadding={isTablet ? 34 : 22}
+                  labelFontScale={isTablet ? 0.88 : 0.78}
                   disabled={!driverWarningButtonReady}
                   onPress={completeDriverWarning}
                 />
@@ -5190,6 +5193,11 @@ const styles = StyleSheet.create({
     aspectRatio: 1122 / 1402,
     transform: [{ translateY: -58 }],
   },
+  driverWarningMenuTablet: {
+    width: '68%',
+    maxWidth: 560,
+    transform: [{ translateY: -52 }],
+  },
   driverWarningMenuImage: {
     width: '100%',
     height: '100%',
@@ -5210,6 +5218,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 3,
   },
+  driverWarningTitleTablet: {
+    fontSize: 38,
+    lineHeight: 44,
+  },
   driverWarningBody: {
     position: 'absolute',
     top: '16%',
@@ -5217,6 +5229,11 @@ const styles = StyleSheet.create({
     right: '11%',
     bottom: '8%',
     alignItems: 'center',
+  },
+  driverWarningBodyTablet: {
+    top: '16.8%',
+    left: '10%',
+    right: '10%',
   },
   driverWarningText: {
     marginTop: 10,
@@ -5226,9 +5243,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0,
   },
+  driverWarningTextTablet: {
+    marginTop: 18,
+    fontSize: 24,
+    lineHeight: 31,
+  },
   driverWarningIcon: {
     marginTop: DRIVER_WARNING_ICON_MARGIN_TOP,
     marginBottom: DRIVER_WARNING_ICON_MARGIN_BOTTOM,
+  },
+  driverWarningIconTablet: {
+    marginTop: 18,
+    marginBottom: 16,
   },
   driverWarningFooterText: {
     fontSize: 18,
@@ -5236,6 +5262,10 @@ const styles = StyleSheet.create({
     color: '#111111',
     textAlign: 'center',
     letterSpacing: 0,
+  },
+  driverWarningFooterTextTablet: {
+    fontSize: 24,
+    lineHeight: 31,
   },
   driverWarningButtonWrap: {
     position: 'absolute',

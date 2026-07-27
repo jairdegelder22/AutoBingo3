@@ -191,15 +191,17 @@ function AudioAwareAdProvider({ children }) {
   );
 }
 
-function DriverWarningBootGate({ width, onComplete }) {
+function DriverWarningBootGate({ width, isTablet, onComplete }) {
   const warningFade = useRef(new Animated.Value(0)).current;
   const buttonFade = useRef(new Animated.Value(0)).current;
   const dismissedRef = useRef(false);
   const [buttonReady, setButtonReady] = useState(false);
-  const iconSize = Math.min(
-    DRIVER_WARNING_BOOT_ICON_MAX_SIZE,
-    width * DRIVER_WARNING_BOOT_ICON_WIDTH_RATIO
-  );
+  const iconSize = isTablet
+    ? Math.min(372, Math.max(326, width * 0.395))
+    : Math.min(
+        DRIVER_WARNING_BOOT_ICON_MAX_SIZE,
+        width * DRIVER_WARNING_BOOT_ICON_WIDTH_RATIO
+      );
 
   useEffect(() => {
     const popupTimer = setTimeout(() => {
@@ -263,6 +265,7 @@ function DriverWarningBootGate({ width, onComplete }) {
       <Animated.View
         style={[
           styles.driverWarningBootContent,
+          isTablet && styles.driverWarningBootContentTablet,
           {
             opacity: warningFade,
             transform: [
@@ -282,11 +285,11 @@ function DriverWarningBootGate({ width, onComplete }) {
           style={styles.driverWarningBootMenu}
           imageStyle={styles.driverWarningBootMenuImage}
         >
-          <Text style={[styles.driverWarningBootTitle, { fontFamily: 'FredokaOne_400Regular' }]}>
+          <Text style={[styles.driverWarningBootTitle, isTablet && styles.driverWarningBootTitleTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
             Rij veilig!
           </Text>
-          <View style={styles.driverWarningBootBody}>
-            <Text style={[styles.driverWarningBootText, { fontFamily: 'FredokaOne_400Regular' }]}>
+          <View style={[styles.driverWarningBootBody, isTablet && styles.driverWarningBootBodyTablet]}>
+            <Text style={[styles.driverWarningBootText, isTablet && styles.driverWarningBootTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
               Gebruik AutoBingo niet als bestuurder
             </Text>
             <Image
@@ -294,13 +297,14 @@ function DriverWarningBootGate({ width, onComplete }) {
               resizeMode="contain"
               style={[
                 styles.driverWarningBootIcon,
+                isTablet && styles.driverWarningBootIconTablet,
                 {
                   width: iconSize,
                   height: iconSize,
                 },
               ]}
             />
-            <Text style={[styles.driverWarningBootFooterText, { fontFamily: 'FredokaOne_400Regular' }]}>
+            <Text style={[styles.driverWarningBootFooterText, isTablet && styles.driverWarningBootFooterTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
               De app is bedoeld voor passagiers
             </Text>
           </View>
@@ -324,9 +328,9 @@ function DriverWarningBootGate({ width, onComplete }) {
             <GlossyButton
               label="Ik ben geen bestuurder"
               variant="green"
-              heightOverride={54}
-              horizontalPadding={22}
-              labelFontScale={0.78}
+              heightOverride={isTablet ? 66 : 54}
+              horizontalPadding={isTablet ? 34 : 22}
+              labelFontScale={isTablet ? 0.88 : 0.78}
               onPress={handleConfirm}
             />
           </Animated.View>
@@ -877,6 +881,7 @@ export default function App() {
       {shouldShowDriverWarning ? (
         <DriverWarningBootGate
           width={width}
+          isTablet={isTablet}
           onComplete={() => setDriverWarningComplete(true)}
         />
       ) : null}
@@ -938,6 +943,10 @@ const styles = StyleSheet.create({
     maxWidth: 430,
     aspectRatio: 1122 / 1402,
   },
+  driverWarningBootContentTablet: {
+    width: '68%',
+    maxWidth: 560,
+  },
   driverWarningBootMenu: {
     width: '100%',
     height: '100%',
@@ -962,6 +971,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 3,
   },
+  driverWarningBootTitleTablet: {
+    fontSize: 38,
+    lineHeight: 44,
+  },
   driverWarningBootBody: {
     position: 'absolute',
     top: '16%',
@@ -969,6 +982,11 @@ const styles = StyleSheet.create({
     right: '11%',
     bottom: '8%',
     alignItems: 'center',
+  },
+  driverWarningBootBodyTablet: {
+    top: '16.8%',
+    left: '10%',
+    right: '10%',
   },
   driverWarningBootText: {
     marginTop: 10,
@@ -978,9 +996,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0,
   },
+  driverWarningBootTextTablet: {
+    marginTop: 18,
+    fontSize: 24,
+    lineHeight: 31,
+  },
   driverWarningBootIcon: {
     marginTop: 10,
     marginBottom: 5,
+  },
+  driverWarningBootIconTablet: {
+    marginTop: 18,
+    marginBottom: 16,
   },
   driverWarningBootFooterText: {
     fontSize: 18,
@@ -988,6 +1015,10 @@ const styles = StyleSheet.create({
     color: '#111111',
     textAlign: 'center',
     letterSpacing: 0,
+  },
+  driverWarningBootFooterTextTablet: {
+    fontSize: 24,
+    lineHeight: 31,
   },
   driverWarningBootButtonWrap: {
     position: 'absolute',

@@ -7,6 +7,7 @@ const SOUND_EFFECTS = {
   gameSettingsKlapIn: require('../../assets/audio/game-settings-klap-in.mp3'),
   gameSettingsKlapUit: require('../../assets/audio/game-settings-klap-uit.mp3'),
   glossyButtonClick: require('../../assets/audio/glossy-button-click.mp3'),
+  holdDownTicking: require('../../assets/audio/hold-down-ticking.mp3'),
   onlineHornMode: require('../../assets/audio/online-horn-mode.mp3'),
   playHornHonk: require('../../assets/audio/play-horn-honk.wav'),
   scrollGeluid: require('../../assets/audio/scroll-geluid.wav'),
@@ -127,6 +128,7 @@ export async function playSoundEffect(soundName, settings, options = {}) {
     }
 
     applyPlaybackOptions(player, settings, options);
+    player.loop = options.loop === true;
     await player.seekTo(0);
     player.play();
   } catch (_error) {
@@ -152,5 +154,24 @@ export async function playPooledSoundEffect(soundName, settings, poolSize = 6, o
     player.play();
   } catch (_error) {
     // Keep scrolling smooth even if audio is unavailable on a device.
+  }
+}
+
+export async function stopSoundEffect(soundName, { reset = true } = {}) {
+  try {
+    const player = getPlayer(soundName);
+
+    if (!player) {
+      return;
+    }
+
+    player.pause();
+    player.loop = false;
+
+    if (reset) {
+      await player.seekTo(0);
+    }
+  } catch (_error) {
+    // Keep UI actions responsive even if audio is unavailable on a device.
   }
 }

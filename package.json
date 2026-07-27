@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "node scripts/pin-google-mobile-ads-android-sdk.js",
+    "eas-build-post-install": "node scripts/pin-google-mobile-ads-android-sdk.js"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka-one": "^0.2.3",

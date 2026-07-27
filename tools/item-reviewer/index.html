@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AutoBingo Item Reviewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="review-panel" aria-label="Item reviewer">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">AutoBingo</p>
+            <h1>Item Reviewer</h1>
+          </div>
+          <div class="progress-box" aria-live="polite">
+            <strong id="progressText">0 / 0</strong>
+            <span id="savedText">Nog niets opgeslagen</span>
+          </div>
+        </header>
+
+        <div class="progress-track" aria-hidden="true">
+          <div id="progressFill"></div>
+        </div>
+
+        <section class="item-stage">
+          <button id="prevButton" class="nav-button" type="button" aria-label="Vorig item">‹</button>
+          <div class="image-wrap">
+            <img id="itemImage" alt="" />
+          </div>
+          <button id="nextButton" class="nav-button" type="button" aria-label="Volgend item">›</button>
+        </section>
+
+        <section class="details">
+          <div class="field-row">
+            <label for="itemName">Naam</label>
+            <input id="itemName" type="text" autocomplete="off" spellcheck="false" />
+          </div>
+          <p id="fileName" class="file-name"></p>
+          <div id="imageVariants" class="variant-row" aria-label="Afbeeldingvarianten"></div>
+        </section>
+
+        <section class="theme-section" aria-label="Thema's">
+          <div id="removedNotice" class="removed-notice" hidden>
+            Dit item wordt straks niet meegenomen in de catalogus.
+          </div>
+          <div id="themeButtons" class="theme-grid"></div>
+          <div class="exclude-block">
+            <p class="section-label">Uitsluiten voor</p>
+            <div id="excludeButtons" class="theme-grid"></div>
+          </div>
+        </section>
+
+        <footer class="actions">
+          <button id="resetItemButton" class="secondary-button" type="button">Reset item</button>
+          <button id="removeItemButton" class="danger-button" type="button">Verwijder item</button>
+          <button id="downloadButton" class="secondary-button" type="button">Download JSON</button>
+          <button id="approveButton" class="primary-button" type="button">Akkoord</button>
+        </footer>
+      </section>
+    </main>
+
+    <script src="./items.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
