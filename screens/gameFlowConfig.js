@@ -1,4 +1,5 @@
 import { THEMES } from './themeCatalog';
+import { LOBBY_CODE_SALT_ENTROPY_BITS } from '../src/utils/lobbyCode';
 
 export const THEME_OPTIONS = THEMES.map(({ id, label, premium }) => ({
   id,
@@ -41,12 +42,26 @@ export const SKIN_OPTIONS = [
   'vlammen',
 ];
 
+export const BASIC_SKIN_OPTIONS = [
+  'rood',
+  'blauw',
+  'groen',
+  'geel',
+  'oranje',
+  'paars',
+  'roze',
+  'lichtblauw',
+  'zwart',
+  'wit',
+];
+
 export const DEFAULT_ZICHTBAARHEID = {
   eigenVoortgang: true,
   andermansVoortgang: true,
 };
 
 export const PLAYER_SETUP_STORAGE_KEY = 'autobingo:last-player-setup';
+export const EQUIPPED_SKIN_STORAGE_KEY = 'autobingo:equipped-skin';
 export const PREFERRED_PLAYER_NAME_STORAGE_KEY = 'autobingo:preferred-player-name';
 
 export function createPlayer(overrides = {}) {
@@ -63,7 +78,8 @@ export function createGameConfig(overrides = {}) {
     thema: 'snelweg',
     wincondition: '1rij',
     diagonaal: true,
-    kaartOpzet: 'anders',
+    kaartOpzet: 'zelfde',
+    nederlands: true,
     modus: 'solo',
     syncType: 'geen',
     lobbyCode: '',
@@ -81,7 +97,7 @@ export function createRandomSeed() {
 }
 
 export function createRandomSalt() {
-  return Math.floor(Math.random() * 2 ** 6);
+  return Math.floor(Math.random() * 2 ** LOBBY_CODE_SALT_ENTROPY_BITS);
 }
 
 export function buildPlayerArray(count, defaults = []) {
@@ -133,7 +149,8 @@ export function createPlaceholderJoinConfig(code) {
       thema: 'snelweg',
       wincondition: '1rij',
       diagonaal: true,
-      kaartOpzet: 'anders',
+      kaartOpzet: 'zelfde',
+      nederlands: true,
       modus: 'klassiek',
       syncType: 'live',
       lobbyCode: normalizedCode,
@@ -149,6 +166,7 @@ export function createPlaceholderJoinConfig(code) {
     wincondition: '2rijen',
     diagonaal: true,
     kaartOpzet: 'zelfde',
+    nederlands: true,
     modus: 'klassiek',
     syncType: 'geen',
     lobbyCode: normalizedCode || 'ROAD',

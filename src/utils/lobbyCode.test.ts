@@ -7,7 +7,16 @@ import {
   type ThemeId,
 } from './lobbyCode';
 
-const THEMES: ThemeId[] = ['snelweg', 'stad', 'natuur', 'vakantie'];
+const THEMES: ThemeId[] = [
+  'snelweg',
+  'stad',
+  'natuur',
+  'vakantie',
+  'winter',
+  'bergen',
+  'voertuigen',
+  'verkeersborden',
+];
 const GAME_MODES: GameModeId[] = ['wegenkaart', 'klassiek', 'claim', 'collectief'];
 
 function assert(condition: unknown, message: string): void {
@@ -27,12 +36,16 @@ export function runLobbyCodeTests(): void {
         syncType: gameMode === 'wegenkaart' ? 'offline' : 'live',
         seed: checked * 97 + 1234,
         salt: checked,
+        wincondition: checked % 3 === 0 ? 'heel-blok' : checked % 3 === 1 ? '2rijen' : '1rij',
+        diagonaal: checked % 2 === 0,
+        kaartOpzet: checked % 2 === 0 ? 'zelfde' : 'anders',
+        nederlands: checked % 2 === 1,
       };
 
       const code = generateLobbyCode(params);
       const decoded = decodeLobbyCode(code);
 
-      assert(code.length === 7, `Expected raw code length 7, got ${code}`);
+      assert(code.length === 8, `Expected raw code length 8, got ${code}`);
       assert(decoded !== null, `Expected decode to succeed for ${code}`);
       const expectedTheme = params.thema === 'natuur' ? 'platteland' : params.thema;
       assert(decoded?.thema === expectedTheme, `Theme mismatch for ${code}`);
@@ -40,9 +53,13 @@ export function runLobbyCodeTests(): void {
       assert(decoded?.syncType === params.syncType, `Sync type mismatch for ${code}`);
       assert(decoded?.seed === params.seed, `Seed mismatch for ${code}`);
       assert(decoded?.salt === params.salt, `Salt mismatch for ${code}`);
+      assert(decoded?.wincondition === params.wincondition, `Wincondition mismatch for ${code}`);
+      assert(decoded?.diagonaal === params.diagonaal, `Diagonal mismatch for ${code}`);
+      assert(decoded?.kaartOpzet === params.kaartOpzet, `Card layout mismatch for ${code}`);
+      assert(decoded?.nederlands === params.nederlands, `Dutch setting mismatch for ${code}`);
 
       const displayCode = formatLobbyCodeForDisplay(code);
-      assert(displayCode.length === 9, `Expected formatted display length 9, got ${displayCode}`);
+      assert(displayCode.length === 10, `Expected formatted display length 10, got ${displayCode}`);
       assert(decodeLobbyCode(displayCode)?.gameMode === params.gameMode, `Display decode mismatch for ${displayCode}`);
 
       checked += 1;

@@ -56,10 +56,6 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
   const menuScale = menuWidth / 975;
   const scaled = (value) => value * menuScale;
   const closeSettings = onClose ?? (() => navigation.goBack());
-  const handleSettingsWarmupReady = useCallback(() => {
-    setMenuImageReady(true);
-  }, []);
-
   useEffect(() => {
     menuProgress.stopAnimation();
 
@@ -241,7 +237,6 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
           timeoutMs={null}
           imageSize={128}
           batchSize={16}
-          onReady={handleSettingsWarmupReady}
         />
         <Pressable style={styles.dismissBackdrop} onPress={closeSettings} />
 
@@ -253,10 +248,16 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
           <ImageBackground
             source={SETTINGS_MENU_IMAGE}
             resizeMode="stretch"
-            style={[styles.menu, { width: menuWidth, height: menuHeight }]}
+            style={[
+              styles.menu,
+              { width: menuWidth, height: menuHeight },
+            ]}
             fadeDuration={0}
             onLoadEnd={() => setMenuImageReady(true)}
+            imageStyle={styles.menuImage}
           >
+            {menuImageReady ? (
+              <>
             <View
               style={[
                 styles.topToggles,
@@ -371,6 +372,8 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
                 }}
               />
             </View>
+              </>
+            ) : null}
           </ImageBackground>
         </Animated.View>
       </View>
@@ -703,13 +706,6 @@ function UnlockCodeModal({ visible, onClose, onRedeem }) {
               editable={!busy}
               style={styles.codeInput}
             />
-            <View style={styles.codeResultSlot}>
-              {result ? (
-                <Text style={[styles.codeResult, result.ok ? styles.codeResultSuccess : styles.codeResultError]}>
-                  {result.title}. {result.message}
-                </Text>
-              ) : null}
-            </View>
             <View style={styles.codeActions}>
               <View style={styles.codeActionButton}>
                 <GlossyButton
@@ -720,6 +716,13 @@ function UnlockCodeModal({ visible, onClose, onRedeem }) {
                   disabled={busy || !code.trim()}
                 />
               </View>
+            </View>
+            <View style={styles.codeResultSlot}>
+              {result ? (
+                <Text style={[styles.codeResult, result.ok ? styles.codeResultSuccess : styles.codeResultError]}>
+                  {result.title}. {result.message}
+                </Text>
+              ) : null}
             </View>
           </View>
         </View>
@@ -761,6 +764,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.34,
     shadowRadius: 20,
     elevation: 16,
+  },
+  menuImage: {
+    width: '100%',
+    height: '100%',
   },
   topToggles: {
     position: 'absolute',
@@ -869,7 +876,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingHorizontal: 58,
-    paddingTop: 130,
+    paddingTop: 106,
     paddingBottom: 86,
   },
   codePanelDismissLayer: {
@@ -889,7 +896,7 @@ const styles = StyleSheet.create({
   },
   codeMessage: {
     zIndex: 1,
-    marginTop: 8,
+    marginTop: 4,
     fontFamily: 'FredokaOne_400Regular',
     color: '#315266',
     fontSize: 15,
@@ -900,7 +907,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
     width: '100%',
     minHeight: 58,
-    marginTop: 34,
+    marginTop: 24,
     borderRadius: 16,
     borderWidth: 3,
     borderColor: '#1A75BA',
@@ -920,10 +927,10 @@ const styles = StyleSheet.create({
   codeResultSlot: {
     zIndex: 1,
     width: '100%',
-    minHeight: 58,
+    minHeight: 48,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
+    justifyContent: 'flex-start',
+    marginTop: 10,
   },
   codeResultSuccess: {
     color: '#087233',
@@ -936,7 +943,7 @@ const styles = StyleSheet.create({
     width: '68%',
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 0,
+    marginTop: 6,
   },
   codeActionButton: {
     width: '100%',

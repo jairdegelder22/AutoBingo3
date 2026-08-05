@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
-import { Animated, Easing, Image, ImageBackground, InteractionManager, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, AppState, Easing, Image, ImageBackground, InteractionManager, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import CircularReveal from './components/CircularReveal';
 import GlossyButton from './src/components/GlossyButton';
 import WarmupImages from './src/components/WarmupImages';
@@ -58,11 +59,28 @@ const DRIVER_WARNING_BOOT_BUTTON_FADE_MS = 520;
 const GAME_ROUTE_SETTLE_MS = 180;
 const ROUTE_RENDER_SETTLE_MS = 220;
 const ROUTE_MIN_SOLID_MS = 460;
-const BOOT_MIN_SOLID_MS = 900;
+const BOOT_MIN_SOLID_MS = Platform.OS === 'android' ? 900 : 120;
+const BOOT_RENDER_SETTLE_MS = Platform.OS === 'android' ? ROUTE_RENDER_SETTLE_MS : 40;
 const ROUTE_READY_TIMEOUT_MS = 12000;
 const BOOT_ROUTE_READY_TIMEOUT_MS = 12000;
 const SETTINGS_GEAR_SOUND = 'settingsGearClick';
 const routePreloadPromises = new Map();
+
+async function hideAndroidSystemNavigation() {
+  if (Platform.OS !== 'android') {
+    return;
+  }
+
+  try {
+    await NavigationBar.setPositionAsync('absolute');
+    await NavigationBar.setBehaviorAsync('overlay-swipe');
+    await NavigationBar.setBackgroundColorAsync('#00000000');
+    await NavigationBar.setButtonStyleAsync('light');
+    await NavigationBar.setVisibilityAsync('hidden');
+  } catch (_error) {
+    // Sommige Android builds ondersteunen niet elke NavigationBar API.
+  }
+}
 
 function GlobalSettingsButton({
   isTablet,
@@ -447,6 +465,24 @@ export default function App() {
       ].join(':')
     : null;
 
+  useEffect(() => {
+    void hideAndroidSystemNavigation();
+
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void hideAndroidSystemNavigation();
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    void hideAndroidSystemNavigation();
+  }, [currentRoute.name, settingsMenuVisible]);
+
   const markCurrentRouteReady = useCallback(() => {
     routeReadyRef.current = true;
     routeReadyResolverRef.current?.();
@@ -477,6 +513,30 @@ export default function App() {
       setTimeout(finish, timeoutMs);
     })
   ), []);
+
+  const activateEnterTransition = useCallback((transition) => {
+    if (!transition?.transitionKey) {
+      return;
+    }
+
+    setEnterTransition((current) => (
+      current?.transitionKey === transition.transitionKey ? current : transition
+    ));
+  }, []);
+
+  const applyNavigationAfterSolidCommit = useCallback((transition, applyNavigation, requestId = null) => {
+    activateEnterTransition(transition);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (requestId !== null && navigationRequestRef.current !== requestId) {
+          return;
+        }
+
+        applyNavigation();
+      });
+    });
+  }, [activateEnterTransition]);
 
   useEffect(() => {
     let cancelled = false;
@@ -553,7 +613,9 @@ export default function App() {
 
       try {
         await Promise.all([
-          preloadAssetsForRoute(currentRoute.name, currentRoute.params),
+          Platform.OS === 'android'
+            ? preloadAssetsForRoute(currentRoute.name, currentRoute.params)
+            : Promise.resolve(),
           waitForCurrentRouteReady(BOOT_ROUTE_READY_TIMEOUT_MS),
           waitForMinimumElapsed(startedAt, BOOT_MIN_SOLID_MS),
         ]);
@@ -561,7 +623,7 @@ export default function App() {
         // Als preload faalt, blijft de app niet hangen op het rode boot-scherm.
       }
 
-      await waitForStableFrame(ROUTE_RENDER_SETTLE_MS);
+      await waitForStableFrame(BOOT_RENDER_SETTLE_MS);
 
       if (!cancelled) {
         bootRevealRef.current?.reveal();
@@ -582,10 +644,8 @@ export default function App() {
       return;
     }
 
-    setEnterTransition((current) => (
-      current?.transitionKey === transition.transitionKey ? current : transition
-    ));
-  }, [currentRoute]);
+    activateEnterTransition(transition);
+  }, [activateEnterTransition, currentRoute]);
 
   useEffect(() => {
     if (!enterTransition) {
@@ -728,8 +788,7 @@ export default function App() {
 
     if (transition.preloaded) {
       preloadedTransitionKeysRef.current.add(transition.transitionKey);
-      setEnterTransition(transition);
-      applyNavigation();
+      applyNavigationAfterSolidCommit(transition, applyNavigation, requestId);
       return;
     }
 
@@ -751,8 +810,7 @@ export default function App() {
       }
 
       preloadedTransitionKeysRef.current.add(transition.transitionKey);
-      setEnterTransition(transition);
-      applyNavigation();
+      applyNavigationAfterSolidCommit(transition, applyNavigation, requestId);
     }
 
     void preloadThenNavigate();
@@ -795,21 +853,22 @@ export default function App() {
         transitionKey: transition.transitionKey ?? `${previousRoute.name}-back-${Date.now()}`,
       };
 
-      setEnterTransition(backTransition);
-      setStack((current) => {
-        return [
-          ...current.slice(0, Math.max(0, current.length - 2)),
-          {
-            ...previousRoute,
-            params: {
-              ...(previousRoute.params ?? {}),
-              transition: backTransition,
+      applyNavigationAfterSolidCommit(backTransition, () => {
+        setStack((current) => {
+          return [
+            ...current.slice(0, Math.max(0, current.length - 2)),
+            {
+              ...previousRoute,
+              params: {
+                ...(previousRoute.params ?? {}),
+                transition: backTransition,
+              },
             },
-          },
-        ];
+          ];
+        });
       });
     },
-  }), [markCurrentRouteReady, stack]);
+  }), [applyNavigationAfterSolidCommit, markCurrentRouteReady, stack]);
 
   async function openSettingsFromGlobalButton(event) {
     if (currentRoute.name === 'Instellingen' || enterTransition || settingsMenuVisible) {
@@ -1274,6 +1333,7 @@ function GameScreen({ navigation, route }) {
       startedAt={config.startedAt}
       wincondition={config.wincondition}
       diagonaal={config.diagonaal}
+      nederlands={config.nederlands}
       aantalSpelersOpDitApparaat={config.aantalSpelersOpDitApparaat ?? spelers.length}
       kaartOpzet={config.kaartOpzet}
       modus={config.modus}

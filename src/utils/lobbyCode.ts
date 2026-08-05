@@ -1,16 +1,23 @@
 export const LOBBY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const LOBBY_CODE_BASE = BigInt(LOBBY_CODE_ALPHABET.length);
-const RAW_CODE_LENGTH = 7;
+const RAW_CODE_LENGTH = 8;
+const LEGACY_RAW_CODE_LENGTH = 7;
+const LEGACY_THEME_BITS = 2;
+const LEGACY_SALT_BITS = 6;
 
 const THEME_TO_BITS = {
   snelweg: 0,
   stad: 1,
-  natuur: 2,
   platteland: 2,
   vakantie: 3,
+  winter: 4,
+  bergen: 5,
+  voertuigen: 6,
+  verkeersborden: 7,
+  natuur: 2,
 } as const;
 
-const BITS_TO_THEME = ['snelweg', 'stad', 'platteland', 'vakantie'] as const;
+const BITS_TO_THEME = ['snelweg', 'stad', 'platteland', 'vakantie', 'winter', 'bergen', 'voertuigen', 'verkeersborden'] as const;
 
 const GAME_MODE_TO_BITS = {
   wegenkaart: 0,
@@ -28,23 +35,35 @@ const SYNC_TYPE_TO_BITS = {
 
 const BITS_TO_SYNC_TYPE = ['offline', 'live'] as const;
 
-const THEME_BITS = 2;
+const WINCONDITION_TO_BITS = {
+  '1rij': 0,
+  '2rijen': 1,
+  'heel-blok': 2,
+} as const;
+
+const BITS_TO_WINCONDITION = ['1rij', '2rijen', 'heel-blok'] as const;
+
+const THEME_BITS = 3;
 const GAME_MODE_BITS = 2;
 const SYNC_BITS = 1;
+const WINCONDITION_BITS = 2;
+const DIAGONAL_BITS = 1;
+const CARD_LAYOUT_BITS = 1;
+const DUTCH_BITS = 1;
 const SEED_BITS = 16;
-const SALT_BITS = 6;
+const SALT_BITS = 5;
 const CHECKSUM_BITS = 8;
 
-const PAYLOAD_BITS = THEME_BITS + GAME_MODE_BITS + SYNC_BITS + SEED_BITS + SALT_BITS;
+const SETTINGS_BITS = WINCONDITION_BITS + DIAGONAL_BITS + CARD_LAYOUT_BITS + DUTCH_BITS;
+const PAYLOAD_BITS = THEME_BITS + GAME_MODE_BITS + SYNC_BITS + SETTINGS_BITS + SEED_BITS + SALT_BITS;
 export const TOTAL_LOBBY_CODE_BITS = PAYLOAD_BITS + CHECKSUM_BITS;
 export const LOBBY_CODE_SALT_ENTROPY_BITS = SALT_BITS;
-
-const SEED_MASK = (1 << SEED_BITS) - 1;
-const SALT_MASK = (1 << SALT_BITS) - 1;
 
 export type ThemeId = keyof typeof THEME_TO_BITS;
 export type GameModeId = keyof typeof GAME_MODE_TO_BITS;
 export type SyncType = keyof typeof SYNC_TYPE_TO_BITS;
+export type WinconditionId = keyof typeof WINCONDITION_TO_BITS;
+export type CardLayoutId = 'zelfde' | 'anders' | 'ander-thema';
 
 export type GameParams = {
   thema: ThemeId;
@@ -52,6 +71,10 @@ export type GameParams = {
   syncType: SyncType;
   seed: number;
   salt: number;
+  wincondition?: WinconditionId;
+  diagonaal?: boolean;
+  kaartOpzet?: CardLayoutId;
+  nederlands?: boolean;
 };
 
 export function generateLobbyCode(params: GameParams): string {
@@ -69,7 +92,8 @@ export function generateLobbyCode(params: GameParams): string {
 
 export function decodeLobbyCode(code: string): GameParams | null {
   const normalizedCode = normalizeLobbyCode(code);
-  if (normalizedCode.length !== RAW_CODE_LENGTH) {
+  const isLegacyCode = normalizedCode.length === LEGACY_RAW_CODE_LENGTH;
+  if (normalizedCode.length !== RAW_CODE_LENGTH && !isLegacyCode) {
     return null;
   }
 
@@ -86,7 +110,7 @@ export function decodeLobbyCode(code: string): GameParams | null {
     return null;
   }
 
-  const decoded = unpackPayload(payload);
+  const decoded = isLegacyCode ? unpackLegacyPayload(payload) : unpackPayload(payload);
   return decoded;
 }
 
@@ -102,11 +126,16 @@ export function normalizeLobbyCode(code = ''): string {
 
 export function formatLobbyCodeForDisplay(code: string): string {
   const normalized = normalizeLobbyCode(code);
-  if (normalized.length !== RAW_CODE_LENGTH) {
+
+  if (normalized.length < 2) {
     return normalized;
   }
 
-  return `${normalized.slice(0, 2)}·${normalized.slice(2, 4)}·${normalized.slice(4)}`;
+  if (normalized.length <= 5) {
+    return `${normalized.slice(0, 2)}·${normalized.slice(2)}${normalized.length === 5 ? '·' : ''}`;
+  }
+
+  return `${normalized.slice(0, 2)}·${normalized.slice(2, 5)}·${normalized.slice(5)}`;
 }
 
 function normalizeGameParams(params: GameParams): GameParams | null {
@@ -134,17 +163,25 @@ function normalizeGameParams(params: GameParams): GameParams | null {
     syncType: params.syncType,
     seed,
     salt,
+    wincondition: params.wincondition && params.wincondition in WINCONDITION_TO_BITS ? params.wincondition : '1rij',
+    diagonaal: params.diagonaal !== false,
+    kaartOpzet: params.kaartOpzet === 'anders' ? 'anders' : 'zelfde',
+    nederlands: params.nederlands !== false,
   };
 }
 
 function packPayload(params: GameParams): number {
   let value = 0;
 
-  value = (value << THEME_BITS) | THEME_TO_BITS[params.thema];
-  value = (value << GAME_MODE_BITS) | GAME_MODE_TO_BITS[params.gameMode];
-  value = (value << SYNC_BITS) | SYNC_TYPE_TO_BITS[params.syncType];
-  value = (value << SEED_BITS) | clampToBits(params.seed, SEED_BITS);
-  value = (value << SALT_BITS) | clampToBits(params.salt, SALT_BITS);
+  value = appendBits(value, THEME_BITS, THEME_TO_BITS[params.thema]);
+  value = appendBits(value, GAME_MODE_BITS, GAME_MODE_TO_BITS[params.gameMode]);
+  value = appendBits(value, SYNC_BITS, SYNC_TYPE_TO_BITS[params.syncType]);
+  value = appendBits(value, WINCONDITION_BITS, WINCONDITION_TO_BITS[params.wincondition ?? '1rij']);
+  value = appendBits(value, DIAGONAL_BITS, params.diagonaal === false ? 0 : 1);
+  value = appendBits(value, CARD_LAYOUT_BITS, params.kaartOpzet === 'anders' ? 1 : 0);
+  value = appendBits(value, DUTCH_BITS, params.nederlands === false ? 0 : 1);
+  value = appendBits(value, SEED_BITS, clampToBits(params.seed, SEED_BITS));
+  value = appendBits(value, SALT_BITS, clampToBits(params.salt, SALT_BITS));
 
   return value;
 }
@@ -152,19 +189,70 @@ function packPayload(params: GameParams): number {
 function unpackPayload(payload: number): GameParams | null {
   let remaining = payload;
 
-  const salt = remaining & SALT_MASK;
-  remaining >>= SALT_BITS;
+  const salt = readLowBits(remaining, SALT_BITS);
+  remaining = dropLowBits(remaining, SALT_BITS);
 
-  const seed = remaining & SEED_MASK;
-  remaining >>= SEED_BITS;
+  const seed = readLowBits(remaining, SEED_BITS);
+  remaining = dropLowBits(remaining, SEED_BITS);
 
-  const syncBits = remaining & 0b1;
-  remaining >>= SYNC_BITS;
+  const dutchBits = readLowBits(remaining, DUTCH_BITS);
+  remaining = dropLowBits(remaining, DUTCH_BITS);
 
-  const gameModeBits = remaining & 0b11;
-  remaining >>= GAME_MODE_BITS;
+  const cardLayoutBits = readLowBits(remaining, CARD_LAYOUT_BITS);
+  remaining = dropLowBits(remaining, CARD_LAYOUT_BITS);
 
-  const themeBits = remaining & 0b11;
+  const diagonalBits = readLowBits(remaining, DIAGONAL_BITS);
+  remaining = dropLowBits(remaining, DIAGONAL_BITS);
+
+  const winconditionBits = readLowBits(remaining, WINCONDITION_BITS);
+  remaining = dropLowBits(remaining, WINCONDITION_BITS);
+
+  const syncBits = readLowBits(remaining, SYNC_BITS);
+  remaining = dropLowBits(remaining, SYNC_BITS);
+
+  const gameModeBits = readLowBits(remaining, GAME_MODE_BITS);
+  remaining = dropLowBits(remaining, GAME_MODE_BITS);
+
+  const themeBits = readLowBits(remaining, THEME_BITS);
+
+  const thema = BITS_TO_THEME[themeBits];
+  const gameMode = BITS_TO_GAME_MODE[gameModeBits];
+  const syncType = BITS_TO_SYNC_TYPE[syncBits];
+  const wincondition = BITS_TO_WINCONDITION[winconditionBits];
+
+  if (!thema || !gameMode || !syncType || !wincondition) {
+    return null;
+  }
+
+  return {
+    thema,
+    gameMode,
+    syncType,
+    seed,
+    salt,
+    wincondition,
+    diagonaal: diagonalBits === 1,
+    kaartOpzet: cardLayoutBits === 1 ? 'anders' : 'zelfde',
+    nederlands: dutchBits === 1,
+  };
+}
+
+function unpackLegacyPayload(payload: number): GameParams | null {
+  let remaining = payload;
+
+  const salt = readLowBits(remaining, LEGACY_SALT_BITS);
+  remaining = dropLowBits(remaining, LEGACY_SALT_BITS);
+
+  const seed = readLowBits(remaining, SEED_BITS);
+  remaining = dropLowBits(remaining, SEED_BITS);
+
+  const syncBits = readLowBits(remaining, SYNC_BITS);
+  remaining = dropLowBits(remaining, SYNC_BITS);
+
+  const gameModeBits = readLowBits(remaining, GAME_MODE_BITS);
+  remaining = dropLowBits(remaining, GAME_MODE_BITS);
+
+  const themeBits = readLowBits(remaining, LEGACY_THEME_BITS);
 
   const thema = BITS_TO_THEME[themeBits];
   const gameMode = BITS_TO_GAME_MODE[gameModeBits];
@@ -180,6 +268,10 @@ function unpackPayload(payload: number): GameParams | null {
     syncType,
     seed,
     salt,
+    wincondition: '1rij',
+    diagonaal: true,
+    kaartOpzet: 'zelfde',
+    nederlands: true,
   };
 }
 
@@ -188,11 +280,12 @@ function normalizeThemeAlias(theme: ThemeId): ThemeId {
 }
 
 function computeChecksum(payload: number): number {
+  const unsignedPayload = payload >>> 0;
   const bytes = [
-    (payload >>> 24) & 0xff,
-    (payload >>> 16) & 0xff,
-    (payload >>> 8) & 0xff,
-    payload & 0xff,
+    Math.floor(unsignedPayload / 2 ** 24) & 0xff,
+    Math.floor(unsignedPayload / 2 ** 16) & 0xff,
+    Math.floor(unsignedPayload / 2 ** 8) & 0xff,
+    unsignedPayload & 0xff,
   ];
 
   let checksum = 0x5d;
@@ -203,6 +296,18 @@ function computeChecksum(payload: number): number {
   }
 
   return checksum & 0xff;
+}
+
+function appendBits(value: number, bits: number, addition: number): number {
+  return value * 2 ** bits + addition;
+}
+
+function readLowBits(value: number, bits: number): number {
+  return value % 2 ** bits;
+}
+
+function dropLowBits(value: number, bits: number): number {
+  return Math.floor(value / 2 ** bits);
 }
 
 function encodeBase32Fixed(value: bigint, length: number): string {

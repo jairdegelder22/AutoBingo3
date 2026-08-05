@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   FlatListProps,
+  InteractionManager,
   ListRenderItemInfo,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   StyleProp,
   StyleSheet,
   useWindowDimensions,
@@ -25,6 +27,7 @@ type ThemeCarouselProps<ItemT> = {
   focusedIndex?: number;
   onSnapToItem?: (index: number) => void;
   containerStyle?: StyleProp<ViewStyle>;
+  loop?: boolean;
   flatListProps?: Omit<
     FlatListProps<ItemT>,
     | 'data'
@@ -47,6 +50,7 @@ const LOOP_SETS = 3;
 const SCROLL_SOUND = 'scrollGeluid';
 const SCROLL_SOUND_POOL_SIZE = 10;
 const SCROLL_SOUND_VOLUME_MULTIPLIER = 0.6;
+const IS_ANDROID = Platform.OS === 'android';
 
 export default function ThemeCarousel<ItemT>({
   items,
@@ -57,6 +61,7 @@ export default function ThemeCarousel<ItemT>({
   focusedIndex,
   onSnapToItem,
   containerStyle,
+  loop = true,
   flatListProps,
 }: ThemeCarouselProps<ItemT>) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -70,18 +75,31 @@ export default function ThemeCarousel<ItemT>({
   const scrollX = useRef(new Animated.Value(0)).current;
   const listRef = useRef<Animated.FlatList<ItemT>>(null);
   const baseCount = items.length;
+  const shouldLoop = loop && baseCount > 1;
   const loopedItems = useMemo<ItemT[]>(
-    () => (baseCount > 1 ? Array.from({ length: LOOP_SETS }, () => items).flat() : items),
-    [baseCount, items]
+    () => (shouldLoop ? Array.from({ length: LOOP_SETS }, () => items).flat() : items),
+    [items, shouldLoop]
   );
-  const initialIndex = baseCount > 1 ? baseCount : 0;
+  const initialRenderCount = IS_ANDROID
+    ? Math.min(loopedItems.length, Math.max(5, baseCount + 2))
+    : loopedItems.length;
+  const renderBatchCount = IS_ANDROID
+    ? Math.min(loopedItems.length, Math.max(4, baseCount))
+    : loopedItems.length;
+  const initialIndex = shouldLoop ? baseCount : 0;
   const currentAbsoluteIndexRef = useRef(initialIndex);
   const currentLogicalIndexRef = useRef(0);
   const hasAppliedInitialOffsetRef = useRef(false);
   const lastFocusedIndexRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    preloadPooledSoundEffect(SCROLL_SOUND, SCROLL_SOUND_POOL_SIZE);
+    const preloadTask = InteractionManager.runAfterInteractions(() => {
+      preloadPooledSoundEffect(SCROLL_SOUND, SCROLL_SOUND_POOL_SIZE);
+    });
+
+    return () => {
+      preloadTask.cancel?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -92,7 +110,7 @@ export default function ThemeCarousel<ItemT>({
   }, [initialIndex]);
 
   useEffect(() => {
-    if (focusedIndex === undefined || baseCount === 0) {
+    if (!IS_ANDROID || focusedIndex === undefined || baseCount === 0) {
       lastFocusedIndexRef.current = focusedIndex;
       return;
     }
@@ -103,7 +121,7 @@ export default function ThemeCarousel<ItemT>({
     lastFocusedIndexRef.current = focusedIndex;
 
     const boundedIndex = Math.max(0, Math.min(focusedIndex, baseCount - 1));
-    const targetAbsoluteIndex = baseCount > 1
+    const targetAbsoluteIndex = shouldLoop
       ? [boundedIndex, boundedIndex + baseCount, boundedIndex + baseCount * 2].reduce((closestIndex, candidateIndex) => {
           const closestDistance = Math.abs(closestIndex - currentAbsoluteIndexRef.current);
           const candidateDistance = Math.abs(candidateIndex - currentAbsoluteIndexRef.current);
@@ -117,8 +135,8 @@ export default function ThemeCarousel<ItemT>({
       animated: true,
     });
     scrollX.setValue(targetOffset);
-    updateFocusedIndex(targetAbsoluteIndex, false);
-  }, [baseCount, focusedIndex, snapInterval, scrollX]);
+    updateFocusedIndex(targetAbsoluteIndex, false, false);
+  }, [baseCount, focusedIndex, scrollX, shouldLoop, snapInterval]);
 
   const ensureInitialOffset = () => {
     if (hasAppliedInitialOffsetRef.current || baseCount === 0) {
@@ -126,12 +144,14 @@ export default function ThemeCarousel<ItemT>({
     }
 
     const initialOffset = initialIndex * snapInterval;
-    listRef.current?.scrollToOffset({
-      offset: initialOffset,
-      animated: false,
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({
+        offset: initialOffset,
+        animated: false,
+      });
     });
     scrollX.setValue(initialOffset);
-    updateFocusedIndex(initialIndex, false);
+    updateFocusedIndex(initialIndex, false, false);
     hasAppliedInitialOffsetRef.current = true;
   };
 
@@ -145,7 +165,7 @@ export default function ThemeCarousel<ItemT>({
   );
 
   const recenterIfNeeded = (absoluteIndex: number) => {
-    if (baseCount <= 1) {
+    if (!shouldLoop || baseCount <= 1) {
       return absoluteIndex;
     }
 
@@ -162,12 +182,13 @@ export default function ThemeCarousel<ItemT>({
         offset: targetIndex * snapInterval,
         animated: false,
       });
+      scrollX.setValue(targetIndex * snapInterval);
     }
 
     return targetIndex;
   };
 
-  const updateFocusedIndex = (absoluteIndex: number, triggerHaptic: boolean) => {
+  const updateFocusedIndex = (absoluteIndex: number, triggerHaptic: boolean, notifySelection = true) => {
     const safeAbsoluteIndex = Math.max(0, Math.min(absoluteIndex, loopedItems.length - 1));
     const logicalIndex = baseCount > 0 ? safeAbsoluteIndex % baseCount : 0;
 
@@ -181,31 +202,44 @@ export default function ThemeCarousel<ItemT>({
           volumeMultiplier: SCROLL_SOUND_VOLUME_MULTIPLIER,
         });
       }
-      onSnapToItem?.(logicalIndex);
+      if (notifySelection) {
+        onSnapToItem?.(logicalIndex);
+      }
     }
   };
 
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-    {
-      useNativeDriver: true,
-      listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-        if (baseCount === 0) {
-          return;
-        }
+    IS_ANDROID
+      ? { useNativeDriver: true }
+      : {
+          useNativeDriver: true,
+          listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+            if (baseCount === 0) {
+              return;
+            }
 
-        const offsetX = event.nativeEvent.contentOffset.x;
-        const absoluteIndex = Math.round(offsetX / snapInterval);
-        updateFocusedIndex(absoluteIndex, true);
-      },
-    }
+            const offsetX = event.nativeEvent.contentOffset.x;
+            const absoluteIndex = Math.round(offsetX / snapInterval);
+            updateFocusedIndex(absoluteIndex, true, true);
+          },
+        }
   );
 
   const handleMomentumEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = event.nativeEvent.contentOffset.x;
     const nextAbsoluteIndex = Math.round(offsetX / snapInterval);
     const recenteredIndex = recenterIfNeeded(nextAbsoluteIndex);
-    updateFocusedIndex(recenteredIndex, false);
+    updateFocusedIndex(recenteredIndex, false, true);
+  };
+
+  const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const nextAbsoluteIndex = Math.round(offsetX / snapInterval);
+
+    requestAnimationFrame(() => {
+      updateFocusedIndex(nextAbsoluteIndex, IS_ANDROID, true);
+    });
   };
 
   const renderItem = ({ item, index }: ListRenderItemInfo<ItemT>) => {
@@ -282,13 +316,15 @@ export default function ThemeCarousel<ItemT>({
         bounces={false}
         data={loopedItems}
         decelerationRate="fast"
+        directionalLockEnabled
         getItemLayout={getItemLayout}
-        initialScrollIndex={initialIndex}
+        initialScrollIndex={shouldLoop ? undefined : initialIndex}
         keyExtractor={(item, index) => `${keyExtractor(item as ItemT, baseCount > 0 ? index % baseCount : index)}-${index}`}
-        initialNumToRender={loopedItems.length}
-        maxToRenderPerBatch={loopedItems.length}
+        initialNumToRender={initialRenderCount}
+        maxToRenderPerBatch={renderBatchCount}
         onLayout={ensureInitialOffset}
         onMomentumScrollEnd={handleMomentumEnd}
+        onScrollEndDrag={handleScrollEndDrag}
         onScroll={handleScroll}
         onScrollToIndexFailed={() => {
           requestAnimationFrame(ensureInitialOffset);
@@ -300,7 +336,7 @@ export default function ThemeCarousel<ItemT>({
         snapToAlignment="start"
         snapToInterval={snapInterval}
         updateCellsBatchingPeriod={0}
-        windowSize={Math.max(7, loopedItems.length)}
+        windowSize={IS_ANDROID ? 5 : Math.max(7, loopedItems.length)}
         style={styles.list}
         onContentSizeChange={ensureInitialOffset}
         contentContainerStyle={[

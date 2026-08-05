@@ -944,8 +944,10 @@ export default function WaitingScreen({ navigation, route }) {
       navigation.goBack?.();
     }
 
-    setLeaveConfirmVisible(false);
-    setLeaveLobbyReveal(null);
+    setTimeout(() => {
+      setLeaveConfirmVisible(false);
+      setLeaveLobbyReveal(null);
+    }, 80);
   }
 
   const remotePlayers = useMemo(

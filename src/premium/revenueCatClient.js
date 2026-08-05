@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 export const REVENUECAT_ENTITLEMENT_PREMIUM = 'premium';
@@ -17,7 +18,19 @@ const REVENUECAT_PUBLIC_API_KEYS = {
 let purchasesModule = null;
 let configured = false;
 
+function isRunningInExpoGo() {
+  return (
+    Constants?.executionEnvironment === 'storeClient'
+    || Constants?.appOwnership === 'expo'
+  );
+}
+
 function getPurchasesModule() {
+  if (isRunningInExpoGo()) {
+    purchasesModule = undefined;
+    return purchasesModule;
+  }
+
   if (purchasesModule !== null) {
     return purchasesModule;
   }

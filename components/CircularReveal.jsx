@@ -30,6 +30,7 @@ const CircularReveal = forwardRef(function CircularReveal(
     originY,
     onComplete,
     onHideComplete,
+    onRevealStart,
     initiallyVisible = false,
     initialProgress = 0,
     mode = 'cover',
@@ -72,12 +73,15 @@ const CircularReveal = forwardRef(function CircularReveal(
 
       setIsVisible(true);
       setBlocksTouches(toValue > 0);
+      if (toValue > 0) {
+        onRevealStart?.();
+      }
 
       animationRef.current = Animated.timing(progress, {
         toValue,
         duration: DEFAULT_DURATION,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: false,
+        useNativeDriver: mode === 'cover',
       });
 
       animationRef.current.start(({ finished }) => {
@@ -105,7 +109,7 @@ const CircularReveal = forwardRef(function CircularReveal(
         }
       });
     },
-    [mode, onComplete, onHideComplete, progress, stopAnimation]
+    [mode, onComplete, onHideComplete, onRevealStart, progress, stopAnimation]
   );
 
   const reveal = useCallback(() => {
@@ -127,6 +131,11 @@ const CircularReveal = forwardRef(function CircularReveal(
   );
 
   useEffect(() => {
+    if (mode === 'cover') {
+      setRenderProgress(initialProgress);
+      return undefined;
+    }
+
     const id = progress.addListener(({ value }) => {
       setRenderProgress(value);
     });
@@ -142,6 +151,30 @@ const CircularReveal = forwardRef(function CircularReveal(
 
   if (!isVisible) {
     return null;
+  }
+
+  if (mode === 'cover') {
+    return (
+      <Animated.View
+        pointerEvents={blocksTouches ? 'auto' : 'none'}
+        style={styles.overlay}
+      >
+        <Animated.View
+          style={[
+            styles.coverCircle,
+            {
+              left: originX - radius,
+              top: originY - radius,
+              width: diameter,
+              height: diameter,
+              borderRadius: radius,
+              backgroundColor: color,
+              transform: [{ scale: progress }],
+            },
+          ]}
+        />
+      </Animated.View>
+    );
   }
 
   return (
@@ -160,6 +193,9 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9999,
+  },
+  coverCircle: {
+    position: 'absolute',
   },
 });
 

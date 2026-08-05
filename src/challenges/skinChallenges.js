@@ -247,6 +247,27 @@ export function isSkinUnlocked(progress, skin) {
   return getChallengeProgressValue(progress, skin).completed;
 }
 
+function getCompletedChallengeUnlocks(previousProgress, nextProgress) {
+  return Object.values(SKIN_CHALLENGES)
+    .map((challenge) => {
+      const previous = getChallengeProgressValue(previousProgress, challenge.skin);
+      const current = getChallengeProgressValue(nextProgress, challenge.skin);
+
+      if (previous.completed || !current.completed) {
+        return null;
+      }
+
+      return {
+        skin: challenge.skin,
+        title: challenge.title,
+        description: challenge.description,
+        previous,
+        current,
+      };
+    })
+    .filter(Boolean);
+}
+
 function hasCheckedTargetIcon({ checked = [], icons = [], targets = [] }) {
   if (!targets.length) {
     return false;
@@ -315,5 +336,10 @@ export async function recordFinishedGameForSkinChallenges(gameResult) {
     }
   });
 
-  return saveSkinChallengeProgress(nextProgress);
+  const savedProgress = await saveSkinChallengeProgress(nextProgress);
+
+  return {
+    progress: savedProgress,
+    unlockedSkins: getCompletedChallengeUnlocks(currentProgress, savedProgress),
+  };
 }

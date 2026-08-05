@@ -83,6 +83,7 @@ function mapLobbyRowToSnapshot(lobbyRow, playerRows = []) {
       wincondition: lobbyRow.win_condition ?? '1rij',
       diagonaal: typeof lobbyRow.allow_diagonal === 'boolean' ? lobbyRow.allow_diagonal : true,
       kaartOpzet: lobbyRow.card_layout ?? 'zelfde',
+      nederlands: typeof lobbyRow.dutch_items_enabled === 'boolean' ? lobbyRow.dutch_items_enabled : true,
     },
     started: lobbyRow.status === 'started',
     ended: lobbyRow.status === 'ended',
@@ -159,6 +160,7 @@ function buildLobbyPayload(config = {}, hostPlayerId, includeAdvancedSettings = 
     payload.win_condition = config?.wincondition ?? '1rij';
     payload.allow_diagonal = typeof config?.diagonaal === 'boolean' ? config.diagonaal : true;
     payload.card_layout = config?.kaartOpzet ?? 'zelfde';
+    payload.dutch_items_enabled = config?.nederlands !== false;
   }
 
   return payload;
@@ -169,7 +171,8 @@ function isMissingLobbySettingsColumn(error) {
   return (
     message.includes("'allow_diagonal' column") ||
     message.includes("'win_condition' column") ||
-    message.includes("'card_layout' column")
+    message.includes("'card_layout' column") ||
+    message.includes("'dutch_items_enabled' column")
   );
 }
 
@@ -486,12 +489,24 @@ export async function updateLobbySettings(code, config = {}) {
       ? config.diagonaal
       : (typeof lobbyRow.allow_diagonal === 'boolean' ? lobbyRow.allow_diagonal : true),
     card_layout: config?.kaartOpzet ?? lobbyRow.card_layout ?? 'zelfde',
+    dutch_items_enabled: typeof config?.nederlands === 'boolean'
+      ? config.nederlands
+      : (typeof lobbyRow.dutch_items_enabled === 'boolean' ? lobbyRow.dutch_items_enabled : true),
   };
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('lobbies')
     .update(updatePayload)
     .eq('id', lobbyRow.id);
+
+  if (error && isMissingLobbySettingsColumn(error)) {
+    const fallbackPayload = { ...updatePayload };
+    delete fallbackPayload.dutch_items_enabled;
+    ({ error } = await supabase
+      .from('lobbies')
+      .update(fallbackPayload)
+      .eq('id', lobbyRow.id));
+  }
 
   if (error) {
     console.warn('updateLobbySettings error', error.message);

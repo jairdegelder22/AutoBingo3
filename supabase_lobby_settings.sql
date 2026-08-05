@@ -8,3 +8,6 @@ add column if not exists allow_diagonal boolean not null default true;
 alter table public.lobbies
 add column if not exists card_layout text not null default 'zelfde'
 check (card_layout in ('zelfde', 'anders', 'ander-thema'));
+
+alter table public.lobbies
+add column if not exists dutch_items_enabled boolean not null default true;

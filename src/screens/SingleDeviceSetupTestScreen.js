@@ -7,6 +7,7 @@ import {
   InteractionManager,
   Keyboard,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -15,6 +16,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from '../settings/haptics';
@@ -28,7 +31,7 @@ import PremiumPaywallModal from '../premium/PremiumPaywallModal';
 import { usePremium } from '../premium/PremiumContext';
 import { PLAYER_ADD_SILHOUETTE_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../../assets/images/players/playerImages';
 import { getThemeCardImage, THEME_CARD_IMAGES, THEME_LOCK_OVERLAY_IMAGE } from '../../assets/images/theme-cards/themeCardImages';
-import { createGameConfig, createPlayer, SKIN_OPTIONS } from '../../screens/gameFlowConfig';
+import { EQUIPPED_SKIN_STORAGE_KEY, createGameConfig, createPlayer, SKIN_OPTIONS } from '../../screens/gameFlowConfig';
 import { THEMES } from '../../screens/themeCatalog';
 import { useAppSettings } from '../settings/AppSettingsContext';
 import { playSoundEffect, preloadSoundEffect } from '../audio/soundEffects';
@@ -49,6 +52,8 @@ const THEME_CARDS = THEMES.map((theme) => ({
   outline: theme.cardOutline,
   premium: theme.premium,
 }));
+const ANDROID_DISABLE_SETUP_IDLE_MOTION = Platform.OS === 'android';
+const PREMIUM_THEME_IDS = new Set(THEMES.filter((theme) => theme.premium).map((theme) => theme.id));
 const MAX_LOCAL_PLAYERS = 2;
 const MAX_PLAYER_NAME_LENGTH = 12;
 const PLAYER_SILHOUETTE_IMAGE = PLAYER_ADD_SILHOUETTE_IMAGE;
@@ -59,13 +64,21 @@ const SETTINGS_DIAGONAL_ICON = require('../../assets/images/settings/diagonal-lo
 const SETTINGS_RULES_PANEL_IMAGE = require('../../assets/images/settings/rules-menu-panel-v2.png');
 const SETTINGS_RULE_SLIDER_FRAME_WINCONDITION = require('../../assets/images/settings/rules-slider-frame-wincondition.png');
 const SETTINGS_RULE_SLIDER_FRAME_DIAGONAL = require('../../assets/images/settings/rules-slider-frame-diagonal.png');
+const SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS = require('../../assets/images/settings/rules-slider-frame-dutch-items.png');
+const SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT = require('../../assets/images/settings/rules-slider-frame-card-layout.png');
 const SETTINGS_WIN_CONDITION_TITLE_ICON = require('../../assets/images/settings/win-condition-title.png');
 const SETTINGS_DIAGONAL_TITLE_ICON = require('../../assets/images/settings/diagonal-rule-title.png');
+const SETTINGS_CARD_LAYOUT_TITLE_ICON = require('../../assets/images/settings/card-layout-title.png');
 const SETTINGS_WIN_ONE_LINE = require('../../assets/images/settings/win-1-line.png');
 const SETTINGS_WIN_TWO_LINES = require('../../assets/images/settings/win-2-lines.png');
 const SETTINGS_WIN_FULL_CARD = require('../../assets/images/settings/win-full-card.png');
 const SETTINGS_DIAGONAL_ON = require('../../assets/images/settings/diagonal-on.png');
 const SETTINGS_DIAGONAL_OFF = require('../../assets/images/settings/diagonal-off.png');
+const SETTINGS_DUTCH_ITEMS_ON = require('../../assets/images/settings/dutch-items-on.png');
+const SETTINGS_DUTCH_ITEMS_OFF = require('../../assets/images/settings/dutch-items-off.png');
+const SETTINGS_DUTCH_ITEMS_TITLE = require('../../assets/images/settings/dutch-items-title.png');
+const SETTINGS_CARD_LAYOUT_SAME = require('../../assets/images/settings/card-layout-same.png');
+const SETTINGS_CARD_LAYOUT_DIFFERENT = require('../../assets/images/settings/card-layout-different.png');
 const SCREEN_HORIZONTAL_PADDING = 24;
 const THEME_CARD_WIDTH = 194;
 const THEME_CARD_HEIGHT = Math.round(THEME_CARD_WIDTH * 1.5);
@@ -85,10 +98,17 @@ const SETTINGS_DIAGONAL_OPTIONS = [
   { id: true, label: 'Wel', image: SETTINGS_DIAGONAL_ON },
   { id: false, label: 'Niet', image: SETTINGS_DIAGONAL_OFF },
 ];
+const SETTINGS_DUTCH_OPTIONS = [
+  { id: true, label: 'Wel Nederlandse items', image: SETTINGS_DUTCH_ITEMS_ON },
+  { id: false, label: 'Geen Nederlandse items', image: SETTINGS_DUTCH_ITEMS_OFF },
+];
+const SETTINGS_CARD_LAYOUT_OPTIONS = [
+  { id: 'zelfde', label: 'Zelfde kaart', image: SETTINGS_CARD_LAYOUT_SAME },
+  { id: 'anders', label: 'Andere kaarten', image: SETTINGS_CARD_LAYOUT_DIFFERENT },
+];
 const GAME_SETTINGS_KLAP_IN_SOUND = 'gameSettingsKlapIn';
 const GAME_SETTINGS_KLAP_UIT_SOUND = 'gameSettingsKlapUit';
-const SETUP_THEME_CARD_IMAGE_COUNT = Object.keys(THEME_CARD_IMAGES).length;
-const SETUP_CRITICAL_IMAGE_COUNT = 2 + SETUP_THEME_CARD_IMAGE_COUNT;
+const SETUP_CRITICAL_IMAGE_COUNT = 3;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -114,6 +134,7 @@ function isEmbeddedThemeCard(themeId) {
     || themeId === 'vakantie'
     || themeId === 'voertuigen'
     || themeId === 'winter'
+    || themeId === 'bergen'
     || themeId === 'verkeersborden'
   );
 }
@@ -122,7 +143,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
   const compactTitleStyle = themeId === 'verkeersborden'
     ? {
         fontSize: 18,
-        lineHeight: 25,
+        lineHeight: 24,
       }
     : themeId === 'voertuigen'
     ? {
@@ -168,11 +189,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   );
   const initialPlayers = initialConfig?.spelers?.length
     ? initialConfig.spelers.map((player, index) => ({
-        ...createPlayer({ skin: player.skin ?? (index === 0 ? 'geel' : 'blauw') }),
+        ...createPlayer({ skin: player.skin ?? (index === 0 ? 'rood' : 'blauw') }),
         ...player,
         naam: player.naam ?? `Speler ${index + 1}`,
       })).slice(0, MAX_LOCAL_PLAYERS)
-    : [{ ...createPlayer({ skin: 'geel' }), naam: 'Speler 1' }];
+    : [{ ...createPlayer({ skin: 'rood' }), naam: 'Speler 1' }];
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(initialThemeIndex);
   const [spelers, setSpelers] = useState(initialPlayers);
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState(null);
@@ -180,19 +201,24 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const [skinPickerMounted, setSkinPickerMounted] = useState(false);
   const [heroTop, setHeroTop] = useState(234);
   const [transitionSourceLeft, setTransitionSourceLeft] = useState(0);
-  const [transitionSkin, setTransitionSkin] = useState('geel');
+  const [transitionSkin, setTransitionSkin] = useState('rood');
   const [transitionCarSize, setTransitionCarSize] = useState(STAGE_SINGLE_CAR_SIZE);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPanelVisible, setSettingsPanelVisible] = useState(false);
   const [wincondition, setWincondition] = useState(initialConfig?.wincondition ?? '1rij');
   const [diagonaal, setDiagonaal] = useState(initialConfig?.diagonaal ?? true);
   const [kaartOpzet, setKaartOpzet] = useState(initialConfig?.kaartOpzet ?? 'zelfde');
+  const [nederlands, setNederlands] = useState(initialConfig?.nederlands !== false);
   const [pendingGameStart, setPendingGameStart] = useState(null);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [setupLayoutReady, setSetupLayoutReady] = useState(false);
   const [setupImagesReady, setSetupImagesReady] = useState(false);
+  const [settingsScrollMetrics, setSettingsScrollMetrics] = useState({ contentHeight: 0, viewportHeight: 0 });
 
   const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.88, 1.18);
+  const compactSetupLift = screenHeight > screenWidth
+    ? Math.round(clamp((932 - screenHeight) * 0.62, 0, 56))
+    : 0;
   const collapsedPanelHeight = Math.round(clamp(screenHeight * 0.078, 66, 88));
   const expandedPanelHeight = Math.round(clamp(screenHeight * 0.74, 560, screenHeight * 0.82));
   const setupMetrics = useMemo(() => ({
@@ -217,6 +243,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const panelHeight = useRef(new Animated.Value(collapsedPanelHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const settingsProgress = useRef(new Animated.Value(0)).current;
+  const settingsScrollY = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const carouselOpacity = useRef(new Animated.Value(0)).current;
   const transitionOpacity = useRef(new Animated.Value(0)).current;
@@ -227,12 +254,15 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const firstPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 0 ? 1 : 0)).current;
   const secondPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 1 ? 1 : 0)).current;
   const playRevealRef = useRef(null);
+  const playStartLockedRef = useRef(false);
+  const playRevealStartedKeyRef = useRef(null);
   const latestPlayPressPointRef = useRef(null);
   const loadedSetupCriticalImagesRef = useRef(new Set());
   const playerLayoutProgress = useState(() => new Animated.Value(spelers.length >= 2 ? 1 : 0))[0];
   const carRefs = useRef([]);
   const selectedTheme = THEME_CARDS[selectedThemeIndex] ?? THEME_CARDS[0];
-  const selectedThemeAvailable = !selectedTheme?.premium || isPremium;
+  const selectedThemeLocked = Boolean(selectedTheme?.id && PREMIUM_THEME_IDS.has(selectedTheme.id) && !isPremium);
+  const selectedThemeAvailable = !selectedThemeLocked;
   const playerCount = spelers.length;
   const selectedPlayer = selectedPlayerIndex === null ? null : spelers[selectedPlayerIndex];
   const stageCarSize = playerCount >= 2 ? STAGE_MULTI_CAR_SIZE : STAGE_SINGLE_CAR_SIZE;
@@ -242,8 +272,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   );
 
   const canStart = useMemo(
-    () => Boolean(selectedTheme?.id && playerCount),
-    [playerCount, selectedTheme?.id]
+    () => Boolean(selectedTheme?.id && selectedThemeAvailable && playerCount),
+    [playerCount, selectedTheme?.id, selectedThemeAvailable]
   );
   const markSetupCriticalImageLoaded = useCallback((key) => {
     loadedSetupCriticalImagesRef.current.add(key);
@@ -252,6 +282,9 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       setSetupImagesReady(true);
     }
   }, []);
+  const markThemeCardImageLoaded = useCallback(() => {
+    markSetupCriticalImageLoaded('theme');
+  }, [markSetupCriticalImageLoaded]);
   const handleSetupWarmupReady = useCallback(() => {
     setSetupImagesReady(true);
   }, []);
@@ -262,6 +295,19 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const settingsContentTranslateY = settingsProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [30, 0],
+  });
+  const settingsScrollbarVisible = settingsScrollMetrics.contentHeight > settingsScrollMetrics.viewportHeight + 10;
+  const settingsScrollbarTrackHeight = Math.max(0, settingsScrollMetrics.viewportHeight - Math.round(22 * scale));
+  const settingsScrollbarThumbHeight = settingsScrollbarVisible
+    ? Math.max(
+        Math.round(34 * scale),
+        (settingsScrollbarTrackHeight * settingsScrollMetrics.viewportHeight) / settingsScrollMetrics.contentHeight
+      )
+    : 0;
+  const settingsScrollbarTranslateY = settingsScrollY.interpolate({
+    inputRange: [0, Math.max(1, settingsScrollMetrics.contentHeight - settingsScrollMetrics.viewportHeight)],
+    outputRange: [0, Math.max(0, settingsScrollbarTrackHeight - settingsScrollbarThumbHeight)],
+    extrapolate: 'clamp',
   });
   const playerStageWidth = Math.max(0, screenWidth - SCREEN_HORIZONTAL_PADDING * 2);
   const laneOffset = playerStageWidth / 4;
@@ -385,6 +431,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       return;
     }
 
+    if (playRevealStartedKeyRef.current === pendingGameStart.transitionKey) {
+      return;
+    }
+
+    playRevealStartedKeyRef.current = pendingGameStart.transitionKey;
     playRevealRef.current?.reveal();
   }, [pendingGameStart]);
 
@@ -397,6 +448,30 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     preloadSoundEffect(GAME_SETTINGS_KLAP_IN_SOUND);
     preloadSoundEffect(GAME_SETTINGS_KLAP_UIT_SOUND);
   }, []);
+
+  useEffect(() => {
+    if (initialConfig?.spelers?.length) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY).then((storedSkin) => {
+      if (cancelled || !SKIN_OPTIONS.includes(storedSkin)) {
+        return;
+      }
+
+      setSpelers((current) => current.map((player, index) => (
+        index === 0 ? { ...player, skin: storedSkin } : player
+      )));
+    }).catch(() => {
+      // Rood blijft de standaard als de opgeslagen keuze niet leesbaar is.
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialConfig?.spelers?.length]);
 
   useEffect(() => {
     Animated.timing(addPlayerFocusOpacity, {
@@ -475,6 +550,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       }),
     ]).start(({ finished }) => {
       if (finished && !open) {
+        settingsProgress.setValue(0);
+        backdropOpacity.setValue(0);
         setSettingsPanelVisible(false);
       }
     });
@@ -536,7 +613,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
 
       setHeroTop(y);
       setTransitionSourceLeft(sourceLeft);
-      setTransitionSkin(spelers[index]?.skin ?? 'geel');
+      setTransitionSkin(spelers[index]?.skin ?? 'rood');
       setTransitionCarSize(sourceSize);
       setSelectedPlayerIndex(index);
       setSkinPickerMounted(true);
@@ -618,6 +695,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }
 
   function handlePlayPressIn(event) {
+    if (selectedThemeLocked || !canStart) {
+      latestPlayPressPointRef.current = null;
+      return;
+    }
+
     latestPlayPressPointRef.current = {
       x: event.nativeEvent.pageX,
       y: event.nativeEvent.pageY,
@@ -625,7 +707,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }
 
   function handleStart() {
-    if (!selectedThemeAvailable) {
+    if (playStartLockedRef.current || pendingGameStart) {
+      return;
+    }
+
+    if (selectedThemeLocked) {
       setPremiumModalVisible(true);
       return;
     }
@@ -634,11 +720,15 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       return;
     }
 
+    playStartLockedRef.current = true;
+    dismissNameEditing();
+
     const config = createGameConfig({
       thema: selectedTheme.id,
       wincondition,
       diagonaal,
       kaartOpzet: playerCount === 2 ? kaartOpzet : 'zelfde',
+      nederlands,
       modus: 'solo',
       syncType: 'geen',
       aantalSpelersOpDitApparaat: playerCount,
@@ -691,9 +781,13 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
               size={66}
             />
           </View>
-          <Pressable
-            style={styles.content}
-            onPress={isEditingPlayerName ? dismissNameEditing : undefined}
+          <View
+            style={[
+              styles.content,
+              compactSetupLift > 0 && {
+                transform: [{ translateY: -compactSetupLift }],
+              },
+            ]}
           >
             <View style={styles.topBlock}>
               <ThemeCarousel
@@ -701,6 +795,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 itemSpacing={10}
                 itemWidth={THEME_CARD_WIDTH}
                 keyExtractor={(item) => item.id}
+                loop={Platform.OS !== 'android'}
+                focusedIndex={selectedThemeIndex}
                 onSnapToItem={setSelectedThemeIndex}
                 flatListProps={{ scrollEnabled: !isEditingPlayerName }}
                 renderCard={({ item }) => (
@@ -708,7 +804,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                     item={item}
                     isPremium={isPremium}
                     onLockedPress={() => setPremiumModalVisible(true)}
-                    onImageLoadEnd={() => markSetupCriticalImageLoaded(`theme-${item.id}`)}
+                    onImageLoadEnd={markThemeCardImageLoaded}
                   />
                 )}
               />
@@ -752,7 +848,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 </View>
                 <PlayerNameInput
                   value={spelers[0]?.naam ?? ''}
-                  skin={spelers[0]?.skin ?? 'geel'}
+                  skin={spelers[0]?.skin ?? 'rood'}
                   defaultName="Speler 1"
                   onChangeText={(naam) => updatePlayerName(0, naam)}
                   onFocus={() => setFocusedNameIndex(0)}
@@ -845,26 +941,31 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
 
             <View style={styles.actionStack}>
               <GlossyButton
-                label="Play"
+                label="Speel"
                 variant="blue"
                 size="large"
                 onPressIn={handlePlayPressIn}
                 onPress={handleStart}
-                disabled={!canStart || !selectedThemeAvailable}
+                disabled={!canStart || Boolean(pendingGameStart)}
               />
             </View>
-          </Pressable>
-
-          <View pointerEvents={settingsOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
-            <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
-            </Animated.View>
           </View>
+
+          {settingsPanelVisible ? (
+            <View
+              pointerEvents={settingsOpen ? 'auto' : 'none'}
+              style={styles.settingsBackdropLayer}
+            >
+              <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
+              </Animated.View>
+            </View>
+          ) : null}
         </SafeAreaView>
 
         <SkinCarouselModal
           visible={skinPickerMounted && selectedPlayer !== null}
-          selectedSkin={selectedPlayer?.skin ?? 'geel'}
+          selectedSkin={selectedPlayer?.skin ?? 'rood'}
           takenSkins={takenSkins}
           heroTop={heroTop}
           overlayOpacity={overlayOpacity}
@@ -936,7 +1037,32 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 },
               ]}
             >
-              <View style={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}>
+              <Animated.ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.settingsMenuScroll}
+                contentContainerStyle={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}
+                scrollEventThrottle={Platform.OS === 'android' ? 32 : 16}
+                removeClippedSubviews={Platform.OS === 'android'}
+                onLayout={(event) => {
+                  const viewportHeight = event.nativeEvent.layout.height;
+                  setSettingsScrollMetrics((current) => (
+                    current.viewportHeight === viewportHeight
+                      ? current
+                      : { ...current, viewportHeight }
+                  ));
+                }}
+                onContentSizeChange={(_, contentHeight) => {
+                  setSettingsScrollMetrics((current) => (
+                    current.contentHeight === contentHeight
+                      ? current
+                      : { ...current, contentHeight }
+                  ));
+                }}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { y: settingsScrollY } } }],
+                  { useNativeDriver: true }
+                )}
+              >
                 <SettingsRuleSlider
                   title="Winconditie"
                   titleIcon={SETTINGS_WIN_CONDITION_TITLE_ICON}
@@ -955,7 +1081,40 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                   metrics={setupMetrics}
                   variant="diagonal"
                 />
-              </View>
+
+                <SettingsRuleSlider
+                  title="Nederlands"
+                  titleIcon={SETTINGS_DUTCH_ITEMS_TITLE}
+                  value={nederlands}
+                  options={SETTINGS_DUTCH_OPTIONS}
+                  onChange={setNederlands}
+                  metrics={setupMetrics}
+                  variant="dutch"
+                />
+
+                <SettingsRuleSlider
+                  title="Kaarten"
+                  titleIcon={SETTINGS_CARD_LAYOUT_TITLE_ICON}
+                  value={kaartOpzet}
+                  options={SETTINGS_CARD_LAYOUT_OPTIONS}
+                  onChange={setKaartOpzet}
+                  metrics={setupMetrics}
+                  variant="cardLayout"
+                />
+              </Animated.ScrollView>
+              {settingsScrollbarVisible ? (
+                <View pointerEvents="none" style={styles.settingsScrollbarTrack}>
+                  <Animated.View
+                    style={[
+                      styles.settingsScrollbarThumb,
+                      {
+                        height: settingsScrollbarThumbHeight,
+                        transform: [{ translateY: settingsScrollbarTranslateY }],
+                      },
+                    ]}
+                  />
+                </View>
+              ) : null}
             </Animated.View>
           </Animated.View>
           {!settingsPanelVisible ? (
@@ -986,14 +1145,17 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 originX: screenWidth / 2,
                 originY: screenHeight / 2,
                 routeName: 'Spel',
-                pauseMs: 80,
-                minSolidMs: 420,
-                settleMs: 120,
-                routeReadySettleMs: 160,
+                preloaded: true,
+                pauseMs: Platform.OS === 'ios' ? 0 : 80,
+                minSolidMs: Platform.OS === 'ios' ? 80 : 420,
+                settleMs: Platform.OS === 'ios' ? 40 : 120,
+                routeReadySettleMs: Platform.OS === 'ios' ? 40 : 160,
                 transitionKey: pendingGameStart.transitionKey,
               },
             });
-            setPendingGameStart(null);
+            setTimeout(() => {
+              setPendingGameStart(null);
+            }, 80);
           }}
         />
       ) : null}
@@ -1008,8 +1170,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   );
 }
 
-function PlayerAvatar({ skin = 'geel', size = 96, style, onImageLoadEnd }) {
-  const source = PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.geel;
+function PlayerAvatar({ skin = 'rood', size = 96, style, onImageLoadEnd }) {
+  const source = PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.rood;
   const shadowWidth = size * 0.76;
   const shadowHeight = size * 0.18;
 
@@ -1030,11 +1192,13 @@ function PlayerAvatar({ skin = 'geel', size = 96, style, onImageLoadEnd }) {
         </Defs>
         <Ellipse cx={shadowWidth / 2} cy={shadowHeight / 2} rx={shadowWidth / 2} ry={shadowHeight / 2} fill="url(#setupCarShadowGradient)" />
       </Svg>
-      <Image
+      <ExpoImage
         source={source}
-        resizeMode="contain"
-        fadeDuration={0}
-        onLoadEnd={onImageLoadEnd}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        transition={0}
+        onLoad={onImageLoadEnd}
+        onError={onImageLoadEnd}
         style={{ width: size, height: size }}
       />
     </View>
@@ -1045,7 +1209,7 @@ function AttentionCarButton({ skin, size, onPress, active = true, style, attenti
   const attention = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!active) {
+    if (!active || ANDROID_DISABLE_SETUP_IDLE_MOTION) {
       attention.stopAnimation();
       attention.setValue(0);
       return undefined;
@@ -1107,14 +1271,14 @@ function AttentionCarButton({ skin, size, onPress, active = true, style, attenti
 
 function PlayerNameInput({
   value,
-  skin = 'geel',
+  skin = 'rood',
   defaultName = 'Speler',
   onChangeText,
   onFocus,
   onBlur,
   hidden = false,
 }) {
-  const carColor = PLAYER_HEX[skin] ?? PLAYER_HEX.geel ?? '#F5C400';
+  const carColor = PLAYER_HEX[skin] ?? PLAYER_HEX.rood ?? '#E03030';
   const handleFocus = () => {
     onFocus?.();
     if (value === defaultName) {
@@ -1190,6 +1354,7 @@ function SkinCarouselModal({
   onSelectSkin,
 }) {
   const [challengeProgress, setChallengeProgress] = useState(null);
+  const [challengeProgressReady, setChallengeProgressReady] = useState(false);
   const orderedSkins = useMemo(
     () => [selectedSkin, ...SKIN_OPTIONS.filter((skin) => skin !== selectedSkin)],
     [selectedSkin]
@@ -1199,13 +1364,19 @@ function SkinCarouselModal({
   useEffect(() => {
     if (visible) {
       setActiveIndex(0);
-      void loadSkinChallengeProgress().then(setChallengeProgress);
+      setChallengeProgressReady(false);
+      void loadSkinChallengeProgress().then((progress) => {
+        setChallengeProgress(progress);
+      }).finally(() => {
+        setChallengeProgressReady(true);
+      });
     }
   }, [visible]);
 
   const activeSkin = orderedSkins[activeIndex] ?? selectedSkin;
   const activeSkinTaken = takenSkins.includes(activeSkin) && activeSkin !== selectedSkin;
-  const activeSkinLocked = isChallengeSkin(activeSkin) && !isSkinUnlocked(challengeProgress, activeSkin);
+  const activeSkinLocked = isChallengeSkin(activeSkin)
+    && (!challengeProgressReady || !isSkinUnlocked(challengeProgress, activeSkin));
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -1232,20 +1403,22 @@ function SkinCarouselModal({
             items={orderedSkins}
             itemWidth={224}
             itemSpacing={0}
+            loop={Platform.OS !== 'android'}
             onSnapToItem={setActiveIndex}
             keyExtractor={(item) => item}
             containerStyle={styles.carouselWrap}
             flatListProps={{ initialScrollIndex: 0 }}
-            renderCard={({ item, isFocused }) => (
+            renderCard={({ item }) => (
               (() => {
-                const itemLocked = isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item);
+                const itemLocked = isChallengeSkin(item)
+                  && challengeProgressReady
+                  && !isSkinUnlocked(challengeProgress, item);
 
                 return (
               <View
                 style={[
                   styles.carouselCardShellPicker,
                   { shadowColor: PLAYER_HEX[item] ?? PLAYER_HEX.geel },
-                  !isFocused && styles.carouselCardShellMuted,
                 ]}
               >
                 <View
@@ -1341,45 +1514,62 @@ function ThemeCard({ item, isPremium = false, onLockedPress, onImageLoadEnd }) {
         ]}
       >
         {themeImage ? (
-          <ImageBackground
-            source={themeImage}
-            resizeMode={usesEmbeddedFrame ? 'contain' : 'cover'}
-            fadeDuration={0}
-            onLoadEnd={onImageLoadEnd}
-            imageStyle={[
-              styles.carouselCardImage,
-              usesEmbeddedFrame && styles.carouselCardImageEmbedded,
-            ]}
+          <View
             style={[
               styles.carouselCardBody,
               usesEmbeddedFrame && styles.carouselCardBodyEmbedded,
             ]}
           >
+            <ExpoImage
+              source={themeImage}
+              contentFit={usesEmbeddedFrame ? 'contain' : 'cover'}
+              cachePolicy="memory-disk"
+              transition={0}
+              onLoad={onImageLoadEnd}
+              onError={onImageLoadEnd}
+              style={[
+                styles.carouselCardImageFill,
+                styles.carouselCardImage,
+                usesEmbeddedFrame && styles.carouselCardImageEmbedded,
+              ]}
+            />
             {usesEmbeddedFrame ? null : <View style={styles.carouselCardOverlay} />}
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
-            <View style={[styles.carouselCardTitleWrap, usesEmbeddedFrame && styles.carouselCardTitleWrapEmbedded]}>
+            <View
+              style={[
+                styles.carouselCardTitleWrap,
+                usesEmbeddedFrame && styles.carouselCardTitleWrapEmbedded,
+                item.id === 'verkeersborden' && styles.carouselCardTitleWrapEmbeddedWide,
+              ]}
+            >
               <Text
+                allowFontScaling={false}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.42}
+                maxFontSizeMultiplier={1}
                 style={[
                   styles.carouselCardTitle,
                   usesEmbeddedFrame && getEmbeddedThemeTitleStyle(item.id),
+                  item.id === 'verkeersborden' && styles.carouselCardTitleNoWrap,
                 ]}
               >
                 {item.title}
               </Text>
             </View>
-          </ImageBackground>
+          </View>
         ) : (
           <View style={[styles.carouselCardBody, { backgroundColor: item.surface }]}>
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
             <View style={styles.carouselCardTitleWrap}>
               <Text style={styles.carouselCardTitle}>{item.title}</Text>
@@ -1393,24 +1583,34 @@ function ThemeCard({ item, isPremium = false, onLockedPress, onImageLoadEnd }) {
 
 function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metrics, variant = 'win' }) {
   const isDiagonal = variant === 'diagonal';
+  const isDutch = variant === 'dutch';
+  const isCardLayout = variant === 'cardLayout';
   const [railWidth, setRailWidth] = useState(0);
   const selectorTranslateX = useRef(new Animated.Value(0)).current;
   const selectorScale = useRef(new Animated.Value(1)).current;
   const selectedIndex = Math.max(0, options.findIndex((option) => option.id === value));
   const optionCount = options.length;
   const selectorWidth = railWidth > 0 ? railWidth / optionCount : 0;
-  const frameSource = isDiagonal
-    ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
-    : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
-  const frameAspectRatio = isDiagonal ? (919 / 1475) : (935 / 1490);
-  const selectorColors = isDiagonal
-    ? ['#A553FF', '#7B24D8', '#4F1196']
-    : ['#62D629', '#2EAA0F', '#146E06'];
-  const titleShadowColor = isDiagonal ? '#4A0A83' : '#155F04';
+  const frameSource = isDutch
+    ? SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS
+    : isCardLayout
+      ? SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT
+      : isDiagonal
+        ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
+        : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
+  const frameAspectRatio = isDutch ? (992 / 1586) : isCardLayout ? (1024 / 1536) : isDiagonal ? (919 / 1475) : (935 / 1490);
+  const selectorColors = isDutch
+    ? ['#FFB02A', '#FF7A00', '#C84A00']
+    : isCardLayout
+      ? ['#40B8FF', '#1086E8', '#0050B5']
+      : isDiagonal
+        ? ['#A553FF', '#7B24D8', '#4F1196']
+        : ['#62D629', '#2EAA0F', '#146E06'];
+  const titleShadowColor = isDutch ? '#A64000' : isCardLayout ? '#004C9F' : isDiagonal ? '#4A0A83' : '#155F04';
   const frameWidth = Math.round(clamp(metrics.scale * 346, 314, 382));
   const frameHeight = Math.round(frameWidth * frameAspectRatio);
-  const selectorVisualWidth = isDiagonal ? selectorWidth : selectorWidth * 1.06;
-  const selectorVisualOffset = isDiagonal ? 0 : selectorWidth * -0.03;
+  const selectorVisualWidth = isDiagonal || isDutch || isCardLayout ? selectorWidth : selectorWidth * 1.06;
+  const selectorVisualOffset = isDiagonal || isDutch || isCardLayout ? 0 : selectorWidth * -0.03;
 
   function animateSelectorToIndex(index) {
     if (!selectorWidth) {
@@ -1488,7 +1688,7 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             style={[
               styles.settingsRuleTitle,
               {
-                fontSize: Math.round(29 * metrics.scale),
+                fontSize: Math.round((isDutch || isCardLayout ? 27 : 29) * metrics.scale),
                 textShadowColor: titleShadowColor,
               },
             ]}
@@ -1502,8 +1702,20 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             style={[
               styles.settingsRuleTitleIcon,
               {
-                width: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 1.14) : Math.round(metrics.settingsTitleIconSize * 0.92),
-                height: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 0.92) : Math.round(metrics.settingsTitleIconSize * 0.92),
+                width: isDiagonal
+                  ? Math.round(metrics.settingsTitleIconSize * 1.14)
+                  : isDutch
+                    ? Math.round(metrics.settingsTitleIconSize * 1.18)
+                    : isCardLayout
+                      ? Math.round(metrics.settingsTitleIconSize * 0.96)
+                    : Math.round(metrics.settingsTitleIconSize * 0.92),
+                height: isDiagonal
+                  ? Math.round(metrics.settingsTitleIconSize * 0.92)
+                  : isDutch
+                    ? Math.round(metrics.settingsTitleIconSize * 0.98)
+                    : isCardLayout
+                      ? Math.round(metrics.settingsTitleIconSize * 0.96)
+                    : Math.round(metrics.settingsTitleIconSize * 0.92),
               },
             ]}
           />
@@ -1545,13 +1757,18 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             {options.map((option, index) => {
               const selected = option.id === value;
               const isLongLabel = option.label.length >= 9;
-              const baseLabelSize = isDiagonal ? 25 : 20;
+              const hasImage = Boolean(option.image);
+              const baseLabelSize = isDiagonal ? 25 : isDutch ? 18 : isCardLayout ? 18 : 20;
               const labelSize = option.label.length >= 9
-                ? 17
+                ? (isDutch || isCardLayout ? 15 : 17)
                 : baseLabelSize;
               const optionImageSize = isDiagonal
                 ? Math.round(metrics.settingsSliderDiagonalImageSize * 0.84)
-                : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
+                : isDutch
+                  ? Math.round(metrics.settingsSliderImageSize * 1.02)
+                  : isCardLayout
+                    ? Math.round(metrics.settingsSliderImageSize * 1.04)
+                  : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
 
               return (
                 <Pressable
@@ -1560,27 +1777,29 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
                   style={styles.settingsRuleOption}
                 >
                   <View style={styles.settingsRuleOptionContent}>
-                    <Image
-                      source={option.image}
-                      resizeMode="contain"
-                      fadeDuration={0}
-                      style={[
-                        styles.settingsRuleOptionImage,
-                        {
-                          width: optionImageSize,
-                          height: optionImageSize,
-                        },
-                      ]}
-                    />
+                    {hasImage ? (
+                      <Image
+                        source={option.image}
+                        resizeMode="contain"
+                        fadeDuration={0}
+                        style={[
+                          styles.settingsRuleOptionImage,
+                          {
+                            width: optionImageSize,
+                            height: optionImageSize,
+                          },
+                        ]}
+                      />
+                    ) : null}
                     <Text
-                      numberOfLines={1}
+                      numberOfLines={isDutch || isCardLayout ? 2 : 1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.58}
                       style={[
                         styles.settingsRuleOptionLabel,
                         {
                           fontSize: Math.round(labelSize * metrics.scale),
-                          lineHeight: Math.round((labelSize + 9) * metrics.scale),
+                          lineHeight: Math.round((labelSize + (isDutch || isCardLayout ? 5 : 9)) * metrics.scale),
                         },
                         selected && styles.settingsRuleOptionLabelSelected,
                       ]}
@@ -1594,6 +1813,51 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
           </View>
         </View>
       </ImageBackground>
+    </View>
+  );
+}
+
+function SettingsTextSegment({ title, value, options, onChange, metrics }) {
+  return (
+    <View style={styles.settingsTextSection}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.76}
+        style={[
+          styles.settingsTextTitle,
+          { fontSize: Math.round(21 * metrics.scale) },
+        ]}
+      >
+        {title}
+      </Text>
+      <View style={styles.settingsTextOptionsRow}>
+        {options.map((option) => {
+          const selected = option.id === value;
+          return (
+            <Pressable
+              key={String(option.id)}
+              onPress={() => onChange(option.id)}
+              style={[
+                styles.settingsTextOption,
+                selected && styles.settingsTextOptionSelected,
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={[
+                  styles.settingsTextOptionLabel,
+                  selected && styles.settingsTextOptionLabelSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -1612,7 +1876,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 4,
+    paddingTop: 30,
     paddingBottom: 152,
     position: 'relative',
   },
@@ -1624,13 +1888,13 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   topBlock: {
-    marginTop: 32,
+    marginTop: 44,
     marginHorizontal: -24,
     zIndex: 1,
   },
   actionStack: {
     gap: 20,
-    marginTop: -2,
+    marginTop: 16,
     zIndex: 1,
   },
   nameFocusShield: {
@@ -1653,7 +1917,7 @@ const styles = StyleSheet.create({
   playerStageSection: {
     height: 252,
     position: 'relative',
-    marginTop: 12,
+    marginTop: 30,
     marginBottom: 8,
     zIndex: 4,
   },
@@ -1710,13 +1974,20 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(8, 18, 31, 0.32)',
+    backgroundColor: 'rgba(8, 18, 31, 0.54)',
+  },
+  settingsBackdropLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
   },
   bottomDock: {
     position: 'absolute',
     left: -8,
     right: -8,
     bottom: 0,
+    zIndex: 40,
+    elevation: 40,
   },
   collapsedPanelPressTarget: {
     position: 'absolute',
@@ -1728,11 +1999,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'transparent',
     borderWidth: 0,
-    shadowColor: '#3B0504',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 14,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   rulesPanelImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1754,6 +2024,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   panelHeader: {
     minHeight: 74,
@@ -1764,6 +2038,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 68,
     paddingTop: 4,
     paddingBottom: 10,
+    zIndex: 4,
+    elevation: 0,
   },
   panelHeaderClosed: {
     borderTopLeftRadius: 26,
@@ -1823,9 +2099,15 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
     backgroundColor: 'transparent',
+    zIndex: 1,
   },
   panelContentGloss: {
     ...StyleSheet.absoluteFillObject,
+  },
+  settingsMenuScroll: {
+    flex: 1,
+    marginTop: 18,
+    marginBottom: 52,
   },
   settingsMenuBody: {
     alignItems: 'center',
@@ -1833,10 +2115,68 @@ const styles = StyleSheet.create({
     paddingTop: 36,
     paddingBottom: 28,
   },
+  settingsScrollbarTrack: {
+    position: 'absolute',
+    top: 28,
+    right: 34,
+    bottom: 82,
+    width: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.12)',
+    overflow: 'hidden',
+  },
+  settingsScrollbarThumb: {
+    width: '100%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.34)',
+  },
   settingsRuleSection: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  settingsTextSection: {
+    width: '86%',
+    maxWidth: 382,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 2,
+    borderColor: 'rgba(45, 127, 178, 0.3)',
+  },
+  settingsTextTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  settingsTextOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  settingsTextOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: '#E8F5FF',
+    borderWidth: 2,
+    borderColor: '#B7D8EF',
+  },
+  settingsTextOptionSelected: {
+    backgroundColor: '#159B3B',
+    borderColor: '#0B6B27',
+  },
+  settingsTextOptionLabel: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  settingsTextOptionLabelSelected: {
+    color: '#FFFFFF',
   },
   settingsRuleFrame: {
     alignItems: 'center',
@@ -2030,6 +2370,11 @@ const styles = StyleSheet.create({
   carouselCardImage: {
     borderRadius: 22,
   },
+  carouselCardImageFill: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   carouselCardImageEmbedded: {
     borderRadius: 0,
   },
@@ -2066,6 +2411,10 @@ const styles = StyleSheet.create({
     minHeight: 46,
     justifyContent: 'center',
   },
+  carouselCardTitleWrapEmbeddedWide: {
+    left: '-5%',
+    right: '-5%',
+  },
   carouselCardTitle: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 28,
@@ -2075,6 +2424,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.38)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 5,
+  },
+  carouselCardTitleNoWrap: {
+    width: '100%',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
   modalBackdrop: {
     flex: 1,

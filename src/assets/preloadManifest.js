@@ -40,6 +40,8 @@ export const HOME_ASSETS = [
   require('../../assets/images/backgrounds/skin-road-background.png'),
   require('../../assets/images/backgrounds/theme-road-scroll-background-v4.png'),
   require('../../assets/images/players/challenge-skin-lock.png'),
+  require('../../assets/images/players/challenge-skin-lock-swing-open.png'),
+  require('../../assets/images/players/challenge-unlock-star-blue.png'),
   require('../../assets/images/nav-icons/nav-palette.png'),
   require('../../assets/images/nav-icons/nav-home.png'),
   require('../../assets/images/nav-icons/nav-cards.png'),
@@ -59,6 +61,7 @@ export const HOME_CRITICAL_ASSETS = [
   require('../../assets/images/nav-icons/nav-palette.png'),
   require('../../assets/images/nav-icons/nav-home.png'),
   require('../../assets/images/nav-icons/nav-cards.png'),
+  THEME_LOCK_OVERLAY_OVERVIEW_IMAGE,
 ];
 
 export const PREMIUM_MODAL_ASSETS = [
@@ -107,6 +110,8 @@ export const SETUP_RULE_ASSETS = [
   require('../../assets/images/settings/rules-menu-panel-v2.png'),
   require('../../assets/images/settings/rules-slider-frame-wincondition.png'),
   require('../../assets/images/settings/rules-slider-frame-diagonal.png'),
+  require('../../assets/images/settings/rules-slider-frame-dutch-items.png'),
+  require('../../assets/images/settings/rules-slider-frame-card-layout.png'),
   require('../../assets/images/settings/win-condition-title.png'),
   require('../../assets/images/settings/diagonal-rule-title.png'),
   require('../../assets/images/settings/win-1-line.png'),
@@ -114,6 +119,12 @@ export const SETUP_RULE_ASSETS = [
   require('../../assets/images/settings/win-full-card.png'),
   require('../../assets/images/settings/diagonal-on.png'),
   require('../../assets/images/settings/diagonal-off.png'),
+  require('../../assets/images/settings/dutch-items-title.png'),
+  require('../../assets/images/settings/dutch-items-on.png'),
+  require('../../assets/images/settings/dutch-items-off.png'),
+  require('../../assets/images/settings/card-layout-title.png'),
+  require('../../assets/images/settings/card-layout-same.png'),
+  require('../../assets/images/settings/card-layout-different.png'),
 ];
 
 export const SETUP_ASSETS = [
@@ -122,6 +133,8 @@ export const SETUP_ASSETS = [
   PLAYER_ADD_SILHOUETTE_IMAGE,
   PLAYER_FUTURE_SKIN_IMAGE,
   require('../../assets/images/players/challenge-skin-lock.png'),
+  require('../../assets/images/players/challenge-skin-lock-swing-open.png'),
+  require('../../assets/images/players/challenge-unlock-star-blue.png'),
   ...Object.values(PLAYER_IMAGES),
   ...Object.values(THEME_CARD_IMAGES),
   THEME_LOCK_OVERLAY_IMAGE,
@@ -164,6 +177,8 @@ export const WAITING_ROOM_ASSETS = [
   PLAYER_ADD_SILHOUETTE_IMAGE,
   PLAYER_FUTURE_SKIN_IMAGE,
   require('../../assets/images/players/challenge-skin-lock.png'),
+  require('../../assets/images/players/challenge-skin-lock-swing-open.png'),
+  require('../../assets/images/players/challenge-unlock-star-blue.png'),
   ...Object.values(PLAYER_IMAGES),
   ...Object.values(THEME_CARD_IMAGES),
 ];
@@ -197,6 +212,35 @@ export const BINGO_BOARD_ASSET_BY_SKIN = {
 };
 
 export const BINGO_BOARD_ASSETS = Object.values(BINGO_BOARD_ASSET_BY_SKIN);
+
+export const BINGO_SPLASH_ASSET_BY_SKIN = {
+  blauw: require('../../assets/logo (bingo-blauw).png'),
+  geel: require('../../assets/logo (bingo-geel).png'),
+  groen: require('../../assets/logo (bingo-groen).png'),
+  lichtblauw: require('../../assets/logo (bingo-lichtblauw).png'),
+  oranje: require('../../assets/logo (bingo-oranje).png'),
+  paars: require('../../assets/logo (bingo-paars).png'),
+  rood: require('../../assets/logo (bingo-rood).png'),
+  roze: require('../../assets/logo (bingo-roze).png'),
+  wit: require('../../assets/logo (bingo-wit).png'),
+  zwart: require('../../assets/logo (bingo-zwart).png'),
+  regenboog: require('../../assets/logo (bingo-regenboog).png'),
+  koe: require('../../assets/logo (bingo-koe).png'),
+  kerst: require('../../assets/logo (bingo-kerst).png'),
+  politie: require('../../assets/logo (bingo-politie).png'),
+  ambulance: require('../../assets/logo (bingo-ambulance).png'),
+  brandweer: require('../../assets/logo (bingo-brandweer).png'),
+  brons: require('../../assets/logo (bingo-brons).png'),
+  zilver: require('../../assets/logo (bingo-zilver).png'),
+  goud: require('../../assets/logo (bingo-goud).png'),
+  kat: require('../../assets/logo (bingo-kat).png'),
+  hond: require('../../assets/logo (bingo-hond).png'),
+  hartjes: require('../../assets/logo (bingo-hartjes).png'),
+  taxi: require('../../assets/logo (bingo-taxi).png'),
+  vlammen: require('../../assets/logo (bingo-vlammen).png'),
+};
+
+export const BINGO_SPLASH_ASSETS = Object.values(BINGO_SPLASH_ASSET_BY_SKIN);
 
 export const CLAIM_PODIUM_ASSETS = [
   require('../../assets/images/claim-results/podium-blauw.png'),
@@ -232,6 +276,8 @@ export const GAME_BASE_ASSETS = [
 
 export const BOOT_ASSETS = [
   ...HOME_CRITICAL_ASSETS,
+  require('../../assets/images/ui/driver-warning-menu.png'),
+  require('../../assets/images/ui/driver-warning-icon.png'),
   ...POPUP_PANEL_ASSETS,
   ...SETTINGS_ASSETS,
   ...PREMIUM_MODAL_ASSETS,
@@ -255,7 +301,20 @@ export const BOOT_WARMUP_ROUTE_NAMES = [
 ];
 
 export function uniqueAssets(assets) {
-  return [...new Set(assets.filter(Boolean))];
+  const seenAssetKeys = new Set();
+  const unique = [];
+
+  assets.filter(Boolean).forEach((asset) => {
+    const key = getAssetKey(asset);
+    if (seenAssetKeys.has(key)) {
+      return;
+    }
+
+    seenAssetKeys.add(key);
+    unique.push(asset);
+  });
+
+  return unique;
 }
 
 export function getAssetKey(source) {
@@ -299,13 +358,16 @@ export function getGameAssets(params = {}) {
   const normalizedMode = String(config.modus ?? config.gameMode ?? '').toLowerCase();
   const boardCellCount = 16;
   const seed = Number.isFinite(config.seed) ? config.seed : 0;
+  const itemOptions = {
+    nederlands: config.nederlands !== false,
+  };
   const boardIconAssets = config.kaartOpzet === 'ander-thema'
     ? getPlayerThemes(config.thema, playerCount)
-      .flatMap((themeId, index) => getRandomIcons(themeId, boardCellCount, seed + index))
+      .flatMap((themeId, index) => getRandomIcons(themeId, boardCellCount, seed + index, itemOptions))
     : config.kaartOpzet === 'zelfde'
-      ? getRandomIcons(config.thema, boardCellCount, seed)
+      ? getRandomIcons(config.thema, boardCellCount, seed, itemOptions)
       : Array.from({ length: playerCount }, (_, index) =>
-        getRandomIcons(config.thema, boardCellCount, seed + index)
+        getRandomIcons(config.thema, boardCellCount, seed + index, itemOptions)
       ).flat();
   const playerBoardAssets = uniqueAssets([
     ...(normalizedMode === 'claim' ? [BINGO_BOARD_ASSET_BY_SKIN.neutral] : []),
@@ -313,11 +375,17 @@ export function getGameAssets(params = {}) {
       .map((skin) => BINGO_BOARD_ASSET_BY_SKIN[skin])
       .filter(Boolean),
   ]);
+  const playerBingoSplashAssets = uniqueAssets(
+    warmupSkinIds
+      .map((skin) => BINGO_SPLASH_ASSET_BY_SKIN[skin])
+      .filter(Boolean)
+  );
 
   return uniqueAssets([
     ...GAME_BASE_ASSETS,
     ...playerSkins,
     ...playerBoardAssets,
+    ...playerBingoSplashAssets,
     ...boardIconAssets,
   ]);
 }

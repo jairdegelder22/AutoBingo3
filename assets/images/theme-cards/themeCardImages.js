@@ -4,14 +4,9 @@ export const THEME_CARD_IMAGES = {
   stad: require('./stad-theme-card.png'),
   vakantie: require('./vakantie-theme-card.png'),
   winter: require('./winter-theme-card.png'),
+  bergen: require('./bergen-theme-card.png'),
   voertuigen: require('./voertuigen-theme-card.png'),
   verkeersborden: require('./verkeersborden-theme-card.png'),
-};
-
-export const THEME_BANNER_FRAME_IMAGES = {
-  platteland: require('./banner-frames-v2/platteland-theme-banner-frame.png'),
-  snelweg: require('./banner-frames-v2/snelweg-theme-banner-frame.png'),
-  stad: require('./banner-frames-v2/stad-theme-banner-frame.png'),
 };
 
 export const THEME_DETAIL_BACKGROUND_IMAGES = {
@@ -20,8 +15,9 @@ export const THEME_DETAIL_BACKGROUND_IMAGES = {
   stad: require('./detail-backgrounds/stad-theme-detail-background.png'),
   vakantie: require('./detail-backgrounds/vakantie-theme-detail-background.png'),
   voertuigen: require('./detail-backgrounds/voertuigen-theme-detail-background.png'),
-  winter: require('./detail-backgrounds/winter-theme-detail-background.png'),
-  verkeersborden: require('./detail-backgrounds/verkeersborden-theme-detail-background.png'),
+  winter: require('./detail-backgrounds/winter-theme-detail-background.jpeg'),
+  bergen: require('./detail-backgrounds/bergen-theme-detail-background.png'),
+  verkeersborden: require('./detail-backgrounds/verkeersborden-theme-detail-background.jpeg'),
 };
 
 export const THEME_LOCK_OVERLAY_IMAGE = require('./theme-lock-overlay.png');

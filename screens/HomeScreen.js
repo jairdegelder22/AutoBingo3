@@ -1,5 +1,7 @@
-import { BackHandler, Animated, Easing, Image, ImageBackground, InteractionManager, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Animated, Easing, FlatList, Image, ImageBackground, InteractionManager, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Asset } from 'expo-asset';
+import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from '../src/settings/haptics';
@@ -13,7 +15,7 @@ import ThemeCarousel from '../src/components/ThemeCarousel';
 import WarmupImages from '../src/components/WarmupImages';
 import { PLAYER_FUTURE_SKIN_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getThemeCardImage, getThemeDetailBackgroundImage, THEME_LOCK_OVERLAY_OVERVIEW_IMAGE } from '../assets/images/theme-cards/themeCardImages';
-import { createGameConfig, DEFAULT_ZICHTBAARHEID, SKIN_OPTIONS } from './gameFlowConfig';
+import { createGameConfig, DEFAULT_ZICHTBAARHEID, EQUIPPED_SKIN_STORAGE_KEY, SKIN_OPTIONS } from './gameFlowConfig';
 import { THEMES } from './themeCatalog';
 import { getThemeIcons } from './themeIcons';
 import { decodeLobbyCode, normalizeLobbyCode } from '../src/utils/lobbyCode';
@@ -36,11 +38,39 @@ import {
   HOME_ASSETS,
   HOME_CRITICAL_ASSETS,
   PREMIUM_MODAL_ASSETS,
+  getAssetKey,
   getThemeDetailAssets,
 } from '../src/assets/preloadManifest';
 import { preloadImageAssets } from '../src/assets/preloadImages';
 
 const PLAY_BUTTON_IMAGE = require('../assets/images/home-online-button.png');
+const STATE_ON_IMAGE = require('../assets/images/settings/toggles/state-on.png');
+const PLAY_BUTTON_CAR_IMAGES = {
+  rood: PLAY_BUTTON_IMAGE,
+  blauw: require('../assets/images/play-button-cars/play-car-blauw.png'),
+  groen: require('../assets/images/play-button-cars/play-car-groen.png'),
+  geel: require('../assets/images/play-button-cars/play-car-geel.png'),
+  oranje: require('../assets/images/play-button-cars/play-car-oranje.png'),
+  paars: require('../assets/images/play-button-cars/play-car-paars.png'),
+  roze: require('../assets/images/play-button-cars/play-car-roze.png'),
+  lichtblauw: require('../assets/images/play-button-cars/play-car-lichtblauw.png'),
+  zwart: require('../assets/images/play-button-cars/play-car-zwart.png'),
+  wit: require('../assets/images/play-button-cars/play-car-wit.png'),
+  regenboog: require('../assets/images/play-button-cars/play-car-regenboog.png'),
+  koe: require('../assets/images/play-button-cars/play-car-koe.png'),
+  kerst: require('../assets/images/play-button-cars/play-car-kerst.png'),
+  politie: require('../assets/images/play-button-cars/play-car-politie.png'),
+  ambulance: require('../assets/images/play-button-cars/play-car-ambulance.png'),
+  brandweer: require('../assets/images/play-button-cars/play-car-brandweer.png'),
+  brons: require('../assets/images/play-button-cars/play-car-brons.png'),
+  zilver: require('../assets/images/play-button-cars/play-car-zilver.png'),
+  goud: require('../assets/images/play-button-cars/play-car-goud.png'),
+  kat: require('../assets/images/play-button-cars/play-car-kat.png'),
+  hond: require('../assets/images/play-button-cars/play-car-hond.png'),
+  hartjes: require('../assets/images/play-button-cars/play-car-hartjes.png'),
+  taxi: require('../assets/images/play-button-cars/play-car-taxi.png'),
+  vlammen: require('../assets/images/play-button-cars/play-car-vlammen.png'),
+};
 const ONLINE_YELLOW_CAR = require('../assets/images/online-car-yellow.png');
 const ONLINE_BLUE_CAR = require('../assets/images/online-car-blue.png');
 const ONLINE_GREEN_CAR = require('../assets/images/online-car-green.png');
@@ -65,6 +95,8 @@ const DRIVER_WARNING_ICON_IMAGE = require('../assets/images/ui/driver-warning-ic
 const SKIN_ROAD_BACKGROUND = require('../assets/images/backgrounds/skin-road-background.png');
 const THEME_ROAD_BACKGROUND = require('../assets/images/backgrounds/theme-road-scroll-background-v4.png');
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
+const CHALLENGE_SKIN_LOCK_OPEN_IMAGE = require('../assets/images/players/challenge-skin-lock-swing-open.png');
+const CHALLENGE_UNLOCK_STAR_IMAGE = require('../assets/images/players/challenge-unlock-star-blue.png');
 const NAV_ICON_IMAGES = {
   palette: {
     selected: require('../assets/images/nav-icons/nav-palette.png'),
@@ -79,6 +111,10 @@ const NAV_ICON_IMAGES = {
     unselected: require('../assets/images/nav-icons/nav-cards.png'),
   },
 };
+const THEME_DETAIL_ROUTE_ASSETS = [
+  require('../assets/images/navigation/back-button.png'),
+  require('../assets/images/navigation/back-button-pressed.png'),
+];
 const SKIN_ROAD_IMAGE_RATIO = 1920 / 819;
 const SKIN_ROAD_REPEAT_COUNT = 2;
 const SKIN_ROAD_ZOOM = 1.28;
@@ -92,7 +128,7 @@ const HOME_ACTION_COLLAPSED_HEIGHT = 122;
 const HOME_ACTION_EXPANDED_HEIGHT = 236;
 const ONLINE_CAR_HORN_JUMP_DELAYS = [0, 295, 465];
 const PRESS_THEN_HORN_DELAY_MS = 300;
-const PLAY_HORN_JUMP_DELAYS = [60, 420];
+const PLAY_HORN_FEEDBACK_DELAYS = [0, 300];
 const GLOSSY_BUTTON_CLICK_SOUND = 'glossyButtonClick';
 const NAV_TAB_SWITCH_SOUND = 'navTabSwitchClick';
 const NAV_TAB_SWITCH_VOLUME_MULTIPLIER = 0.65;
@@ -101,6 +137,7 @@ const ONLINE_CARS_HORN_SOUND = 'onlineHornMode';
 const PLAY_HORN_SOUND = 'playHornHonk';
 const BUG_REPORT_STORAGE_KEY = 'autoBingo.pendingBugReports';
 const BUG_REPORT_APP_VERSION = '1.0.0';
+const AnimatedExpoImage = Animated.createAnimatedComponent(ExpoImage);
 const BUG_REPORT_SEVERITIES = [
   { value: 'low', label: 'Klein' },
   { value: 'medium', label: 'Vervelend' },
@@ -209,8 +246,8 @@ function getSkinShopAnimationPhase(item, animationSeed, cycleMs) {
 const THEME_SHOWCASE_ITEMS = THEMES.map((theme) => ({
   ...theme,
   previewImage: getThemeCardImage(theme.id),
-  previewItems: theme.id === 'winter' ? [] : getThemeIcons(theme.id).slice(0, 10),
-  itemCount: theme.id === 'winter' ? 0 : getThemeIcons(theme.id).length,
+  previewItems: getThemeIcons(theme.id).slice(0, 10),
+  itemCount: getThemeIcons(theme.id).length,
 }));
 const THEME_ROAD_ITEMS_PER_SEGMENT = 1;
 const THEME_ROAD_NEXT_CARD_PEEK_RATIO = 0.07;
@@ -225,6 +262,47 @@ const THEME_ROAD_TITLE_OUTLINE_OFFSETS = [
   [-1.5, 1.5],
   [1.5, 1.5],
 ];
+const THEME_REVEAL_COLOR_OVERRIDES = {
+  platteland: '#1F6F34',
+};
+const THEME_REVEAL_PRELOAD_TIMEOUT_MS = 650;
+const LICENSE_PLATE_DASH_SLOT_WEIGHT = 0.44;
+const LICENSE_PLATE_TOTAL_SLOT_UNITS = 8 + LICENSE_PLATE_DASH_SLOT_WEIGHT * 2;
+
+function getThemeRevealColor(theme) {
+  return THEME_REVEAL_COLOR_OVERRIDES[theme?.id]
+    ?? theme?.cardOutline
+    ?? theme?.cardBorder
+    ?? theme?.bg
+    ?? '#1A5EA8';
+}
+
+function getLicensePlateSlots(rawCode = '') {
+  const chars = normalizeLobbyCode(rawCode).split('');
+  return [
+    { key: 'char-0', type: 'char', value: chars[0] ?? '' },
+    { key: 'char-1', type: 'char', value: chars[1] ?? '' },
+    { key: 'dash-0', type: 'dash', value: chars.length >= 2 ? '-' : '' },
+    { key: 'char-2', type: 'char', value: chars[2] ?? '' },
+    { key: 'char-3', type: 'char', value: chars[3] ?? '' },
+    { key: 'char-4', type: 'char', value: chars[4] ?? '' },
+    { key: 'dash-1', type: 'dash', value: chars.length >= 5 ? '-' : '' },
+    { key: 'char-5', type: 'char', value: chars[5] ?? '' },
+    { key: 'char-6', type: 'char', value: chars[6] ?? '' },
+    { key: 'char-7', type: 'char', value: chars[7] ?? '' },
+  ];
+}
+
+function getLicensePlateCursorUnits(rawLength) {
+  if (rawLength >= 8) {
+    return LICENSE_PLATE_TOTAL_SLOT_UNITS;
+  }
+
+  return rawLength
+    + (rawLength >= 2 ? LICENSE_PLATE_DASH_SLOT_WEIGHT : 0)
+    + (rawLength >= 5 ? LICENSE_PLATE_DASH_SLOT_WEIGHT : 0)
+    + 0.5;
+}
 
 function hasEmbeddedThemeFrame(themeId) {
   return (
@@ -234,6 +312,7 @@ function hasEmbeddedThemeFrame(themeId) {
     || themeId === 'vakantie'
     || themeId === 'voertuigen'
     || themeId === 'winter'
+    || themeId === 'bergen'
     || themeId === 'verkeersborden'
   );
 }
@@ -260,6 +339,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
     return {
       color: '#111111',
       ...compactTitleStyle,
+      top: '5.1%',
       letterSpacing: 0.5,
       textShadowColor: 'rgba(255, 255, 255, 0.52)',
       textShadowOffset: { width: 0, height: 1 },
@@ -270,6 +350,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
   return {
     color: '#FFFFFF',
     ...compactTitleStyle,
+    top: '5.1%',
     letterSpacing: 0.5,
     textShadowColor: '#15539D',
     textShadowOffset: { width: 0, height: 1 },
@@ -287,6 +368,10 @@ function withAlpha(hexColor, alpha) {
   const blue = parseInt(hexColor.slice(5, 7), 16);
 
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function HomeNavIcon({ icon, active, size = 60 }) {
@@ -376,7 +461,7 @@ function SkinRoadBackground() {
   );
 }
 
-function ThemeRoadCard({ item, isLocked = false }) {
+function ThemeRoadCard({ item, isLocked = false, onImageLoadEnd }) {
   const cardColor = item.cardOutline ?? item.cardBorder ?? item.bg;
   const cardChromeColor = isLocked ? withAlpha(cardColor, 0.42) : cardColor;
   const embeddedFrame = hasEmbeddedThemeFrame(item.id);
@@ -410,10 +495,11 @@ function ThemeRoadCard({ item, isLocked = false }) {
       style={[styles.roadThemeCardLockLayer, { opacity: lockOpacity }]}
     >
       <View style={styles.roadThemeCardLockedDim} />
-      <Image
+      <ExpoImage
         source={THEME_LOCK_OVERLAY_OVERVIEW_IMAGE}
-        resizeMode="cover"
-        fadeDuration={0}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={0}
         style={styles.roadThemeCardLockOverlay}
       />
     </Animated.View>
@@ -432,18 +518,28 @@ function ThemeRoadCard({ item, isLocked = false }) {
               },
         ]}
       >
-        <ImageBackground
-          source={item.previewImage}
-          resizeMode={embeddedFrame ? 'stretch' : 'cover'}
-          imageStyle={embeddedFrame ? styles.roadThemeCardImageEmbedded : null}
+        <View
           style={[
             styles.roadThemeCardBody,
             embeddedFrame && styles.roadThemeCardBodyEmbedded,
           ]}
         >
+          <ExpoImage
+            source={item.previewImage}
+            contentFit={embeddedFrame ? 'fill' : 'cover'}
+            cachePolicy="memory-disk"
+            transition={0}
+            onLoad={onImageLoadEnd}
+            onError={onImageLoadEnd}
+            style={[
+              styles.roadThemeCardPreviewImage,
+              embeddedFrame && styles.roadThemeCardImageEmbedded,
+            ]}
+          />
           {lockLayer}
           {embeddedFrame ? (
             <Text
+              allowFontScaling={false}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.72}
@@ -456,7 +552,7 @@ function ThemeRoadCard({ item, isLocked = false }) {
               {item.label}
             </Text>
           ) : null}
-        </ImageBackground>
+        </View>
       </View>
     );
   }
@@ -486,11 +582,16 @@ function ThemeRoadCard({ item, isLocked = false }) {
   );
 }
 
-function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemePress }) {
+function ThemeRoadBackground({ isPremium = false, onReady, onScrollOffsetChange, onThemePress }) {
   const { height, width } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(width, height);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollOffsetRef = useRef(0);
+  const visibleRoadPageRef = useRef(0);
+  const [visibleRoadPage, setVisibleRoadPage] = useState(0);
+  const [roadBackgroundReady, setRoadBackgroundReady] = useState(false);
+  const [roadCardReadyPage, setRoadCardReadyPage] = useState(null);
+  const readyCalledRef = useRef(false);
   const stageHeight = height;
   const nextCardPeek = Math.min(isTablet ? 58 : 36, Math.max(isTablet ? 34 : 24, width * THEME_ROAD_NEXT_CARD_PEEK_RATIO));
   const topClearance = Math.max(isTablet ? 92 : 72, height * (isTablet ? 0.09 : 0.08));
@@ -510,6 +611,27 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
     ),
   }));
 
+  useEffect(() => {
+    if (readyCalledRef.current || !roadBackgroundReady || roadCardReadyPage !== visibleRoadPage) {
+      return;
+    }
+
+    readyCalledRef.current = true;
+    onReady?.();
+  }, [onReady, roadBackgroundReady, roadCardReadyPage, visibleRoadPage]);
+
+  const updateVisibleRoadPage = useCallback((offsetX) => {
+    const nextPage = Math.max(
+      0,
+      Math.min(THEME_ROAD_PAGE_COUNT - 1, Math.round(offsetX / segmentWidth))
+    );
+
+    if (nextPage !== visibleRoadPageRef.current) {
+      visibleRoadPageRef.current = nextPage;
+      setVisibleRoadPage(nextPage);
+    }
+  }, [segmentWidth]);
+
   return (
     <Animated.ScrollView
       horizontal
@@ -528,15 +650,20 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
           listener: (event) => {
             const offsetX = event.nativeEvent.contentOffset.x;
             scrollOffsetRef.current = offsetX;
+            updateVisibleRoadPage(offsetX);
             onScrollOffsetChange?.(offsetX);
           },
         }
       )}
     >
       <View style={[styles.themeRoadStage, { width: stageWidth, height: stageHeight }]}>
-        <Image
+        <ExpoImage
           source={THEME_ROAD_BACKGROUND}
-          resizeMode="stretch"
+          contentFit="fill"
+          cachePolicy="memory-disk"
+          transition={0}
+          onLoad={() => setRoadBackgroundReady(true)}
+          onError={() => setRoadBackgroundReady(true)}
           style={[
             styles.themeRoadImage,
             {
@@ -546,6 +673,7 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
           ]}
         />
         {roadPages.map((page, pageIndex) => (
+          Math.abs(pageIndex - visibleRoadPage) > 1 ? null :
           page.items.map((item) => {
             const cardX = pageIndex * segmentWidth + centeredCardLeft;
             const cardY = cardTop;
@@ -615,7 +743,15 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
                   }}
                   style={styles.roadThemeCardPressable}
                 >
-                  <ThemeRoadCard item={item} isLocked={isLocked} />
+                  <ThemeRoadCard
+                    item={item}
+                    isLocked={isLocked}
+                    onImageLoadEnd={() => {
+                      if (pageIndex === visibleRoadPageRef.current) {
+                        setRoadCardReadyPage(pageIndex);
+                      }
+                    }}
+                  />
                 </Pressable>
               </Animated.View>
             );
@@ -626,14 +762,14 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
   );
 }
 
-function ThemeItemTile({ itemImage, onInspect }) {
+function ThemeItemTile({ itemImage, inspectImage, onInspect, onLoadEnd }) {
   const tileRef = useRef(null);
 
   function handlePress() {
     tileRef.current?.measureInWindow((x, y, measuredWidth, measuredHeight) => {
       void Haptics.selectionAsync();
       onInspect?.({
-        icon: itemImage,
+        icon: inspectImage ?? itemImage,
         rect: {
           x,
           y,
@@ -646,9 +782,48 @@ function ThemeItemTile({ itemImage, onInspect }) {
 
   return (
     <Pressable ref={tileRef} style={styles.themeItemTile} onPress={handlePress}>
-      <Image source={itemImage} resizeMode="contain" fadeDuration={0} style={styles.themeItemImage} />
+      <ExpoImage
+        source={itemImage}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        transition={0}
+        onLoad={onLoadEnd}
+        onError={onLoadEnd}
+        style={styles.themeItemImage}
+      />
     </Pressable>
   );
+}
+
+function getResolvedAssetSource(source, resolvedSources) {
+  if (!source) {
+    return source;
+  }
+
+  return resolvedSources.get(getAssetKey(source)) ?? source;
+}
+
+async function loadResolvedAssetSources(sources) {
+  const uniqueSources = [];
+  const seen = new Set();
+
+  sources.filter(Boolean).forEach((source) => {
+    const key = getAssetKey(source);
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueSources.push(source);
+    }
+  });
+
+  const entries = await Promise.all(uniqueSources.map(async (source) => {
+    const asset = Asset.fromModule(source);
+    await asset.downloadAsync();
+    const uri = asset.localUri ?? asset.uri;
+    return [getAssetKey(source), uri ? { uri } : source];
+  }));
+
+  return new Map(entries);
 }
 
 function ThemeItemInspectOverlay({ cell, progress, onClose }) {
@@ -686,10 +861,6 @@ function ThemeItemInspectOverlay({ cell, progress, onClose }) {
     inputRange: [0, 1],
     outputRange: [startSize, targetSize],
   });
-  const imageSize = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [startSize * 0.82, targetSize * 0.82],
-  });
   const shadowOpacity = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [0.08, 0.28],
@@ -714,20 +885,20 @@ function ThemeItemInspectOverlay({ cell, progress, onClose }) {
           },
         ]}
       >
-        <Animated.Image
+        <ExpoImage
+          key={getAssetKey(cell.icon)}
           source={cell.icon}
-          resizeMode="contain"
-          style={{
-            width: imageSize,
-            height: imageSize,
-          }}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          transition={0}
+          style={styles.themeInspectImage}
         />
       </Animated.View>
     </View>
   );
 }
 
-function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
+function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
   const { height, width } = useWindowDimensions();
   const safeWidth = Number.isFinite(width) && width > 0 ? width : FALLBACK_WINDOW_WIDTH;
   const safeHeight = Number.isFinite(height) && height > 0 ? height : FALLBACK_WINDOW_HEIGHT;
@@ -786,6 +957,7 @@ function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
               item={item}
               animationSeed={index}
               hidden={item.id === inspectedSkinId}
+              equipped={item.id === equippedSkin}
               onInspect={onInspect}
               style={{
                 left: columnIndex === 0 ? width * (isTablet ? 0.055 : 0.035) : width * (isTablet ? 0.525 : 0.495),
@@ -801,18 +973,20 @@ function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
   );
 }
 
-function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
+function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, style }) {
   const tileRef = useRef(null);
   const bob = useRef(new Animated.Value(0)).current;
   const isUnlocked = isSkinShopItemUnlocked(item);
   const isChallengeLocked = item.unlockType === 'challenge' && !isUnlocked;
+  const shouldAnimateIdleMotion = isUnlocked;
+  const tileHeight = style?.height ?? 146;
   const animationPhase = getSkinShopAnimationPhase(item, animationSeed, SKIN_SHOP_CAR_BOB_DURATION);
-  const tileImageHeight = Math.max(SKIN_SHOP_TILE_IMAGE_HEIGHT, Math.min(202, (style?.height ?? 146) * 0.94));
+  const tileImageHeight = Math.max(SKIN_SHOP_TILE_IMAGE_HEIGHT, Math.min(202, tileHeight * 0.94));
 
   useEffect(() => {
     bob.stopAnimation();
 
-    if (!isUnlocked) {
+    if (!shouldAnimateIdleMotion) {
       bob.setValue(0);
       return undefined;
     }
@@ -841,7 +1015,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
       bob.stopAnimation();
       bob.setValue(0);
     };
-  }, [bob, isUnlocked]);
+  }, [bob, shouldAnimateIdleMotion]);
 
   function handlePress() {
     tileRef.current?.measureInWindow((x, y, width, height) => {
@@ -876,7 +1050,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
       <Animated.View
         style={[
           styles.skinShopTileShadowMotion,
-          isUnlocked && {
+          shouldAnimateIdleMotion && {
             transform: [
               {
                 scaleX: bob.interpolate({
@@ -900,7 +1074,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
         style={[
           styles.skinShopTileCarMotion,
           { height: tileImageHeight },
-          isUnlocked && {
+          shouldAnimateIdleMotion && {
             transform: [
               {
                 translateY: bob.interpolate({
@@ -922,6 +1096,16 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
           ]}
         />
       </Animated.View>
+        {equipped && isUnlocked ? (
+          <View pointerEvents="none" style={styles.skinShopEquippedBadge}>
+            <Image
+              source={STATE_ON_IMAGE}
+              resizeMode="contain"
+              fadeDuration={0}
+              style={styles.skinShopEquippedIcon}
+            />
+          </View>
+        ) : null}
       {isChallengeLocked ? (
         <ChallengeSkinLockOverlay
           size="tile"
@@ -1016,7 +1200,7 @@ function SkinCarShadow({ style } = {}) {
   );
 }
 
-function SkinInspectOverlay({ inspection, progress, onClose }) {
+function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEquip }) {
   const { height, width } = useWindowDimensions();
 
   if (!inspection) {
@@ -1026,7 +1210,8 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
   const { skin, rect } = inspection;
   const isFutureSkin = skin.unlockType === 'future';
   const isChallengeLocked = skin.unlockType === 'challenge' && !skin.unlocked;
-  const hasSkinNameLabel = !isChallengeLocked && !isFutureSkin;
+  const canEquipSkin = isSkinShopItemUnlocked(skin) && !isFutureSkin;
+  const isEquipped = skin.id === equippedSkin;
   const challengeText = skin.challenge ?? 'Voltooi de bijbehorende challenge om deze skin gratis te ontgrendelen.';
   const challengeProgress = skin.challengeProgress ?? { current: 0, target: 1 };
   const challengeRatio = challengeProgress.target > 0
@@ -1037,8 +1222,8 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
   const targetHeight = targetWidth * 0.76;
   const targetContainerHeight = isChallengeLocked
     ? targetHeight + 142
-    : hasSkinNameLabel
-      ? targetHeight + 86
+    : canEquipSkin
+      ? targetHeight + 172
       : targetHeight;
   const targetLeft = (width - targetWidth) / 2;
   const targetTop = (height - targetContainerHeight) / 2 - 4;
@@ -1064,7 +1249,7 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
   });
   const imageHeight = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [SKIN_SHOP_TILE_IMAGE_HEIGHT, (isChallengeLocked || hasSkinNameLabel) ? targetHeight * 0.92 : targetHeight],
+    outputRange: [SKIN_SHOP_TILE_IMAGE_HEIGHT, (isChallengeLocked || canEquipSkin) ? targetHeight * 0.92 : targetHeight],
   });
   const shadowScale = progress.interpolate({
     inputRange: [0, 1],
@@ -1082,11 +1267,11 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
       </Pressable>
 
       <Animated.View
-        pointerEvents="none"
+        pointerEvents="box-none"
         style={[
           styles.skinInspectMovingCar,
           isChallengeLocked && styles.skinInspectChallengeMovingCar,
-          hasSkinNameLabel && styles.skinInspectNamedMovingCar,
+          canEquipSkin && styles.skinInspectNamedMovingCar,
           {
             left,
             top,
@@ -1165,7 +1350,7 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
             </Animated.View>
           </>
         ) : null}
-        {hasSkinNameLabel ? (
+        {canEquipSkin ? (
           <Animated.View
             style={[
               styles.skinInspectNameBlock,
@@ -1182,6 +1367,30 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
             >
               {skin.label}
             </Text>
+            <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              style={[
+                styles.skinInspectChallengeText,
+                !skin.challenge && styles.skinInspectReservedChallengeText,
+              ]}
+            >
+              {skin.challenge ?? ' '}
+            </Text>
+            <View style={styles.skinInspectEquipButtonWrap}>
+              <GlossyButton
+                label={isEquipped ? 'Geselecteerd' : 'Selecteer'}
+                variant="green"
+                size="normal"
+                disabled={isEquipped}
+                heightOverride={isTablet ? 64 : 56}
+                horizontalPadding={isTablet ? 34 : 28}
+                labelFontScale={isTablet ? 1.04 : 0.96}
+                soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+                onPress={() => onEquip?.(skin.id)}
+              />
+            </View>
           </Animated.View>
         ) : null}
         {isFutureSkin ? (
@@ -1201,12 +1410,77 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
   );
 }
 
-function ThemeDetailScreen({ theme, onBack }) {
-  const items = theme.id === 'winter' ? [] : getThemeIcons(theme.id);
+function ThemeDetailScreen({ theme, onBack, onReady }) {
+  const items = useMemo(() => getThemeIcons(theme.id), [theme.id]);
   const titleColor = theme.id === 'winter' ? '#274154' : '#FFFFFF';
   const backgroundImage = getThemeDetailBackgroundImage(theme.id);
   const inspectProgress = useRef(new Animated.Value(0)).current;
   const [inspectedItem, setInspectedItem] = useState(null);
+  const [resolvedSources, setResolvedSources] = useState(new Map());
+  const [assetBundleReady, setAssetBundleReady] = useState(false);
+  const [backgroundImageReady, setBackgroundImageReady] = useState(!backgroundImage);
+  const [visibleItemLoadCount, setVisibleItemLoadCount] = useState(0);
+  const visibleItemLoadKeysRef = useRef(new Set());
+  const readyCalledRef = useRef(false);
+  const resolvedBackgroundImage = getResolvedAssetSource(backgroundImage, resolvedSources);
+  const requiredInitialItemCount = Platform.OS === 'android'
+    ? Math.min(items.length, 6)
+    : items.length;
+  const resolvedDetailAssets = useMemo(() => ([
+    backgroundImage,
+    ...items,
+    ...THEME_DETAIL_ROUTE_ASSETS,
+  ].filter(Boolean).map((source) => getResolvedAssetSource(source, resolvedSources))), [backgroundImage, items, resolvedSources]);
+
+  useEffect(() => {
+    readyCalledRef.current = false;
+    setAssetBundleReady(false);
+    setBackgroundImageReady(!backgroundImage);
+    visibleItemLoadKeysRef.current = new Set();
+    setVisibleItemLoadCount(0);
+
+    let cancelled = false;
+
+    loadResolvedAssetSources([
+      backgroundImage,
+      ...items,
+      ...THEME_DETAIL_ROUTE_ASSETS,
+    ]).then((nextResolvedSources) => {
+      if (!cancelled) {
+        setResolvedSources(nextResolvedSources);
+        setAssetBundleReady(true);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setResolvedSources(new Map());
+        setAssetBundleReady(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backgroundImage, items, theme.id]);
+
+  useEffect(() => {
+    const visibleAssetsReady = backgroundImageReady && visibleItemLoadCount >= requiredInitialItemCount;
+
+    if (!assetBundleReady || !visibleAssetsReady || readyCalledRef.current) {
+      return;
+    }
+
+    readyCalledRef.current = true;
+    onReady?.();
+  }, [assetBundleReady, backgroundImageReady, onReady, requiredInitialItemCount, visibleItemLoadCount]);
+
+  function markVisibleItemLoaded(index) {
+    if (visibleItemLoadKeysRef.current.has(index)) {
+      return;
+    }
+
+    visibleItemLoadKeysRef.current.add(index);
+    setVisibleItemLoadCount(visibleItemLoadKeysRef.current.size);
+  }
 
   function openItemInspect(cell) {
     setInspectedItem(cell);
@@ -1234,6 +1508,21 @@ function ThemeDetailScreen({ theme, onBack }) {
     });
   }
 
+  const renderThemeItem = useCallback(({ item: itemImage, index }) => (
+    <ThemeItemTile
+      itemImage={getResolvedAssetSource(itemImage, resolvedSources)}
+      inspectImage={itemImage}
+      onInspect={openItemInspect}
+      onLoadEnd={() => {
+        if (index < requiredInitialItemCount) {
+          markVisibleItemLoaded(index);
+        }
+      }}
+    />
+  ), [openItemInspect, requiredInitialItemCount, resolvedSources]);
+
+  const themeItemKeyExtractor = useCallback((_itemImage, index) => `${theme.id}-${index}`, [theme.id]);
+
   const content = (
     <>
       <View style={styles.themeDetailShade} />
@@ -1242,56 +1531,91 @@ function ThemeDetailScreen({ theme, onBack }) {
         size={66}
         style={styles.themeDetailBackButtonWrap}
       />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.themeDetailContent}
-      >
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.78}
-          style={[
-            styles.themeDetailTitle,
-            theme.id === 'verkeersborden' && styles.themeDetailTitleCompact,
-            { color: titleColor },
-          ]}
+      {items.length ? (
+        <FlatList
+          data={items}
+          keyExtractor={themeItemKeyExtractor}
+          renderItem={renderThemeItem}
+          numColumns={3}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={requiredInitialItemCount}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 6 : items.length}
+          updateCellsBatchingPeriod={Platform.OS === 'android' ? 24 : 0}
+          windowSize={Platform.OS === 'android' ? 5 : 9}
+          columnWrapperStyle={styles.themeItemsGridRow}
+          contentContainerStyle={styles.themeDetailContent}
+          ListHeaderComponent={(
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              style={[
+                styles.themeDetailTitle,
+                theme.id === 'verkeersborden' && styles.themeDetailTitleCompact,
+                { color: titleColor },
+              ]}
+            >
+              {theme.label}
+            </Text>
+          )}
+        />
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={Platform.OS === 'android'}
+          contentContainerStyle={styles.themeDetailContent}
         >
-          {theme.label}
-        </Text>
-        {items.length ? (
-          <View style={styles.themeItemsGrid}>
-            {items.map((itemImage, index) => (
-              <ThemeItemTile
-                key={`${theme.id}-${index}`}
-                itemImage={itemImage}
-                onInspect={openItemInspect}
-              />
-            ))}
-          </View>
-        ) : (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            style={[
+              styles.themeDetailTitle,
+              theme.id === 'verkeersborden' && styles.themeDetailTitleCompact,
+              { color: titleColor },
+            ]}
+          >
+            {theme.label}
+          </Text>
           <View style={styles.themeItemsEmptyState}>
             <Text style={styles.themeItemsEmptyText}>Items komen later</Text>
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
       <ThemeItemInspectOverlay
         cell={inspectedItem}
         progress={inspectProgress}
         onClose={closeItemInspect}
       />
+      <WarmupImages
+        assets={resolvedDetailAssets}
+        active={assetBundleReady && Platform.OS !== 'android'}
+        timeoutMs={null}
+        imageSize={96}
+        batchSize={16}
+      />
     </>
   );
 
   if (backgroundImage) {
+    if (!assetBundleReady) {
+      return <View style={[styles.themeDetailScreen, { backgroundColor: theme.cardSurface ?? theme.bg ?? '#376A98' }]} />;
+    }
+
     return (
-      <ImageBackground
-        source={backgroundImage}
-        resizeMode="cover"
-        fadeDuration={0}
-        style={styles.themeDetailScreen}
-      >
+      <View style={styles.themeDetailScreen}>
+        <ExpoImage
+          source={resolvedBackgroundImage}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={0}
+          style={StyleSheet.absoluteFill}
+          onLoad={() => setBackgroundImageReady(true)}
+          onError={() => setBackgroundImageReady(true)}
+        />
         {content}
-      </ImageBackground>
+      </View>
     );
   }
 
@@ -1301,6 +1625,7 @@ function ThemeDetailScreen({ theme, onBack }) {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.themeDetailScreen}
+      onLayout={onReady}
     >
       {content}
     </LinearGradient>
@@ -1351,6 +1676,7 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
               <ImageBackground
                 source={item.previewImage}
                 resizeMode={embeddedFrame ? 'stretch' : 'cover'}
+                resizeMethod={Platform.OS === 'android' ? 'scale' : 'auto'}
                 fadeDuration={0}
                 imageStyle={[
                   styles.themeShowcaseCardImage,
@@ -1363,6 +1689,10 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
               >
                 <View style={styles.themeShowcaseOverlay} />
                 <Text
+                  allowFontScaling={false}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.76}
                   style={[
                     styles.themeShowcaseTitle,
                     embeddedFrame && styles.themeShowcaseTitleEmbedded,
@@ -1414,7 +1744,12 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
         {selectedItemImage ? (
           <>
             <View style={styles.itemPreviewStage}>
-              <Image source={selectedItemImage} resizeMode="contain" fadeDuration={0} style={styles.itemPreviewImage} />
+              <Image
+                source={selectedItemImage}
+                resizeMode="contain"
+                fadeDuration={0}
+                style={styles.itemPreviewImage}
+              />
             </View>
             <Text style={styles.itemPreviewCaption}>
               Voorbeelditem {boundedItemIndex + 1} van {previewItems.length}
@@ -1430,7 +1765,12 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
                   onPress={() => onSelectItem(index)}
                   style={[styles.itemThumb, index === boundedItemIndex && styles.itemThumbActive]}
                 >
-                  <Image source={itemImage} resizeMode="contain" fadeDuration={0} style={styles.itemThumbImage} />
+                  <Image
+                    source={itemImage}
+                    resizeMode="contain"
+                    fadeDuration={0}
+                    style={styles.itemThumbImage}
+                  />
                 </Pressable>
               ))}
             </ScrollView>
@@ -1500,6 +1840,13 @@ export default function HomeScreen({
   const pendingRouteRef = useRef(null);
   const pendingRouteParamsRef = useRef(null);
   const pendingThemeBackRef = useRef(false);
+  const themeDetailReadyResolverRef = useRef(null);
+  const themeDetailReadyRef = useRef(false);
+  const themeRoadReadyResolverRef = useRef(null);
+  const themeRoadReadyRef = useRef(false);
+  const themeRevealFallbackTimeoutRef = useRef(null);
+  const homeReturnReadyResolverRef = useRef(null);
+  const homeReturnReadyRef = useRef(false);
   const latestPressPointRef = useRef(null);
   const loadedCriticalImagesRef = useRef(new Set());
   const themeRoadOffsetRef = useRef(0);
@@ -1529,13 +1876,19 @@ export default function HomeScreen({
   const [selectedThemeItemIndex, setSelectedThemeItemIndex] = useState(0);
   const [selectedThemeDetail, setSelectedThemeDetail] = useState(null);
   const [skinInspection, setSkinInspection] = useState(null);
+  const [equippedSkin, setEquippedSkin] = useState('rood');
   const [skinChallengeProgress, setSkinChallengeProgress] = useState(null);
+  const skinChallengeProgressLoadingRef = useRef(false);
   const [pendingThemeDetail, setPendingThemeDetail] = useState(null);
   const [homeAssetsReady, setHomeAssetsReady] = useState(false);
   const [homeLayoutReady, setHomeLayoutReady] = useState(false);
   const [homeImagesReady, setHomeImagesReady] = useState(false);
+  const [homeRenderKey, setHomeRenderKey] = useState(0);
+  const [themeRoadRenderKey, setThemeRoadRenderKey] = useState(0);
   const [themeRevealState, setThemeRevealState] = useState({
     covering: false,
+    phase: 'cover',
+    solidHold: false,
     color: '#1A5EA8',
     origin: { x: windowWidth / 2, y: 360 },
   });
@@ -1561,6 +1914,9 @@ export default function HomeScreen({
   const actionButtonHeight = isTablet ? 112 : 88;
   const actionAvailableWidth = windowWidth - actionPadding * 2 - actionGap;
   const collapsedActionWidth = actionAvailableWidth / 2;
+  const shouldRenderSkinShopTab = true;
+  const shouldRenderHomeTab = true;
+  const shouldRenderThemeCardsTab = true;
   const expandedOnlineWidth = actionAvailableWidth * 0.66;
   const expandedPlayWidth = actionAvailableWidth - expandedOnlineWidth;
   const playPanelWidth = onlineExpand.interpolate({
@@ -1661,12 +2017,40 @@ export default function HomeScreen({
 
     if (loadedCriticalImagesRef.current.size >= HOME_CRITICAL_IMAGE_COUNT) {
       setHomeImagesReady(true);
+      homeReturnReadyRef.current = true;
+      homeReturnReadyResolverRef.current?.();
+      homeReturnReadyResolverRef.current = null;
     }
   }, []);
 
   useEffect(() => {
     setLobbyExitMessage(route?.params?.lobbyExitMessage ?? '');
   }, [route?.params?.lobbyExitMessage]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY).then((storedSkin) => {
+      if (!cancelled && SKIN_OPTIONS.includes(storedSkin)) {
+        setEquippedSkin(storedSkin);
+      }
+    }).catch(() => {
+      // Rood blijft de standaard als de opgeslagen keuze niet leesbaar is.
+    });
+
+    skinChallengeProgressLoadingRef.current = true;
+    loadSkinChallengeProgress().then((progress) => {
+      if (!cancelled) {
+        setSkinChallengeProgress(progress);
+      }
+    }).finally(() => {
+      skinChallengeProgressLoadingRef.current = false;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     preloadSoundEffect(GLOSSY_BUTTON_CLICK_SOUND);
@@ -1680,13 +2064,19 @@ export default function HomeScreen({
         clearTimeout(pendingOnlineJumpTimeoutRef.current);
         pendingOnlineJumpTimeoutRef.current = null;
       }
+      if (themeRevealFallbackTimeoutRef.current) {
+        clearTimeout(themeRevealFallbackTimeoutRef.current);
+        themeRevealFallbackTimeoutRef.current = null;
+      }
     };
   }, []);
+
   const normalizedJoinCode = useMemo(() => normalizeLobbyCode(joinCode), [joinCode]);
   const skinShopItems = useMemo(
     () => buildSkinShopItems(skinChallengeProgress),
     [skinChallengeProgress]
   );
+  const playButtonImage = PLAY_BUTTON_CAR_IMAGES[equippedSkin] ?? PLAY_BUTTON_IMAGE;
   const showMainMenuPremiumButton = (
     [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !isPremium
@@ -1696,27 +2086,21 @@ export default function HomeScreen({
     [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !selectedThemeDetail
   );
-  const joinPlateSlots = useMemo(() => {
-    const chars = normalizedJoinCode.split('');
-    return [
-      { key: 'char-0', type: 'char', value: chars[0] ?? '' },
-      { key: 'char-1', type: 'char', value: chars[1] ?? '' },
-      { key: 'dash-0', type: 'dash', value: '-' },
-      { key: 'char-2', type: 'char', value: chars[2] ?? '' },
-      { key: 'char-3', type: 'char', value: chars[3] ?? '' },
-      { key: 'dash-1', type: 'dash', value: '-' },
-      { key: 'char-4', type: 'char', value: chars[4] ?? '' },
-      { key: 'char-5', type: 'char', value: chars[5] ?? '' },
-      { key: 'char-6', type: 'char', value: chars[6] ?? '' },
-    ];
-  }, [normalizedJoinCode]);
-  const joinCursorSlotIndex = [0, 1, 3, 4, 6, 7, 8, 9][normalizedJoinCode.length] ?? 9;
+  const joinPlateSlots = getLicensePlateSlots(normalizedJoinCode);
   const joinPlateWidth = Math.min(windowWidth - (isTablet ? 48 : 18), isTablet ? 760 : 430);
   const joinPlateHeight = joinPlateWidth / (1870 / 520);
   const joinPlateTop = (windowHeight - joinPlateHeight) / 2;
   const joinPlateIntroHeight = isTablet ? 92 : 68;
   const joinPlateLayerTop = Math.max(isTablet ? 116 : 82, joinPlateTop - joinPlateIntroHeight);
-  const joinPlateFontSize = Math.min(isTablet ? 72 : 42, Math.max(isTablet ? 48 : 30, joinPlateWidth * 0.096));
+  const joinPlateTextLeft = joinPlateWidth * 0.18;
+  const joinPlateTextWidth = joinPlateWidth * 0.728;
+  const joinPlateSlotWidth = joinPlateTextWidth / LICENSE_PLATE_TOTAL_SLOT_UNITS;
+  const joinPlateDashSlotWidth = joinPlateSlotWidth * LICENSE_PLATE_DASH_SLOT_WEIGHT;
+  const joinPlateFontSize = Math.round(clamp(joinPlateSlotWidth * 0.78, isTablet ? 34 : 25, isTablet ? 48 : 31));
+  const joinPlateCursorLeft = Math.min(
+    joinPlateTextWidth - 3,
+    getLicensePlateCursorUnits(normalizedJoinCode.length) * joinPlateSlotWidth
+  );
   const joinPlateOpacity = joinPlateProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
@@ -1773,12 +2157,19 @@ export default function HomeScreen({
   }, [homeAssetsReady, homeImagesReady, homeLayoutReady, navigation]);
 
   useEffect(() => {
-    if (activeTab !== HOME_TAB_SKINSHOP) {
+    if (
+      activeTab !== HOME_TAB_SKINSHOP
+      || skinChallengeProgress
+      || skinChallengeProgressLoadingRef.current
+    ) {
       return;
     }
 
-    void loadSkinChallengeProgress().then(setSkinChallengeProgress);
-  }, [activeTab]);
+    skinChallengeProgressLoadingRef.current = true;
+    void loadSkinChallengeProgress().then(setSkinChallengeProgress).finally(() => {
+      skinChallengeProgressLoadingRef.current = false;
+    });
+  }, [activeTab, skinChallengeProgress]);
 
   useEffect(() => {
     if (!isJoinPlateVisible) {
@@ -2103,9 +2494,9 @@ export default function HomeScreen({
 
   const buildPlayHornJumpAnimation = () =>
     Animated.sequence([
-      Animated.delay(PRESS_THEN_HORN_DELAY_MS + PLAY_HORN_JUMP_DELAYS[0]),
+      Animated.delay(PLAY_HORN_FEEDBACK_DELAYS[0]),
       buildPlayHornHopAnimation(-13),
-      Animated.delay(PLAY_HORN_JUMP_DELAYS[1] - PLAY_HORN_JUMP_DELAYS[0] - 206),
+      Animated.delay(PLAY_HORN_FEEDBACK_DELAYS[1] - PLAY_HORN_FEEDBACK_DELAYS[0] - 206),
       buildPlayHornHopAnimation(-10),
     ]);
 
@@ -2358,6 +2749,20 @@ export default function HomeScreen({
     }).start();
   };
 
+  const handleEquipSkin = async (skinId) => {
+    if (!SKIN_OPTIONS.includes(skinId)) {
+      return;
+    }
+
+    setEquippedSkin(skinId);
+
+    try {
+      await AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, skinId);
+    } catch (_error) {
+      // Niet kritiek: de keuze is direct zichtbaar en rood blijft de fallback.
+    }
+  };
+
   const closeSkinInspect = (onClosed) => {
     const afterClose = typeof onClosed === 'function' ? onClosed : null;
 
@@ -2445,7 +2850,7 @@ export default function HomeScreen({
   const submitJoinCode = async (codeToSubmit = normalizedJoinCode) => {
     const code = normalizeLobbyCode(codeToSubmit);
 
-    if (code.length !== 7 || isJoinBusy) {
+    if (code.length !== 8 || isJoinBusy) {
       return;
     }
 
@@ -2486,9 +2891,14 @@ export default function HomeScreen({
         lobbyCode: code,
         seed: liveLobby?.config?.seed ?? decoded.seed,
         salt: liveLobby?.config?.salt ?? decoded.salt,
-        wincondition: liveLobby?.config?.wincondition ?? '1rij',
-        diagonaal: typeof liveLobby?.config?.diagonaal === 'boolean' ? liveLobby.config.diagonaal : true,
-        kaartOpzet: liveLobby?.config?.kaartOpzet ?? 'zelfde',
+        wincondition: liveLobby?.config?.wincondition ?? decoded.wincondition ?? '1rij',
+        diagonaal: typeof liveLobby?.config?.diagonaal === 'boolean'
+          ? liveLobby.config.diagonaal
+          : (typeof decoded.diagonaal === 'boolean' ? decoded.diagonaal : true),
+        kaartOpzet: liveLobby?.config?.kaartOpzet ?? decoded.kaartOpzet ?? 'zelfde',
+        nederlands: typeof liveLobby?.config?.nederlands === 'boolean'
+          ? liveLobby.config.nederlands
+          : (typeof decoded.nederlands === 'boolean' ? decoded.nederlands : true),
         zichtbaarheid: decoded.syncType === 'live'
           ? { ...DEFAULT_ZICHTBAARHEID }
           : { eigenVoortgang: false, andermansVoortgang: false },
@@ -2539,13 +2949,12 @@ export default function HomeScreen({
     }
 
     isNavigatingRef.current = true;
-    setTimeout(() => {
-      void playSoundEffect(PLAY_HORN_SOUND, settings);
-    }, PRESS_THEN_HORN_DELAY_MS);
-    PLAY_HORN_JUMP_DELAYS.forEach((delay) => {
+    void playSoundEffect(PLAY_HORN_SOUND, settings);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    PLAY_HORN_FEEDBACK_DELAYS.slice(1).forEach((delay) => {
       setTimeout(() => {
         triggerLightJumpHaptic();
-      }, PRESS_THEN_HORN_DELAY_MS + delay);
+      }, delay);
     });
 
     buildPlayHornJumpAnimation().start(({ finished }) => {
@@ -2559,6 +2968,16 @@ export default function HomeScreen({
           targetRef: playButtonWrapRef,
           color: '#F5C400',
           routeName: 'SingleDeviceSetupTest',
+          routeParams: {
+            initialConfig: createGameConfig({
+              spelers: [
+                {
+                  naam: 'Speler 1',
+                  skin: equippedSkin,
+                },
+              ],
+            }),
+          },
           origin: latestPressPointRef.current,
         });
       }, 120);
@@ -2670,14 +3089,27 @@ export default function HomeScreen({
     setPendingThemeDetail(theme);
     setThemeRevealState({
       covering: true,
-      color: theme.cardOutline ?? theme.cardBorder ?? theme.bg ?? '#1A5EA8',
-      origin,
+      phase: 'cover',
+      solidHold: false,
+      color: getThemeRevealColor(theme),
+      origin: origin ?? { x: windowWidth / 2, y: windowHeight / 2 },
     });
-
     requestAnimationFrame(() => {
       themeCoverRevealRef.current?.reveal();
     });
   };
+
+  const handleThemeDetailReady = useCallback(() => {
+    themeDetailReadyRef.current = true;
+    themeDetailReadyResolverRef.current?.();
+    themeDetailReadyResolverRef.current = null;
+  }, []);
+
+  const handleThemeRoadReady = useCallback(() => {
+    themeRoadReadyRef.current = true;
+    themeRoadReadyResolverRef.current?.();
+    themeRoadReadyResolverRef.current = null;
+  }, []);
 
   const handleThemeBackPress = (origin) => {
     const theme = selectedThemeDetail;
@@ -2689,54 +3121,142 @@ export default function HomeScreen({
     pendingThemeBackRef.current = true;
     setThemeRevealState({
       covering: true,
-      color: theme.cardOutline ?? theme.cardBorder ?? theme.bg ?? '#1A5EA8',
+      phase: 'cover',
+      solidHold: false,
+      color: getThemeRevealColor(theme),
       origin: origin ?? { x: windowWidth / 2, y: 76 },
     });
-
     requestAnimationFrame(() => {
       themeCoverRevealRef.current?.reveal();
     });
   };
 
   const handleThemeCoverComplete = async () => {
+    setThemeRevealState((current) => (
+      current.phase === 'cover'
+        ? { ...current, solidHold: true }
+        : current
+    ));
+
     if (pendingThemeBackRef.current) {
       pendingThemeBackRef.current = false;
 
-      try {
-        await preloadImageAssets(HOME_ASSETS);
-      } catch (_error) {
-        // De homepagina mag alsnog terugkomen als een cache-warmup faalt.
+      if (Platform.OS === 'android') {
+        try {
+          await Promise.race([
+            preloadImageAssets([
+              THEME_ROAD_BACKGROUND,
+              THEME_LOCK_OVERLAY_OVERVIEW_IMAGE,
+              ...THEME_SHOWCASE_ITEMS.map((item) => item.previewImage).filter(Boolean),
+            ]),
+            new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
+          ]);
+        } catch (_error) {
+          // De thema-overzichtpagina mag alsnog terugkomen als een cache-warmup faalt.
+        }
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 220));
-
+      setThemeRoadRenderKey((current) => current + 1);
       setSelectedThemeDetail(null);
+      if (Platform.OS === 'android') {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      }
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      setThemeRevealState((current) => ({ ...current, covering: false }));
+      setThemeRevealState((current) => ({
+        ...current,
+        phase: 'uncover',
+        solidHold: true,
+        origin: { x: windowWidth / 2, y: windowHeight / 2 },
+      }));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      themeCoverRevealRef.current?.reveal();
+      if (themeRevealFallbackTimeoutRef.current) {
+        clearTimeout(themeRevealFallbackTimeoutRef.current);
+      }
+      themeRevealFallbackTimeoutRef.current = setTimeout(() => {
+        setThemeRevealState((current) => (
+          current.phase === 'uncover'
+            ? { ...current, covering: false, solidHold: false, phase: 'cover' }
+            : current
+        ));
+      }, 1100);
       return;
     }
 
     const theme = pendingThemeDetail;
 
     if (!theme) {
-      setThemeRevealState((current) => ({ ...current, covering: false }));
+      setThemeRevealState((current) => ({
+        ...current,
+        covering: false,
+        solidHold: false,
+      }));
       return;
     }
 
-    try {
-      await preloadImageAssets(getThemeDetailAssets(
-        theme.id,
-        theme.previewImage ? [theme.previewImage] : []
-      ));
-    } catch (_error) {
-      // Als preload faalt, tonen we de detailpagina alsnog.
+    if (Platform.OS === 'android') {
+      try {
+        await Promise.race([
+          preloadImageAssets(getThemeDetailAssets(
+            theme.id,
+            theme.previewImage ? [theme.previewImage] : []
+          )),
+          new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
+        ]);
+      } catch (_error) {
+        // Als preload faalt, tonen we de detailpagina alsnog.
+      }
     }
 
     setSelectedThemeDetail(theme);
     setPendingThemeDetail(null);
-    await new Promise((resolve) => setTimeout(resolve, 280));
+    if (Platform.OS === 'android') {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    setThemeRevealState((current) => ({ ...current, covering: false }));
+    setThemeRevealState((current) => ({
+      ...current,
+      phase: 'uncover',
+      solidHold: true,
+      origin: { x: windowWidth / 2, y: windowHeight / 2 },
+    }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    themeCoverRevealRef.current?.reveal();
+    if (themeRevealFallbackTimeoutRef.current) {
+      clearTimeout(themeRevealFallbackTimeoutRef.current);
+    }
+    themeRevealFallbackTimeoutRef.current = setTimeout(() => {
+      setThemeRevealState((current) => (
+        current.phase === 'uncover'
+          ? { ...current, covering: false, solidHold: false, phase: 'cover' }
+          : current
+      ));
+    }, 1100);
+  };
+
+  const handleThemeUncoverStarted = useCallback(() => {
+    if (themeRevealFallbackTimeoutRef.current) {
+      clearTimeout(themeRevealFallbackTimeoutRef.current);
+      themeRevealFallbackTimeoutRef.current = null;
+    }
+    setThemeRevealState((current) => (
+      current.phase === 'uncover'
+        ? { ...current, solidHold: false }
+        : current
+    ));
+  }, []);
+
+  const handleThemeUncoverComplete = () => {
+    if (themeRevealFallbackTimeoutRef.current) {
+      clearTimeout(themeRevealFallbackTimeoutRef.current);
+      themeRevealFallbackTimeoutRef.current = null;
+    }
+    setThemeRevealState((current) => ({
+      ...current,
+      covering: false,
+      phase: 'cover',
+      solidHold: false,
+    }));
   };
 
   const tabSwipeResponder = useMemo(() => {
@@ -2769,27 +3289,28 @@ export default function HomeScreen({
       ]).start();
     };
 
-    return PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_event, gestureState) => (
-        !isJoinPlateVisible
-        &&
+    const canStartTabSwipe = (gestureState) => {
+      if (isJoinPlateVisible) {
+        return false;
+      }
+
+      if (
         activeTab === HOME_TAB_THEMECARDS
         && !selectedThemeDetail
-        && themeRoadOffsetRef.current <= 2
-        && gestureState.dx > 8
-        && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.25
-      ),
-      onMoveShouldSetPanResponder: (_event, gestureState) => (
-        !isJoinPlateVisible
-        &&
-        (
-          activeTab !== HOME_TAB_THEMECARDS
-          || (!selectedThemeDetail && themeRoadOffsetRef.current <= 2 && gestureState.dx > 8)
-        )
-        &&
+        && !(themeRoadOffsetRef.current <= 8 && gestureState.dx > 8)
+      ) {
+        return false;
+      }
+
+      return (
         Math.abs(gestureState.dx) > 8
         && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.25
-      ),
+      );
+    };
+
+    return PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_event, gestureState) => canStartTabSwipe(gestureState),
+      onMoveShouldSetPanResponder: (_event, gestureState) => canStartTabSwipe(gestureState),
       onPanResponderGrant: () => {
         if (isJoinPlateVisible) {
           return;
@@ -2889,37 +3410,47 @@ export default function HomeScreen({
           ]}
         >
           <View style={[styles.tabPage, { width: windowWidth }]}>
-            <SkinShopPanel
-              items={skinShopItems}
-              inspectedSkinId={skinInspection?.skin?.id}
-              onInspect={openSkinInspect}
-            />
+            {shouldRenderSkinShopTab ? (
+              <SkinShopPanel
+                items={skinShopItems}
+                inspectedSkinId={skinInspection?.skin?.id}
+                equippedSkin={equippedSkin}
+                onInspect={openSkinInspect}
+              />
+            ) : null}
           </View>
 
           <View style={[styles.tabPage, { width: windowWidth }]}>
-            <ImageBackground
-              source={require('../assets/homepage.png')}
-              resizeMode="cover"
-              style={StyleSheet.absoluteFill}
-              fadeDuration={0}
-              onLoadEnd={() => markHomeCriticalImageLoaded('background')}
-            />
-            <View style={styles.overlay}>
-              <Animated.Image
-                source={require('../assets/logo.png')}
-                resizeMode="contain"
-                fadeDuration={0}
-                onLoadEnd={() => markHomeCriticalImageLoaded('logo')}
-                style={[
-                  styles.logo,
-                  compactHomeChrome && styles.logoCompactHomeChrome,
-                  isTablet && {
-                    height: 520,
-                    marginTop: -18,
-                  },
-                  { transform: [{ scale: pulse }] },
-                ]}
-              />
+            {shouldRenderHomeTab ? (
+              <>
+                <ExpoImage
+                  key={`home-bg-${homeRenderKey}`}
+                  source={require('../assets/homepage.png')}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={0}
+                  style={StyleSheet.absoluteFill}
+                  onLoad={() => markHomeCriticalImageLoaded('background')}
+                  onError={() => markHomeCriticalImageLoaded('background')}
+                />
+                <View style={styles.overlay}>
+                  <Animated.Image
+                    key={`home-logo-${homeRenderKey}`}
+                    source={require('../assets/logo.png')}
+                    resizeMode="contain"
+                    fadeDuration={0}
+                    onLoadEnd={() => markHomeCriticalImageLoaded('logo')}
+                    onError={() => markHomeCriticalImageLoaded('logo')}
+                    style={[
+                      styles.logo,
+                      compactHomeChrome && styles.logoCompactHomeChrome,
+                      isTablet && {
+                        height: 520,
+                        marginTop: -18,
+                      },
+                      { transform: [{ scale: pulse }] },
+                    ]}
+                  />
 
               {isJoinPlateVisible ? (
                 <>
@@ -2973,16 +3504,20 @@ export default function HomeScreen({
                           style={[
                             styles.joinPlateCodeRow,
                             {
+                              left: joinPlateTextLeft,
+                              width: joinPlateTextWidth,
                               height: joinPlateFontSize * 1.34,
                             },
                           ]}
                       >
-                        {joinPlateSlots.map((slot, slotIndex) => (
+                        {joinPlateSlots.map((slot) => (
                           <View
                             key={slot.key}
                             style={[
-                              styles.joinPlateSlot,
-                              slot.type === 'dash' ? styles.joinPlateDashSlot : styles.joinPlateCharSlot,
+                              styles.joinPlateCodeSlot,
+                              {
+                                width: slot.type === 'dash' ? joinPlateDashSlotWidth : joinPlateSlotWidth,
+                              },
                             ]}
                           >
                             <Text
@@ -2990,42 +3525,29 @@ export default function HomeScreen({
                               style={[
                                 styles.joinPlateSlotText,
                                 slot.type === 'dash' && styles.joinPlateDashText,
-                                slot.type !== 'dash' && /[MW]/.test(slot.value) && styles.joinPlateWideSlotText,
                                 {
-                                  fontSize: joinPlateFontSize,
-                                  lineHeight: joinPlateFontSize * 1.24,
+                                  fontSize: slot.type === 'dash'
+                                    ? Math.round(joinPlateFontSize * 0.72)
+                                    : joinPlateFontSize,
+                                  lineHeight: joinPlateFontSize * 1.18,
                                 },
                               ]}
                             >
                               {slot.value}
                             </Text>
-                            {joinCursorSlotIndex === slotIndex ? (
-                              <Animated.View
-                                pointerEvents="none"
-                                style={[
-                                  styles.joinPlateCursor,
-                                  {
-                                    width: joinPlateFontSize * 0.48,
-                                    opacity: joinCursorBlink,
-                                  },
-                                ]}
-                              />
-                            ) : null}
                           </View>
                         ))}
-                        {joinCursorSlotIndex === 9 ? (
-                          <Animated.View
-                            pointerEvents="none"
-                            style={[
-                              styles.joinPlateCursor,
-                              styles.joinPlateEndCursor,
-                              {
-                                width: joinPlateFontSize * 0.48,
-                                opacity: joinCursorBlink,
-                              },
-                            ]}
-                          />
-                        ) : null}
+                        <Animated.View
+                          pointerEvents="none"
+                          style={[
+                            styles.joinPlateCursor,
+                            {
+                              opacity: joinCursorBlink,
+                              left: joinPlateCursorLeft,
+                              display: normalizedJoinCode.length >= 8 ? 'none' : 'flex',
+                            },
+                          ]}
+                        />
                       </View>
                     </Pressable>
                     {joinError ? (
@@ -3039,7 +3561,7 @@ export default function HomeScreen({
                         setJoinCode(nextCode);
                         setJoinError('');
 
-                        if (nextCode.length === 7) {
+                        if (nextCode.length === 8) {
                           setTimeout(() => {
                             void submitJoinCode(nextCode);
                           }, 220);
@@ -3107,10 +3629,12 @@ export default function HomeScreen({
                         ]}
                       >
                         <Animated.Image
-                          source={PLAY_BUTTON_IMAGE}
+                          key={`home-play-${homeRenderKey}`}
+                          source={playButtonImage}
                           resizeMode="contain"
                           fadeDuration={0}
                           onLoadEnd={() => markHomeCriticalImageLoaded('play')}
+                          onError={() => markHomeCriticalImageLoaded('play')}
                           style={[
                             styles.playActionImage,
                             {
@@ -3120,7 +3644,7 @@ export default function HomeScreen({
                         />
                       </View>
                       <GlossyButton
-                        label="Play"
+                        label="Speel"
                         variant="yellow"
                         size="large"
                         labelOffsetY={0}
@@ -3129,7 +3653,8 @@ export default function HomeScreen({
                         heightOverride={actionButtonHeight}
                         labelFontScale={isTablet ? 1.18 : 1}
                         hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
-                        soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+                        disableHaptics
+                        soundEffectName={null}
                         onPressIn={(event) => {
                           latestPressPointRef.current = {
                             x: event.nativeEvent.pageX,
@@ -3415,24 +3940,31 @@ export default function HomeScreen({
                   </View>
                 </View>
               </View>
-            </View>
+                </View>
+              </>
+            ) : null}
           </View>
 
           <View style={[styles.tabPage, styles.themeCardsPage, { width: windowWidth }]}>
-            {selectedThemeDetail ? (
-              <ThemeDetailScreen
-                theme={selectedThemeDetail}
-                onBack={handleThemeBackPress}
-              />
-            ) : (
-              <ThemeRoadBackground
-                isPremium={isPremium}
-                onScrollOffsetChange={(offset) => {
-                  themeRoadOffsetRef.current = offset;
-                }}
-                onThemePress={handleRoadThemePress}
-              />
-            )}
+            {shouldRenderThemeCardsTab ? (
+              selectedThemeDetail ? (
+                <ThemeDetailScreen
+                  theme={selectedThemeDetail}
+                  onBack={handleThemeBackPress}
+                  onReady={handleThemeDetailReady}
+                />
+              ) : (
+                <ThemeRoadBackground
+                  key={`theme-road-${themeRoadRenderKey}`}
+                  isPremium={isPremium}
+                  onReady={handleThemeRoadReady}
+                  onScrollOffsetChange={(offset) => {
+                    themeRoadOffsetRef.current = offset;
+                  }}
+                  onThemePress={handleRoadThemePress}
+                />
+              )
+            ) : null}
           </View>
         </Animated.View>
       </View>
@@ -3463,10 +3995,11 @@ export default function HomeScreen({
             void openPremiumModal('menu');
           }}
         >
-          <Animated.Image
+          <AnimatedExpoImage
             source={MAIN_MENU_PREMIUM_CROWN_IMAGE}
-            resizeMode="contain"
-            fadeDuration={0}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            transition={0}
             style={[
               styles.mainMenuPremiumButtonImage,
               {
@@ -3512,10 +4045,11 @@ export default function HomeScreen({
             void openBugReportModal();
           }}
         >
-          <Animated.Image
+          <AnimatedExpoImage
             source={BUG_REPORT_BUTTON_IMAGE}
-            resizeMode="contain"
-            fadeDuration={0}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            transition={0}
             style={[
               styles.mainMenuBugReportButtonImage,
               {
@@ -3532,11 +4066,13 @@ export default function HomeScreen({
         </Pressable>
       ) : null}
 
-      <SkinInspectOverlay
-        inspection={skinInspection}
-        progress={skinInspectProgress}
-        onClose={closeSkinInspect}
-      />
+        <SkinInspectOverlay
+          inspection={skinInspection}
+          progress={skinInspectProgress}
+          equippedSkin={equippedSkin}
+          onClose={closeSkinInspect}
+          onEquip={handleEquipSkin}
+        />
 
       {!selectedThemeDetail ? (
         <View style={styles.bottomNavShell}>
@@ -3563,7 +4099,10 @@ export default function HomeScreen({
                 colors={['#FFE56A', '#F3C316']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
-                style={styles.bottomNavActiveHighlightFill}
+                style={[
+                  styles.bottomNavActiveHighlightFill,
+                  Platform.OS === 'android' && styles.bottomNavActiveHighlightFillAndroid,
+                ]}
               />
             </Animated.View>
             {NAV_ITEMS.map((item) => (
@@ -3609,17 +4148,29 @@ export default function HomeScreen({
             });
             pendingRouteRef.current = null;
             pendingRouteParamsRef.current = null;
-            isNavigatingRef.current = false;
           }}
         />
+        {themeRevealState.solidHold ? (
+          <View
+            pointerEvents="auto"
+            style={[
+              styles.themeRevealSolidHold,
+              { backgroundColor: themeRevealState.color },
+            ]}
+          />
+        ) : null}
         {themeRevealState.covering ? (
           <CircularReveal
-            key={`theme-cover-${pendingThemeDetail?.id ?? 'pending'}`}
+            key={`theme-${themeRevealState.phase}`}
             ref={themeCoverRevealRef}
             color={themeRevealState.color}
             originX={themeRevealState.origin.x}
             originY={themeRevealState.origin.y}
-            onComplete={handleThemeCoverComplete}
+            initiallyVisible={themeRevealState.phase === 'uncover'}
+            initialProgress={0}
+            mode={themeRevealState.phase}
+            onRevealStart={themeRevealState.phase === 'uncover' ? handleThemeUncoverStarted : undefined}
+            onComplete={themeRevealState.phase === 'uncover' ? handleThemeUncoverComplete : handleThemeCoverComplete}
           />
         ) : null}
         {driverWarningVisible ? (
@@ -3764,6 +4315,8 @@ export default function HomeScreen({
                   style={styles.bugReportBodyScrollView}
                   indicatorStyle="black"
                   showsVerticalScrollIndicator
+                  keyboardShouldPersistTaps="always"
+                  keyboardDismissMode="none"
                   contentContainerStyle={styles.bugReportBodyScroll}
                 >
                   <Text style={[styles.bugReportIntroText, { fontFamily: 'FredokaOne_400Regular' }]}>
@@ -3780,6 +4333,8 @@ export default function HomeScreen({
                       placeholder="Scherm of onderdeel"
                       placeholderTextColor="#719649"
                       maxLength={80}
+                      returnKeyType="done"
+                      blurOnSubmit
                       style={[styles.bugReportInput, styles.bugReportSingleLineInput, { fontFamily: 'FredokaOne_400Regular' }]}
                     />
                   </View>
@@ -3795,6 +4350,9 @@ export default function HomeScreen({
                       placeholderTextColor="#719649"
                       multiline
                       maxLength={220}
+                      scrollEnabled={false}
+                      returnKeyType="done"
+                      blurOnSubmit
                       style={[styles.bugReportInput, styles.bugReportSummaryInput, { fontFamily: 'FredokaOne_400Regular' }]}
                       textAlignVertical="top"
                     />
@@ -3811,6 +4369,9 @@ export default function HomeScreen({
                       placeholderTextColor="#719649"
                       multiline
                       maxLength={320}
+                      scrollEnabled={false}
+                      returnKeyType="done"
+                      blurOnSubmit
                       style={[styles.bugReportInput, styles.bugReportStepsInput, { fontFamily: 'FredokaOne_400Regular' }]}
                       textAlignVertical="top"
                     />
@@ -4015,6 +4576,7 @@ const styles = StyleSheet.create({
   },
   roadThemeCardBody: {
     flex: 1,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -4025,6 +4587,11 @@ const styles = StyleSheet.create({
   },
   roadThemeCardImageEmbedded: {
     borderRadius: 0,
+  },
+  roadThemeCardPreviewImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   roadThemeCardLockLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -4055,11 +4622,11 @@ const styles = StyleSheet.create({
   },
   roadThemeCardTitleEmbedded: {
     position: 'absolute',
-    top: '5.0%',
+    top: '6.2%',
     left: '10%',
     right: '10%',
-    fontSize: 28,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 40,
     color: '#FFFFFF',
     textAlign: 'center',
   },
@@ -4105,6 +4672,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     rowGap: 16,
   },
+  themeItemsGridRow: {
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   themeItemTile: {
     width: '31%',
     aspectRatio: 1,
@@ -4141,6 +4712,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000000',
   },
+  themeRevealSolidHold: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9998,
+    elevation: 99998,
+  },
   themeInspectCell: {
     position: 'absolute',
     alignItems: 'center',
@@ -4155,6 +4731,12 @@ const styles = StyleSheet.create({
     },
     shadowRadius: 22,
     elevation: 18,
+  },
+  themeInspectImage: {
+    width: '76%',
+    height: '76%',
+    maxWidth: 320,
+    maxHeight: 320,
   },
   tabPagesViewport: {
     flex: 1,
@@ -4273,26 +4855,19 @@ const styles = StyleSheet.create({
   },
   joinPlateCodeRow: {
     position: 'absolute',
-    left: '18.2%',
-    right: '8.2%',
-    top: '25.8%',
+    top: '34%',
+    height: '42%',
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  joinPlateSlot: {
-    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  joinPlateCharSlot: {
-    flex: 1,
-  },
-  joinPlateDashSlot: {
-    flex: 0.36,
+  joinPlateCodeSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
   },
   joinPlateSlotText: {
-    width: '138%',
+    width: '100%',
     fontFamily: 'KentekenSmits1951',
     fontWeight: '400',
     color: '#111111',
@@ -4302,22 +4877,18 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(17,17,17,0.42)',
     textShadowOffset: { width: 0.6, height: 0 },
     textShadowRadius: 0.2,
-  },
-  joinPlateWideSlotText: {
-    transform: [{ scaleX: 0.86 }],
+    transform: [{ scaleY: 1.08 }],
   },
   joinPlateDashText: {
-    opacity: 0.78,
+    opacity: 0.86,
   },
   joinPlateCursor: {
     position: 'absolute',
-    bottom: '3%',
-    height: 3,
-    borderRadius: 3,
+    top: '12%',
+    width: 3,
+    height: '72%',
+    borderRadius: 2,
     backgroundColor: '#111111',
-  },
-  joinPlateEndCursor: {
-    right: -4,
   },
   joinPlateError: {
     marginTop: -4,
@@ -4411,6 +4982,20 @@ const styles = StyleSheet.create({
     marginLeft: -38,
     zIndex: 4,
   },
+  skinShopEquippedBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 6,
+  },
+  skinShopEquippedIcon: {
+    width: '100%',
+    height: '100%',
+  },
   challengeSkinLockTile: {
     width: 76,
     height: 76,
@@ -4485,11 +5070,11 @@ const styles = StyleSheet.create({
     left: 34,
     right: 34,
     bottom: 10,
-    minHeight: 58,
+    minHeight: 142,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: 'rgba(18, 32, 52, 0.84)',
@@ -4507,6 +5092,13 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.42)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  skinInspectReservedChallengeText: {
+    opacity: 0,
+  },
+  skinInspectEquipButtonWrap: {
+    width: '100%',
+    marginTop: 10,
   },
   skinInspectChallengeText: {
     width: '100%',
@@ -4954,11 +5546,11 @@ const styles = StyleSheet.create({
   },
   themeShowcaseTitleEmbedded: {
     position: 'absolute',
-    top: 12,
+    top: 16,
     left: 24,
     right: 24,
-    fontSize: 28,
-    lineHeight: 40,
+    fontSize: 30,
+    lineHeight: 42,
     textAlign: 'center',
   },
   lockBadge: {
@@ -5071,8 +5663,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
     paddingBottom: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     backgroundColor: '#1573E0',
     borderTopWidth: 4,
     borderLeftWidth: 0,
@@ -5092,7 +5684,7 @@ const styles = StyleSheet.create({
   bottomNavButton: {
     flex: 1,
     justifyContent: 'flex-end',
-    zIndex: 1,
+    zIndex: 2,
   },
   bottomNavButtonCenter: {
     marginTop: 0,
@@ -5120,24 +5712,28 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     bottom: 0,
-    minHeight: 136,
-    marginTop: -18,
+    top: -22,
     zIndex: 0,
   },
   bottomNavActiveHighlightFill: {
     flex: 1,
     borderTopWidth: 4,
-    borderTopColor: '#FFF1A8',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopColor: '#FFF2A8',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     shadowColor: '#C99B10',
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.38,
     shadowOffset: {
       width: 0,
       height: -2,
     },
-    shadowRadius: 6,
-    elevation: 10,
+    shadowRadius: 10,
+    elevation: 9,
+  },
+  bottomNavActiveHighlightFillAndroid: {
+    borderTopWidth: 0,
   },
   bottomNavIconWrap: {
     width: 60,

@@ -70,6 +70,7 @@ export default function PremiumPaywallModal({
   const [selectedPackageKey, setSelectedPackageKey] = useState('lifetime');
   const [busyPackageId, setBusyPackageId] = useState(null);
   const [ctaPressed, setCtaPressed] = useState(false);
+  const [menuImageReady, setMenuImageReady] = useState(false);
   const benefitPulseScales = useRef(BENEFITS.map(() => new Animated.Value(1))).current;
   const { isTablet } = getResponsiveMetrics(width, height);
 
@@ -107,6 +108,7 @@ export default function PremiumPaywallModal({
 
   useEffect(() => {
     if (!visible) {
+      setMenuImageReady(false);
       benefitPulseScales.forEach((pulseScale) => {
         pulseScale.stopAnimation();
         pulseScale.setValue(1);
@@ -225,8 +227,10 @@ export default function PremiumPaywallModal({
           source={PREMIUM_MENU_IMAGE}
           resizeMode="stretch"
           fadeDuration={0}
+          onLoadEnd={() => setMenuImageReady(true)}
           style={[
             styles.menu,
+            !menuImageReady && styles.menuHidden,
             {
               width: menuWidth,
               height: menuHeight,
@@ -234,6 +238,8 @@ export default function PremiumPaywallModal({
           ]}
           imageStyle={styles.menuImage}
         >
+          {menuImageReady ? (
+            <>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Sluit Premium"
@@ -455,6 +461,8 @@ export default function PremiumPaywallModal({
               <Text style={[styles.legalLinkText, { fontSize: scaled(8) }]}>Privacybeleid</Text>
             </Pressable>
           </View>
+            </>
+          ) : null}
         </ImageBackground>
       </View>
     </Modal>
@@ -479,6 +487,9 @@ const styles = StyleSheet.create({
   menuImage: {
     width: '100%',
     height: '100%',
+  },
+  menuHidden: {
+    opacity: 0,
   },
   closeButton: {
     position: 'absolute',

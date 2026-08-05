@@ -4,20 +4,22 @@ import { getResponsiveMetrics } from '../src/utils/responsive';
 
 const LOBBY_LICENSE_PLATE_IMAGE = require('../assets/images/license-plates/dutch-join-plate-cropped.png');
 const PLATE_IMAGE_RATIO = 1870 / 520;
+const DASH_SLOT_WEIGHT = 0.44;
+const TOTAL_SLOT_UNITS = 8 + DASH_SLOT_WEIGHT * 2;
 
-function buildCodeSlots(code) {
+function buildCodeSlots(code = '') {
   const chars = normalizeLobbyCode(code).split('');
-
   return [
     { key: 'char-0', type: 'char', value: chars[0] ?? '' },
     { key: 'char-1', type: 'char', value: chars[1] ?? '' },
-    { key: 'dash-0', type: 'dash', value: '-' },
+    { key: 'dash-0', type: 'dash', value: chars.length >= 2 ? '-' : '' },
     { key: 'char-2', type: 'char', value: chars[2] ?? '' },
     { key: 'char-3', type: 'char', value: chars[3] ?? '' },
-    { key: 'dash-1', type: 'dash', value: '-' },
     { key: 'char-4', type: 'char', value: chars[4] ?? '' },
+    { key: 'dash-1', type: 'dash', value: chars.length >= 5 ? '-' : '' },
     { key: 'char-5', type: 'char', value: chars[5] ?? '' },
     { key: 'char-6', type: 'char', value: chars[6] ?? '' },
+    { key: 'char-7', type: 'char', value: chars[7] ?? '' },
   ];
 }
 
@@ -28,8 +30,12 @@ export default function LobbyCodePlate({ code, title = 'Lobbycode' }) {
     ? Math.min(windowWidth - 64, 760)
     : Math.min(windowWidth - 12, 470);
   const plateHeight = plateWidth / PLATE_IMAGE_RATIO;
-  const fontSize = Math.min(isTablet ? 72 : 46, Math.max(isTablet ? 48 : 32, plateWidth * 0.098));
-  const slots = buildCodeSlots(code || 'BG47KW0');
+  const rawCode = normalizeLobbyCode(code || 'BG47KW2A');
+  const slots = buildCodeSlots(rawCode);
+  const codeRowWidth = plateWidth * 0.728;
+  const slotWidth = codeRowWidth / TOTAL_SLOT_UNITS;
+  const dashSlotWidth = slotWidth * DASH_SLOT_WEIGHT;
+  const fontSize = Math.round(Math.min(isTablet ? 48 : 31, Math.max(isTablet ? 34 : 25, slotWidth * 0.78)));
 
   return (
     <View style={styles.wrap}>
@@ -57,6 +63,7 @@ export default function LobbyCodePlate({ code, title = 'Lobbycode' }) {
           style={[
             styles.codeRow,
             {
+              width: codeRowWidth,
               height: fontSize * 1.34,
             },
           ]}
@@ -66,7 +73,9 @@ export default function LobbyCodePlate({ code, title = 'Lobbycode' }) {
               key={slot.key}
               style={[
                 styles.codeSlot,
-                slot.type === 'dash' ? styles.dashSlot : styles.charSlot,
+                {
+                  width: slot.type === 'dash' ? dashSlotWidth : slotWidth,
+                },
               ]}
             >
               <Text
@@ -75,8 +84,8 @@ export default function LobbyCodePlate({ code, title = 'Lobbycode' }) {
                   styles.codeText,
                   slot.type === 'dash' && styles.dashText,
                   {
-                    fontSize,
-                    lineHeight: fontSize * 1.24,
+                    fontSize: slot.type === 'dash' ? Math.round(fontSize * 0.72) : fontSize,
+                    lineHeight: fontSize * 1.18,
                   },
                 ]}
               >
@@ -145,26 +154,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  codeRow: {
-    position: 'absolute',
-    left: '18.2%',
-    right: '8.2%',
-    top: '25.8%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  codeSlot: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  charSlot: {
-    flex: 1,
-  },
-  dashSlot: {
-    flex: 0.36,
-  },
   codeText: {
     width: '100%',
     fontFamily: 'KentekenSmits1951',
@@ -176,8 +165,22 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(17,17,17,0.42)',
     textShadowOffset: { width: 0.6, height: 0 },
     textShadowRadius: 0.2,
+    transform: [{ scaleY: 1.08 }],
+  },
+  codeRow: {
+    position: 'absolute',
+    left: '18%',
+    top: '34%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  codeSlot: {
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dashText: {
-    opacity: 0.78,
+    opacity: 0.86,
   },
 });

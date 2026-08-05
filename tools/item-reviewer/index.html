@@ -14,6 +14,11 @@
             <p class="eyebrow">AutoBingo</p>
             <h1>Item Reviewer</h1>
           </div>
+          <div class="toolbar">
+            <label class="upload-button" for="jsonUpload">JSON uploaden</label>
+            <input id="jsonUpload" class="file-input" type="file" accept="application/json,.json" />
+            <button id="overviewButton" class="secondary-button" type="button">Overzicht</button>
+          </div>
           <div class="progress-box" aria-live="polite">
             <strong id="progressText">0 / 0</strong>
             <span id="savedText">Nog niets opgeslagen</span>
@@ -23,6 +28,42 @@
         <div class="progress-track" aria-hidden="true">
           <div id="progressFill"></div>
         </div>
+
+        <section id="overviewPanel" class="overview-panel" hidden aria-label="Item overzicht">
+          <div class="overview-controls">
+            <input id="overviewSearch" type="search" placeholder="Zoek item, bestand of thema" autocomplete="off" />
+            <select id="overviewThemeFilter">
+              <option value="">Alle thema's</option>
+            </select>
+            <select id="overviewStatusFilter">
+              <option value="active">Actieve items</option>
+              <option value="all">Alles</option>
+              <option value="removed">Verwijderd</option>
+              <option value="new">Nieuwe batch</option>
+            </select>
+          </div>
+          <div class="overview-layout">
+            <div id="overviewList" class="overview-list"></div>
+            <aside class="overview-editor">
+              <div id="overviewEmpty" class="overview-empty">Selecteer een item om thema's te wijzigen.</div>
+              <div id="overviewEditorBody" hidden>
+                <img id="overviewImage" class="overview-image" alt="" />
+                <input id="overviewName" class="overview-name" type="text" autocomplete="off" spellcheck="false" />
+                <p id="overviewFile" class="file-name"></p>
+                <p class="section-label">Gewicht</p>
+                <div id="overviewWeightButtons" class="choice-row compact"></div>
+                <p class="section-label">Gewicht per thema</p>
+                <div id="overviewThemeWeightButtons" class="theme-weight-list compact"></div>
+                <button id="overviewDutchButton" class="dutch-button" type="button">Nederlands item</button>
+                <button id="overviewRemoveButton" class="danger-button" type="button">Verwijder item</button>
+                <p class="section-label">Thema's</p>
+                <div id="overviewThemeButtons" class="theme-grid compact"></div>
+                <p class="section-label">Uitsluiten voor</p>
+                <div id="overviewExcludeButtons" class="theme-grid compact"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
 
         <section class="item-stage">
           <button id="prevButton" class="nav-button" type="button" aria-label="Vorig item">‹</button>
@@ -39,6 +80,13 @@
           </div>
           <p id="fileName" class="file-name"></p>
           <div id="imageVariants" class="variant-row" aria-label="Afbeeldingvarianten"></div>
+          <p class="section-label">Standaard gewicht</p>
+          <div id="weightButtons" class="choice-row weight-row"></div>
+          <p class="section-label">Gewicht per thema</p>
+          <div id="themeWeightButtons" class="theme-weight-list"></div>
+          <button id="dutchItemButton" class="dutch-button" type="button" aria-pressed="false">
+            Nederlands item
+          </button>
         </section>
 
         <section class="theme-section" aria-label="Thema's">

@@ -19,6 +19,8 @@ import {
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { BackButton, InlineNote, ScreenLayout } from './flowComponents';
 import {
+  BASIC_SKIN_OPTIONS,
+  EQUIPPED_SKIN_STORAGE_KEY,
   PLAYER_SETUP_STORAGE_KEY,
   SKIN_OPTIONS,
   createGameConfig,
@@ -110,6 +112,14 @@ const LOBBY_WIN_OPTIONS = [
 const LOBBY_DIAGONAL_OPTIONS = [
   { id: true, label: 'Wel diagonaal' },
   { id: false, label: 'Niet diagonaal' },
+];
+const LOBBY_DUTCH_OPTIONS = [
+  { id: true, label: 'Nederlands aan' },
+  { id: false, label: 'Nederlands uit' },
+];
+const LOBBY_CARD_LAYOUT_OPTIONS = [
+  { id: 'zelfde', label: 'Zelfde kaart' },
+  { id: 'anders', label: 'Andere kaarten' },
 ];
 
 function normalizeName(value = '') {
@@ -278,7 +288,7 @@ function resolveUniqueLocalPlayers(players = [], remotePlayers = []) {
       return player;
     }
 
-    const fallbackSkin = SKIN_OPTIONS.find((skin) => !reservedSkins.has(skin)) ?? player.skin;
+    const fallbackSkin = BASIC_SKIN_OPTIONS.find((skin) => !reservedSkins.has(skin)) ?? player.skin;
     reservedSkins.add(fallbackSkin);
     if (fallbackSkin !== player.skin) {
       changed = true;
@@ -361,6 +371,7 @@ function LobbyGameSettingsPage({
 }) {
   const { height: screenHeight } = useWindowDimensions();
   const selectedThemeIndex = Math.max(0, LOBBY_THEME_CARDS.findIndex((theme) => theme.id === settings.thema));
+  const showClassicRuleSettings = settings.modus === 'klassiek' || settings.modus === 'wegenkaart';
   const slideY = useRef(new Animated.Value(screenHeight)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const panResponder = useMemo(() => PanResponder.create({
@@ -488,29 +499,61 @@ function LobbyGameSettingsPage({
 
             <View style={styles.settingsBottomPanel}>
               <Text style={styles.settingsBottomPanelTitle}>Spelregels</Text>
-              <Text style={styles.settingsSectionLabel}>Win conditie</Text>
+              {showClassicRuleSettings ? (
+                <>
+                  <Text style={styles.settingsSectionLabel}>Win conditie</Text>
+                  <View style={styles.settingsChipRow}>
+                    {LOBBY_WIN_OPTIONS.map((option) => (
+                      <LobbySettingsChip
+                        key={option.id}
+                        label={option.label}
+                        selected={settings.wincondition === option.id}
+                        onPress={() => onChange({ wincondition: option.id })}
+                      />
+                    ))}
+                  </View>
+
+                  <Text style={styles.settingsSectionLabel}>Diagonaal</Text>
+                  <View style={styles.settingsChipRow}>
+                    {LOBBY_DIAGONAL_OPTIONS.map((option) => (
+                      <LobbySettingsChip
+                        key={String(option.id)}
+                        label={option.label}
+                        selected={settings.diagonaal === option.id}
+                        onPress={() => onChange({ diagonaal: option.id })}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
+              <Text style={styles.settingsSectionLabel}>Nederlands</Text>
               <View style={styles.settingsChipRow}>
-                {LOBBY_WIN_OPTIONS.map((option) => (
+                {LOBBY_DUTCH_OPTIONS.map((option) => (
                   <LobbySettingsChip
-                    key={option.id}
+                    key={String(option.id)}
                     label={option.label}
-                    selected={settings.wincondition === option.id}
-                    onPress={() => onChange({ wincondition: option.id })}
+                    selected={settings.nederlands === option.id}
+                    onPress={() => onChange({ nederlands: option.id })}
                   />
                 ))}
               </View>
 
-              <Text style={styles.settingsSectionLabel}>Diagonaal</Text>
-              <View style={styles.settingsChipRow}>
-                {LOBBY_DIAGONAL_OPTIONS.map((option) => (
-                  <LobbySettingsChip
-                    key={String(option.id)}
-                    label={option.label}
-                    selected={settings.diagonaal === option.id}
-                    onPress={() => onChange({ diagonaal: option.id })}
-                  />
-                ))}
-              </View>
+              {showClassicRuleSettings ? (
+                <>
+                  <Text style={styles.settingsSectionLabel}>Kaarten</Text>
+                  <View style={styles.settingsChipRow}>
+                    {LOBBY_CARD_LAYOUT_OPTIONS.map((option) => (
+                      <LobbySettingsChip
+                        key={option.id}
+                        label={option.label}
+                        selected={settings.kaartOpzet === option.id}
+                        onPress={() => onChange({ kaartOpzet: option.id })}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
             </View>
           </ScrollView>
         </ImageBackground>
@@ -1007,6 +1050,7 @@ export default function LobbyScreen({ navigation, route }) {
     wincondition: config?.wincondition ?? '1rij',
     diagonaal: typeof config?.diagonaal === 'boolean' ? config.diagonaal : true,
     kaartOpzet: config?.kaartOpzet ?? 'zelfde',
+    nederlands: config?.nederlands !== false,
   }));
   const handleLobbyWarmupReady = useCallback(() => {
     setLobbyAssetsReady(true);
@@ -1088,16 +1132,21 @@ export default function LobbyScreen({ navigation, route }) {
         ? nextConfig.diagonaal
         : (typeof current.diagonaal === 'boolean' ? current.diagonaal : true),
       kaartOpzet: nextConfig.kaartOpzet ?? current.kaartOpzet ?? 'zelfde',
+      nederlands: typeof nextConfig.nederlands === 'boolean'
+        ? nextConfig.nederlands
+        : (typeof current.nederlands === 'boolean' ? current.nederlands : true),
     }));
   }, [
     config?.diagonaal,
     config?.kaartOpzet,
     config?.modus,
+    config?.nederlands,
     config?.thema,
     config?.wincondition,
     liveLobby?.config?.diagonaal,
     liveLobby?.config?.kaartOpzet,
     liveLobby?.config?.modus,
+    liveLobby?.config?.nederlands,
     liveLobby?.config?.thema,
     liveLobby?.config?.wincondition,
   ]);
@@ -1214,23 +1263,47 @@ export default function LobbyScreen({ navigation, route }) {
       return;
     }
 
-    AsyncStorage.getItem(PLAYER_SETUP_STORAGE_KEY).then((storedValue) => {
+    Promise.all([
+      AsyncStorage.getItem(PLAYER_SETUP_STORAGE_KEY),
+      AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY),
+    ]).then(([storedValue, storedEquippedSkin]) => {
+      const preferredSkin = SKIN_OPTIONS.includes(storedEquippedSkin) ? storedEquippedSkin : 'rood';
+
       if (storedValue) {
         try {
           const parsed = JSON.parse(storedValue);
           const parsedPlayers = Array.isArray(parsed?.spelers) && parsed.spelers.length
             ? parsed.spelers
                 .slice(0, 1)
-                .map((player, index) => normalizeLocalPlayer(player, index === 0 ? 'rood' : 'blauw'))
+                .map((player, index) => ({
+                  ...normalizeLocalPlayer(player, index === 0 ? preferredSkin : 'blauw'),
+                  skin: index === 0 ? preferredSkin : (player?.skin || 'blauw'),
+                }))
             : null;
 
           if (parsedPlayers?.length) {
             setSpelers(parsedPlayers);
+          } else {
+            setSpelers((current) => current.map((player, index) => (
+              index === 0 ? { ...player, skin: preferredSkin } : player
+            )));
           }
         } catch (_error) {
           // Negeer corrupte placeholder-data.
+          setSpelers((current) => current.map((player, index) => (
+            index === 0 ? { ...player, skin: preferredSkin } : player
+          )));
         }
+      } else {
+        setSpelers((current) => current.map((player, index) => (
+          index === 0 ? { ...player, skin: preferredSkin } : player
+        )));
       }
+      setStorageLoaded(true);
+    }).catch(() => {
+      setSpelers((current) => current.map((player, index) => (
+        index === 0 ? { ...player, skin: 'rood' } : player
+      )));
       setStorageLoaded(true);
     });
   }, []);
@@ -1778,8 +1851,10 @@ export default function LobbyScreen({ navigation, route }) {
       navigation.goBack?.();
     }
 
-    setLeaveConfirmVisible(false);
-    setLeaveLobbyReveal(null);
+    setTimeout(() => {
+      setLeaveConfirmVisible(false);
+      setLeaveLobbyReveal(null);
+    }, 80);
   }
 
   async function handleConfirmStartPress(event) {

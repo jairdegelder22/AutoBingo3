@@ -1,0 +1,3343 @@
+{
+  "exportedAt": "2026-07-27T20:33:47.407Z",
+  "mode": "full-catalog",
+  "themes": [
+    {
+      "id": "algemeen",
+      "label": "Algemeen"
+    },
+    {
+      "id": "snelweg",
+      "label": "Snelweg"
+    },
+    {
+      "id": "stad",
+      "label": "Stad"
+    },
+    {
+      "id": "platteland",
+      "label": "Platteland"
+    },
+    {
+      "id": "vakantie",
+      "label": "Vakantie"
+    },
+    {
+      "id": "winter",
+      "label": "Winter"
+    },
+    {
+      "id": "bergen",
+      "label": "Bergen"
+    },
+    {
+      "id": "voertuigen",
+      "label": "Voertuigen"
+    },
+    {
+      "id": "verkeersborden",
+      "label": "Verkeersborden"
+    }
+  ],
+  "items": [
+    {
+      "id": "afvalbak groen",
+      "name": "blikvanger",
+      "originalName": "afvalbak groen",
+      "themes": [
+        "stad",
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/afvalbak-groen.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "blauwe zeecontainer",
+      "name": "zeecontainer",
+      "originalName": "blauwe zeecontainer",
+      "themes": [
+        "algemeen"
+      ],
+      "excludedThemes": [
+        "snelweg",
+        "platteland",
+        "voertuigen",
+        "verkeersborden"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/blauwe-zeecontainer.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "bocht reflectoren",
+      "name": "scherpe bocht",
+      "originalName": "bocht reflectoren",
+      "themes": [
+        "snelweg",
+        "vakantie",
+        "bergen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/bocht-reflectoren.png",
+        "../../assets/images/Bergen/bocht-reflectoren.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "bochtig verkeersbord",
+      "name": "s-bocht verkeersbord",
+      "originalName": "bochtig verkeersbord",
+      "themes": [
+        "algemeen",
+        "bergen",
+        "verkeersborden"
+      ],
+      "excludedThemes": [
+        "stad",
+        "platteland",
+        "voertuigen"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/bochtig-verkeersbord.png",
+        "../../assets/images/Bergen/bochtig-verkeersbord.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "bolle spiegel",
+      "name": "verkeersspiegel",
+      "originalName": "bolle spiegel",
+      "themes": [
+        "algemeen"
+      ],
+      "excludedThemes": [
+        "snelweg",
+        "voertuigen",
+        "verkeersborden"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/bolle-spiegel.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "gladheid bord",
+      "name": "gladheid bord",
+      "originalName": "gladheid bord",
+      "themes": [
+        "winter",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/gladheid-bord.png",
+        "../../assets/images/Winter/gladheid-bord.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "groene container",
+      "name": "grote container",
+      "originalName": "groene container",
+      "themes": [
+        "algemeen"
+      ],
+      "excludedThemes": [
+        "snelweg",
+        "voertuigen",
+        "verkeersborden"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/groene-container.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "houten afzetpaal",
+      "name": "elektriciteitspaal",
+      "originalName": "houten afzetpaal",
+      "themes": [
+        "algemeen"
+      ],
+      "excludedThemes": [
+        "snelweg",
+        "stad",
+        "voertuigen",
+        "verkeersborden"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/houten-afzetpaal.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "houtstapel",
+      "name": "houtstapel",
+      "originalName": "houtstapel",
+      "themes": [
+        "platteland",
+        "vakantie",
+        "bergen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/houtstapel.png",
+        "../../assets/images/Bergen/houtstapel.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "huis met lichtjes",
+      "name": "huis met lichtjes",
+      "originalName": "huis met lichtjes",
+      "themes": [
+        "winter"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/huis-met-lichtjes.png",
+        "../../assets/images/Winter/huis-met-lichtjes.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "informatiebord natuurgebied",
+      "name": "informatiebord natuurgebied",
+      "originalName": "informatiebord natuurgebied",
+      "themes": [
+        "vakantie",
+        "bergen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/informatiebord-natuurgebied.png",
+        "../../assets/images/Bergen/informatiebord-natuurgebied.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "kerstboom",
+      "name": "kerstboom",
+      "originalName": "kerstboom",
+      "themes": [
+        "winter"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/kerstboom.png",
+        "../../assets/images/Winter/kerstboom.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "kruising",
+      "name": "kruising",
+      "originalName": "kruising",
+      "themes": [
+        "algemeen"
+      ],
+      "excludedThemes": [
+        "snelweg",
+        "voertuigen",
+        "verkeersborden"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/kruising.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "motorboot",
+      "name": "motorboot",
+      "originalName": "motorboot",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/motorboot.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "picknicktafel",
+      "name": "picknicktafel",
+      "originalName": "picknicktafel",
+      "themes": [
+        "algemeen",
+        "vakantie"
+      ],
+      "excludedThemes": [
+        "voertuigen",
+        "verkeersborden"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/picknicktafel.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "roeiboot",
+      "name": "roeiboot",
+      "originalName": "roeiboot",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/roeiboot.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "rubberboot",
+      "name": "rubberboot",
+      "originalName": "rubberboot",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/rubberboot.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "schaatser",
+      "name": "schaatser",
+      "originalName": "schaatser",
+      "themes": [
+        "winter"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/schaatser.png",
+        "../../assets/images/Winter/schaatser.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "schotelantenne",
+      "name": "schotelantenne",
+      "originalName": "schotelantenne",
+      "themes": [
+        "stad",
+        "platteland",
+        "vakantie",
+        "bergen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/schotelantenne.png",
+        "../../assets/images/Bergen/schotelantenne.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "slee",
+      "name": "slee",
+      "originalName": "slee",
+      "themes": [
+        "winter"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/slee.png",
+        "../../assets/images/Winter/slee.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "trampoline",
+      "name": "trampoline",
+      "originalName": "trampoline",
+      "themes": [
+        "algemeen"
+      ],
+      "excludedThemes": [
+        "snelweg",
+        "voertuigen",
+        "verkeersborden"
+      ],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/trampoline.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "waterval",
+      "name": "waterval",
+      "originalName": "waterval",
+      "themes": [
+        "vakantie",
+        "bergen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [],
+      "images": [
+        "../../assets/images/NieuweItems/waterval.png",
+        "../../assets/images/Bergen/waterval.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "100 bord",
+      "name": "100 bord",
+      "originalName": "100 bord",
+      "themes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Platteland/100 bord.png",
+        "../../assets/images/Verkeersborden/100 bord.png"
+      ],
+      "removed": false,
+      "approved": true
+    },
+    {
+      "id": "130 bord",
+      "name": "130 bord",
+      "originalName": "130 bord",
+      "themes": [
+        "snelweg",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/130 bord.png",
+        "../../assets/images/Verkeersborden/130 bord.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "30 bord",
+      "name": "30 bord",
+      "originalName": "30 bord",
+      "themes": [
+        "stad",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/stad/30 bord.png",
+        "../../assets/images/Verkeersborden/30 bord.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "adviessnelheid 60",
+      "name": "adviessnelheid 60",
+      "originalName": "adviessnelheid 60",
+      "themes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Platteland/adviessnelheid 60.png",
+        "../../assets/images/Verkeersborden/adviessnelheid 60.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "adviessnelheid 61",
+      "name": "adviessnelheid 61",
+      "originalName": "adviessnelheid 61",
+      "themes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Platteland/adviessnelheid 61.png",
+        "../../assets/images/Verkeersborden/adviessnelheid 61.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "afzethek",
+      "name": "afzethek",
+      "originalName": "afzethek",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/afzethek.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "ambulance",
+      "name": "ambulance",
+      "originalName": "ambulance",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/ambulance.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "anwb auto",
+      "name": "anwb auto",
+      "originalName": "anwb auto",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/anwb auto.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "apotheekbord",
+      "name": "apotheekbord",
+      "originalName": "apotheekbord",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/apotheekbord.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "auto met aanhangwagen",
+      "name": "auto met aanhangwagen",
+      "originalName": "auto met aanhangwagen",
+      "themes": [
+        "snelweg",
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg",
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/auto met aanhangwagen.png",
+        "../../assets/images/Platteland/auto met aanhangwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "auto met dakkoffer",
+      "name": "auto met dakkoffer",
+      "originalName": "auto met dakkoffer",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/auto met dakkoffer.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "auto met fietsdrager",
+      "name": "auto met fietsdrager",
+      "originalName": "auto met fietsdrager",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/auto met fietsdrager.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "auto met paardenwagen",
+      "name": "auto met paardenwagen",
+      "originalName": "auto met paardenwagen",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/auto met paardenwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "auto met pech",
+      "name": "auto met pech",
+      "originalName": "auto met pech",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/auto met pech.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "autotransporter",
+      "name": "autotransporter",
+      "originalName": "autotransporter",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/autotransporter.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "bakfiets",
+      "name": "bakfiets",
+      "originalName": "bakfiets",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/bakfiets.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "boot op aanhangwagen",
+      "name": "boot op aanhangwagen",
+      "originalName": "boot op aanhangwagen",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/boot op aanhangwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "brandweerauto",
+      "name": "brandweerauto",
+      "originalName": "brandweerauto",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/brandweerauto.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "brievenbus",
+      "name": "brievenbus",
+      "originalName": "brievenbus",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/brievenbus.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "brug over water",
+      "name": "brug over water",
+      "originalName": "brug over water",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/brug over water.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "brug over weg",
+      "name": "brug over weg",
+      "originalName": "brug over weg",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/brug over weg.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "bulldozer",
+      "name": "bulldozer",
+      "originalName": "bulldozer",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/bulldozer.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "bus",
+      "name": "bus",
+      "originalName": "bus",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/bus.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "bushalte",
+      "name": "bushalte",
+      "originalName": "bushalte",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/bushalte.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "busje",
+      "name": "busje",
+      "originalName": "busje",
+      "themes": [
+        "snelweg",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/busje.png",
+        "../../assets/images/Voertuigen/busje.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "cabrio",
+      "name": "cabrio",
+      "originalName": "cabrio",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/cabrio.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "camper",
+      "name": "camper",
+      "originalName": "camper",
+      "themes": [
+        "vakantie",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/camper.png",
+        "../../assets/images/Voertuigen/camper.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "camperspiegel",
+      "name": "camperspiegel",
+      "originalName": "camperspiegel",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/camperspiegel.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "caravan",
+      "name": "caravan",
+      "originalName": "caravan",
+      "themes": [
+        "vakantie",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/caravan.png",
+        "../../assets/images/Voertuigen/caravan.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "cementwagen",
+      "name": "cementwagen",
+      "originalName": "cementwagen",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/cementwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "cruise schip",
+      "name": "cruise schip",
+      "originalName": "cruise schip",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/cruise schip.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "doodlopende weg",
+      "name": "doodlopende weg",
+      "originalName": "doodlopende weg",
+      "themes": [
+        "stad",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/stad/doodlopende weg.png",
+        "../../assets/images/Verkeersborden/doodlopende weg.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "eend",
+      "name": "eend",
+      "originalName": "eend",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/eend.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "eenrichtingsveer rechts",
+      "name": "eenrichtingsveer rechts",
+      "originalName": "eenrichtingsveer rechts",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/eenrichtingsveer rechts.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "eenrichtingsverkeer rechtdoor",
+      "name": "eenrichtingsverkeer rechtdoor",
+      "originalName": "eenrichtingsverkeer rechtdoor",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/eenrichtingsverkeer rechtdoor.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "fabriek",
+      "name": "fabriek",
+      "originalName": "fabriek",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/fabriek.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "fietser",
+      "name": "fietser",
+      "originalName": "fietser",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/fietser.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "fietspad",
+      "name": "fietspad",
+      "originalName": "fietspad",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/fietspad.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "fietspaddestoel",
+      "name": "fietspaddestoel",
+      "originalName": "fietspaddestoel",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/fietspaddestoel.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "file",
+      "name": "file",
+      "originalName": "file",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/file.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "flat",
+      "name": "flat",
+      "originalName": "flat",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/flat.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "flitspaal",
+      "name": "flitspaal",
+      "originalName": "flitspaal",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/flitspaal.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "foodtruck",
+      "name": "foodtruck",
+      "originalName": "foodtruck",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/foodtruck.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "geldautomaat",
+      "name": "geldautomaat",
+      "originalName": "geldautomaat",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/geldautomaat.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "gesloten voor fietsers",
+      "name": "gesloten voor fietsers",
+      "originalName": "gesloten voor fietsers",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/gesloten voor fietsers.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "gesloten voor fietsers en bromfietsers",
+      "name": "gesloten voor fietsers en bromfietsers",
+      "originalName": "gesloten voor fietsers en bromfietsers",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/gesloten voor fietsers en bromfietsers.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "gesloten voor te brede voertuigen",
+      "name": "gesloten voor te brede voertuigen",
+      "originalName": "gesloten voor te brede voertuigen",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/gesloten voor te brede voertuigen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "gesloten voor te hoge voertuigen",
+      "name": "gesloten voor te hoge voertuigen",
+      "originalName": "gesloten voor te hoge voertuigen",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/gesloten voor te hoge voertuigen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "gesloten voor zware aslast",
+      "name": "gesloten voor zware aslast",
+      "originalName": "gesloten voor zware aslast",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/gesloten voor zware aslast.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "gesloten voor zware voertuigen",
+      "name": "gesloten voor zware voertuigen",
+      "originalName": "gesloten voor zware voertuigen",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/gesloten voor zware voertuigen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "golfcart",
+      "name": "golfcart",
+      "originalName": "golfcart",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/golfcart.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "graafmachine",
+      "name": "graafmachine",
+      "originalName": "graafmachine",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/graafmachine.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "graffiti",
+      "name": "graffiti",
+      "originalName": "graffiti",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/graffiti.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "grensbord",
+      "name": "grensbord",
+      "originalName": "grensbord",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/grensbord.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "hectometerpaal",
+      "name": "hectometerpaal",
+      "originalName": "hectometerpaal",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/hectometerpaal.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "helikopter",
+      "name": "helikopter",
+      "originalName": "helikopter",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/helikopter.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "hijskraan",
+      "name": "hijskraan",
+      "originalName": "hijskraan",
+      "themes": [
+        "snelweg",
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg",
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/hijskraan.png",
+        "../../assets/images/stad/hijskraan.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "hond",
+      "name": "hond",
+      "originalName": "hond",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/hond.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "hoogspanningsmast",
+      "name": "hoogspanningsmast",
+      "originalName": "hoogspanningsmast",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/hoogspanningsmast.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "hoogwerker",
+      "name": "hoogwerker",
+      "originalName": "hoogwerker",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/hoogwerker.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "hooibaal",
+      "name": "hooibaal",
+      "originalName": "hooibaal",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/hooibaal.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "huis",
+      "name": "huis",
+      "originalName": "huis",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/huis.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "huis met zonnepanelen",
+      "name": "huis met zonnepanelen",
+      "originalName": "huis met zonnepanelen",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/huis met zonnepanelen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "ijscowagen",
+      "name": "ijscowagen",
+      "originalName": "ijscowagen",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/ijscowagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "inrijden toegestaan",
+      "name": "inrijden toegestaan",
+      "originalName": "inrijden toegestaan",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/inrijden toegestaan.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "inrijverbod beide richtingen",
+      "name": "inrijverbod beide richtingen",
+      "originalName": "inrijverbod beide richtingen",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/inrijverbod beide richtingen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "inrijverbod deze richting",
+      "name": "inrijverbod deze richting",
+      "originalName": "inrijverbod deze richting",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/inrijverbod deze richting.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "kas",
+      "name": "kas",
+      "originalName": "kas",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/kas.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "kasteel",
+      "name": "kasteel",
+      "originalName": "kasteel",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/kasteel.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "kerk",
+      "name": "kerk",
+      "originalName": "kerk",
+      "themes": [
+        "stad",
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad",
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/stad/kerk.png",
+        "../../assets/images/Platteland/kerk.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "kinderwagen",
+      "name": "kinderwagen",
+      "originalName": "kinderwagen",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/kinderwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "kledingrek",
+      "name": "kledingrek",
+      "originalName": "kledingrek",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/kledingrek.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "kliko",
+      "name": "kliko",
+      "originalName": "kliko",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/kliko.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "koe",
+      "name": "koe",
+      "originalName": "koe",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/koe.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "laadpaal",
+      "name": "laadpaal",
+      "originalName": "laadpaal",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/laadpaal.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "lesauto",
+      "name": "lesauto",
+      "originalName": "lesauto",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/lesauto.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "lijkwagen",
+      "name": "lijkwagen",
+      "originalName": "lijkwagen",
+      "themes": [
+        "snelweg",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/lijkwagen.png",
+        "../../assets/images/Voertuigen/lijkwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "limousine",
+      "name": "limousine",
+      "originalName": "limousine",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/limousine.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "loopbrug",
+      "name": "loopbrug",
+      "originalName": "loopbrug",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/loopbrug.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "luchtballon",
+      "name": "luchtballon",
+      "originalName": "luchtballon",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/luchtballon.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "man die hond uit laat",
+      "name": "man die hond uit laat",
+      "originalName": "man die hond uit laat",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/man die hond uit laat.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "man op grasmaaier",
+      "name": "man op grasmaaier",
+      "originalName": "man op grasmaaier",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/man op grasmaaier.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "marktkraam",
+      "name": "marktkraam",
+      "originalName": "marktkraam",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/marktkraam.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "matrixbord rood kruis",
+      "name": "matrixbord rood kruis",
+      "originalName": "matrixbord rood kruis",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/matrixbord rood kruis.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "medium truck",
+      "name": "medium truck",
+      "originalName": "medium truck",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/medium truck.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "meer",
+      "name": "meer",
+      "originalName": "meer",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/meer.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "meeuwen",
+      "name": "meeuwen",
+      "originalName": "meeuwen",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/meeuwen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "molen",
+      "name": "molen",
+      "originalName": "molen",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/molen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "monstertruck",
+      "name": "monstertruck",
+      "originalName": "monstertruck",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/monstertruck.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "motorrijder",
+      "name": "motorrijder",
+      "originalName": "motorrijder",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/motorrijder.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "nederlandse vlag",
+      "name": "nederlandse vlag",
+      "originalName": "nederlandse vlag",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/nederlandse vlag.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "oldtimer",
+      "name": "oldtimer",
+      "originalName": "oldtimer",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/oldtimer.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "overstekend wild",
+      "name": "overstekend wild",
+      "originalName": "overstekend wild",
+      "themes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Platteland/overstekend wild.png",
+        "../../assets/images/Verkeersborden/overstekend wild.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "paard",
+      "name": "paard",
+      "originalName": "paard",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/paard.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "paraplu",
+      "name": "paraplu",
+      "originalName": "paraplu",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/paraplu.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "parasol",
+      "name": "parasol",
+      "originalName": "parasol",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/parasol.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "passagiervliegtuig",
+      "name": "passagiervliegtuig",
+      "originalName": "passagiervliegtuig",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/passagiervliegtuig.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "poes",
+      "name": "poes",
+      "originalName": "poes",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/poes.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "politie auto",
+      "name": "politie auto",
+      "originalName": "politie auto",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/politie auto.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "politie motorrijder",
+      "name": "politie motorrijder",
+      "originalName": "politie motorrijder",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/politie motorrijder.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "politieagent",
+      "name": "politieagent",
+      "originalName": "politieagent",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/politieagent.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "postbode",
+      "name": "postbode",
+      "originalName": "postbode",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/postbode.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "quad",
+      "name": "quad",
+      "originalName": "quad",
+      "themes": [
+        "platteland",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Platteland/quad.png",
+        "../../assets/images/Voertuigen/quad.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "reflectorpaal",
+      "name": "reflectorpaal",
+      "originalName": "reflectorpaal",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/reflectorpaal.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "regenboog",
+      "name": "regenboog",
+      "originalName": "regenboog",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/regenboog.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "riksja",
+      "name": "riksja",
+      "originalName": "riksja",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/riksja.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "rotonde",
+      "name": "rotonde",
+      "originalName": "rotonde",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/rotonde.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "rotondebord",
+      "name": "rotondebord",
+      "originalName": "rotondebord",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/rotondebord.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "schaap",
+      "name": "schaap",
+      "originalName": "schaap",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/schaap.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "schrikdraad",
+      "name": "schrikdraad",
+      "originalName": "schrikdraad",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/schrikdraad.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "scooter",
+      "name": "scooter",
+      "originalName": "scooter",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/scooter.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "segway",
+      "name": "segway",
+      "originalName": "segway",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/segway.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "slagboom",
+      "name": "slagboom",
+      "originalName": "slagboom",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/slagboom.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "sleepwagen",
+      "name": "sleepwagen",
+      "originalName": "sleepwagen",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/sleepwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "sloot",
+      "name": "sloot",
+      "originalName": "sloot",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/sloot.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "snelheidsmeter",
+      "name": "snelheidsmeter",
+      "originalName": "snelheidsmeter",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/snelheidsmeter.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "snowcat",
+      "name": "snowcat",
+      "originalName": "snowcat",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/snowcat.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "speeltuin",
+      "name": "speeltuin",
+      "originalName": "speeltuin",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/speeltuin.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "spoorboom",
+      "name": "spoorboom",
+      "originalName": "spoorboom",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/spoorboom.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "sportauto",
+      "name": "sportauto",
+      "originalName": "sportauto",
+      "themes": [
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Voertuigen/sportauto.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "stopbord",
+      "name": "stopbord",
+      "originalName": "stopbord",
+      "themes": [
+        "stad",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/stad/stopbord.png",
+        "../../assets/images/Verkeersborden/stopbord.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "stoplicht",
+      "name": "stoplicht",
+      "originalName": "stoplicht",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/stoplicht.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "strandwachthut",
+      "name": "strandwachthut",
+      "originalName": "strandwachthut",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/strandwachthut.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "tankstation",
+      "name": "tankstation",
+      "originalName": "tankstation",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/tankstation.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "tankwagen",
+      "name": "tankwagen",
+      "originalName": "tankwagen",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/tankwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "tent",
+      "name": "tent",
+      "originalName": "tent",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/tent.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "terras",
+      "name": "terras",
+      "originalName": "terras",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/terras.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "tolweg",
+      "name": "tolweg",
+      "originalName": "tolweg",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/tolweg.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "touringbus",
+      "name": "touringbus",
+      "originalName": "touringbus",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/touringbus.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "tractor",
+      "name": "tractor",
+      "originalName": "tractor",
+      "themes": [
+        "platteland",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Platteland/tractor.png",
+        "../../assets/images/Voertuigen/tractor.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "tram",
+      "name": "tram",
+      "originalName": "tram",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/tram.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "trein",
+      "name": "trein",
+      "originalName": "trein",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/trein.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "tunnel",
+      "name": "tunnel",
+      "originalName": "tunnel",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/tunnel.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "veerboot",
+      "name": "veerboot",
+      "originalName": "veerboot",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/veerboot.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "verboden aanhangwagen",
+      "name": "verboden aanhangwagen",
+      "originalName": "verboden aanhangwagen",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/verboden aanhangwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "verboden auto",
+      "name": "verboden auto",
+      "originalName": "verboden auto",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/verboden auto.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "verboden auto en motor",
+      "name": "verboden auto en motor",
+      "originalName": "verboden auto en motor",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/verboden auto en motor.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "verboden bromfiets",
+      "name": "verboden bromfiets",
+      "originalName": "verboden bromfiets",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/verboden bromfiets.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "verboden motor",
+      "name": "verboden motor",
+      "originalName": "verboden motor",
+      "themes": [
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Verkeersborden/verboden motor.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "victor veilig",
+      "name": "victor veilig",
+      "originalName": "victor veilig",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/victor veilig.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "visser",
+      "name": "visser",
+      "originalName": "visser",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/visser.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "voorrang verlenen",
+      "name": "voorrang verlenen",
+      "originalName": "voorrang verlenen",
+      "themes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Platteland/voorrang verlenen.png",
+        "../../assets/images/Verkeersborden/voorrang verlenen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "voorrangsbord",
+      "name": "voorrangsbord",
+      "originalName": "voorrangsbord",
+      "themes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "platteland",
+        "verkeersborden"
+      ],
+      "images": [
+        "../../assets/images/Platteland/voorrangsbord.png",
+        "../../assets/images/Verkeersborden/voorrangsbord.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "vrachtwagen",
+      "name": "vrachtwagen",
+      "originalName": "vrachtwagen",
+      "themes": [
+        "snelweg",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/vrachtwagen.png",
+        "../../assets/images/Voertuigen/vrachtwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "vuilniswagen",
+      "name": "vuilniswagen",
+      "originalName": "vuilniswagen",
+      "themes": [
+        "stad",
+        "voertuigen"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad",
+        "voertuigen"
+      ],
+      "images": [
+        "../../assets/images/stad/vuilniswagen.png",
+        "../../assets/images/Voertuigen/vuilniswagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "vuurtoren",
+      "name": "vuurtoren",
+      "originalName": "vuurtoren",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/vuurtoren.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "weg met groene lijn",
+      "name": "weg met groene lijn",
+      "originalName": "weg met groene lijn",
+      "themes": [
+        "platteland"
+      ],
+      "excludedThemes": [],
+      "nederlands": true,
+      "originalThemes": [
+        "platteland"
+      ],
+      "images": [
+        "../../assets/images/Platteland/weg met groene lijn.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "wielrenner",
+      "name": "wielrenner",
+      "originalName": "wielrenner",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/wielrenner.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "wijngaard",
+      "name": "wijngaard",
+      "originalName": "wijngaard",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/wijngaard.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "windmolen",
+      "name": "windmolen",
+      "originalName": "windmolen",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/windmolen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "winkel",
+      "name": "winkel",
+      "originalName": "winkel",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/winkel.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "winkelwagen",
+      "name": "winkelwagen",
+      "originalName": "winkelwagen",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/winkelwagen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "zandkasteel",
+      "name": "zandkasteel",
+      "originalName": "zandkasteel",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/zandkasteel.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "zebrapad",
+      "name": "zebrapad",
+      "originalName": "zebrapad",
+      "themes": [
+        "stad"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "stad"
+      ],
+      "images": [
+        "../../assets/images/stad/zebrapad.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "zielboot",
+      "name": "zielboot",
+      "originalName": "zielboot",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/zielboot.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "zonnepanelen",
+      "name": "zonnepanelen",
+      "originalName": "zonnepanelen",
+      "themes": [
+        "snelweg"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "snelweg"
+      ],
+      "images": [
+        "../../assets/images/Snelweg/zonnepanelen.png"
+      ],
+      "removed": false,
+      "approved": false
+    },
+    {
+      "id": "zwembad",
+      "name": "zwembad",
+      "originalName": "zwembad",
+      "themes": [
+        "vakantie"
+      ],
+      "excludedThemes": [],
+      "nederlands": false,
+      "originalThemes": [
+        "vakantie"
+      ],
+      "images": [
+        "../../assets/images/Vakantie/zwembad.png"
+      ],
+      "removed": false,
+      "approved": false
+    }
+  ]
+}

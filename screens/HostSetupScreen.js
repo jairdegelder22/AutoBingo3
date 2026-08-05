@@ -6,6 +6,7 @@ import {
   ImageBackground,
   InteractionManager,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from '../src/settings/haptics';
 import ThemeCarousel from '../src/components/ThemeCarousel';
@@ -29,7 +31,7 @@ import {
   DEFAULT_ZICHTBAARHEID,
 } from './gameFlowConfig';
 import { THEMES } from './themeCatalog';
-import { generateLobbyCode } from '../src/utils/lobbyCode';
+import { LOBBY_CODE_SALT_ENTROPY_BITS, generateLobbyCode } from '../src/utils/lobbyCode';
 import { getResponsiveMetrics } from '../src/utils/responsive';
 import { checkOnlineConnection } from '../src/services/liveLobbyService';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
@@ -60,14 +62,23 @@ const SETTINGS_DIAGONAL_ICON = require('../assets/images/settings/diagonal-logo.
 const SETTINGS_RULES_PANEL_IMAGE = require('../assets/images/settings/rules-menu-panel-v2.png');
 const SETTINGS_RULE_SLIDER_FRAME_WINCONDITION = require('../assets/images/settings/rules-slider-frame-wincondition.png');
 const SETTINGS_RULE_SLIDER_FRAME_DIAGONAL = require('../assets/images/settings/rules-slider-frame-diagonal.png');
+const SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS = require('../assets/images/settings/rules-slider-frame-dutch-items.png');
+const SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT = require('../assets/images/settings/rules-slider-frame-card-layout.png');
 const SETTINGS_WIN_CONDITION_TITLE_ICON = require('../assets/images/settings/win-condition-title.png');
 const SETTINGS_DIAGONAL_TITLE_ICON = require('../assets/images/settings/diagonal-rule-title.png');
+const SETTINGS_CARD_LAYOUT_TITLE_ICON = require('../assets/images/settings/card-layout-title.png');
 const SETTINGS_WIN_ONE_LINE = require('../assets/images/settings/win-1-line.png');
 const SETTINGS_WIN_TWO_LINES = require('../assets/images/settings/win-2-lines.png');
 const SETTINGS_WIN_FULL_CARD = require('../assets/images/settings/win-full-card.png');
 const SETTINGS_DIAGONAL_ON = require('../assets/images/settings/diagonal-on.png');
 const SETTINGS_DIAGONAL_OFF = require('../assets/images/settings/diagonal-off.png');
+const SETTINGS_DUTCH_ITEMS_ON = require('../assets/images/settings/dutch-items-on.png');
+const SETTINGS_DUTCH_ITEMS_OFF = require('../assets/images/settings/dutch-items-off.png');
+const SETTINGS_DUTCH_ITEMS_TITLE = require('../assets/images/settings/dutch-items-title.png');
+const SETTINGS_CARD_LAYOUT_SAME = require('../assets/images/settings/card-layout-same.png');
+const SETTINGS_CARD_LAYOUT_DIFFERENT = require('../assets/images/settings/card-layout-different.png');
 const CREATE_LOBBY_REVEAL_BLUE = '#1A7BD4';
+const ANDROID_DISABLE_SETUP_IDLE_MOTION = Platform.OS === 'android';
 const CONFIRM_CREATE_LOBBY_REVEAL_GREEN = '#159B3B';
 
 function withAlpha(hexColor, alpha) {
@@ -90,6 +101,7 @@ function isEmbeddedThemeCard(themeId) {
     || themeId === 'vakantie'
     || themeId === 'voertuigen'
     || themeId === 'winter'
+    || themeId === 'bergen'
     || themeId === 'verkeersborden'
   );
 }
@@ -116,7 +128,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
 
 function getEmbeddedThemeTitleScale(themeId) {
   if (themeId === 'verkeersborden') {
-    return 0.64;
+    return 0.48;
   }
 
   if (themeId === 'voertuigen') {
@@ -134,6 +146,7 @@ const THEME_CARDS = THEMES.map((theme) => ({
   outline: theme.cardOutline,
   premium: theme.premium,
 }));
+const PREMIUM_THEME_IDS = new Set(THEMES.filter((theme) => theme.premium).map((theme) => theme.id));
 
 const GAME_MODE_CARDS = [
   {
@@ -180,6 +193,14 @@ const SETTINGS_DIAGONAL_OPTIONS = [
   { id: true, label: 'Wel', image: SETTINGS_DIAGONAL_ON },
   { id: false, label: 'Niet', image: SETTINGS_DIAGONAL_OFF },
 ];
+const SETTINGS_DUTCH_OPTIONS = [
+  { id: true, label: 'Wel Nederlandse items', image: SETTINGS_DUTCH_ITEMS_ON },
+  { id: false, label: 'Geen Nederlandse items', image: SETTINGS_DUTCH_ITEMS_OFF },
+];
+const SETTINGS_CARD_LAYOUT_OPTIONS = [
+  { id: 'zelfde', label: 'Zelfde kaart', image: SETTINGS_CARD_LAYOUT_SAME },
+  { id: 'anders', label: 'Andere kaarten', image: SETTINGS_CARD_LAYOUT_DIFFERENT },
+];
 const GAME_SETTINGS_KLAP_IN_SOUND = 'gameSettingsKlapIn';
 const GAME_SETTINGS_KLAP_UIT_SOUND = 'gameSettingsKlapUit';
 
@@ -217,12 +238,14 @@ export default function HostSetupScreen({ navigation }) {
   const [wincondition, setWincondition] = useState('1rij');
   const [diagonaal, setDiagonaal] = useState(true);
   const [kaartOpzet, setKaartOpzet] = useState('zelfde');
+  const [nederlands, setNederlands] = useState(true);
   const [createLobbyConfirmVisible, setCreateLobbyConfirmVisible] = useState(false);
   const [connectionErrorVisible, setConnectionErrorVisible] = useState(false);
   const [createLobbyReveal, setCreateLobbyReveal] = useState(null);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [hostLayoutReady, setHostLayoutReady] = useState(false);
   const [hostAssetsReady, setHostAssetsReady] = useState(false);
+  const [settingsScrollMetrics, setSettingsScrollMetrics] = useState({ contentHeight: 0, viewportHeight: 0 });
 
   const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.88, isTablet ? 1.34 : 1.18);
   const collapsedPanelHeight = Math.round(clamp(screenHeight * (isTablet ? 0.09 : 0.078), 66, isTablet ? 118 : 88));
@@ -238,7 +261,9 @@ export default function HostSetupScreen({ navigation }) {
     return {
       scale,
       horizontalPadding,
-      contentTop: Math.round(clamp(screenHeight * 0.018, 12, 28)),
+      contentTop: Platform.OS === 'android'
+        ? Math.round(clamp(screenHeight * (isTablet ? 0.042 : 0.047), 34, isTablet ? 72 : 54))
+        : Math.round(clamp(screenHeight * 0.018, 12, 28)),
       contentBottom: Math.max(0, collapsedPanelHeight - bottomSafeAreaEstimate),
       titleMarginTop: Math.round(clamp(screenHeight * 0.011, 8, 14)),
       titleMarginBottom: Math.round(clamp(screenHeight * 0.006, 5, 8)),
@@ -290,6 +315,7 @@ export default function HostSetupScreen({ navigation }) {
   const panelHeight = useRef(new Animated.Value(collapsedPanelHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const settingsProgress = useRef(new Animated.Value(0)).current;
+  const settingsScrollY = useRef(new Animated.Value(0)).current;
   const gameModePickerOpacity = useRef(new Animated.Value(0)).current;
   const gameModeMotionProgress = useRef(new Animated.Value(0)).current;
   const createLobbyConfirmProgress = useRef(new Animated.Value(0)).current;
@@ -315,11 +341,13 @@ export default function HostSetupScreen({ navigation }) {
   const selectedGameMode = GAME_MODE_CARDS[selectedGameModeIndex] ?? GAME_MODE_CARDS[0];
   const liveSyncEnabled = selectedGameMode?.requiresWifi ?? true;
   const isCardCodeMode = selectedGameMode?.id === 'wegenkaart';
-  const selectedThemeAvailable = !selectedTheme?.premium || isPremium;
+  const showClassicRuleSettings = selectedGameMode?.id === 'klassiek' || selectedGameMode?.id === 'wegenkaart';
+  const selectedThemeLocked = Boolean(selectedTheme?.id && PREMIUM_THEME_IDS.has(selectedTheme.id) && !isPremium);
+  const selectedThemeAvailable = !selectedThemeLocked;
 
   const canGenerate = useMemo(
-    () => Boolean(selectedTheme?.id && selectedGameMode?.id),
-    [selectedGameMode?.id, selectedTheme?.id]
+    () => Boolean(selectedTheme?.id && selectedThemeAvailable && selectedGameMode?.id),
+    [selectedGameMode?.id, selectedTheme?.id, selectedThemeAvailable]
   );
   const settingsPanelTranslateY = settingsProgress.interpolate({
     inputRange: [0, 1],
@@ -328,6 +356,19 @@ export default function HostSetupScreen({ navigation }) {
   const settingsContentTranslateY = settingsProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [30, 0],
+  });
+  const settingsScrollbarVisible = settingsScrollMetrics.contentHeight > settingsScrollMetrics.viewportHeight + 10;
+  const settingsScrollbarTrackHeight = Math.max(0, settingsScrollMetrics.viewportHeight - Math.round(22 * scale));
+  const settingsScrollbarThumbHeight = settingsScrollbarVisible
+    ? Math.max(
+        Math.round(34 * scale),
+        (settingsScrollbarTrackHeight * settingsScrollMetrics.viewportHeight) / settingsScrollMetrics.contentHeight
+      )
+    : 0;
+  const settingsScrollbarTranslateY = settingsScrollY.interpolate({
+    inputRange: [0, Math.max(1, settingsScrollMetrics.contentHeight - settingsScrollMetrics.viewportHeight)],
+    outputRange: [0, Math.max(0, settingsScrollbarTrackHeight - settingsScrollbarThumbHeight)],
+    extrapolate: 'clamp',
   });
   const handleHostWarmupReady = useCallback(() => {
     setHostAssetsReady(true);
@@ -413,6 +454,8 @@ export default function HostSetupScreen({ navigation }) {
       }),
     ]).start(({ finished }) => {
       if (finished && !open) {
+        settingsProgress.setValue(0);
+        backdropOpacity.setValue(0);
         setSettingsPanelVisible(false);
       }
     });
@@ -666,13 +709,17 @@ export default function HostSetupScreen({ navigation }) {
 
     const syncType = liveSyncEnabled ? 'live' : 'geen';
     const seed = Math.floor(Math.random() * 2 ** 16);
-    const salt = Math.floor(Math.random() * 2 ** 6);
+    const salt = Math.floor(Math.random() * 2 ** LOBBY_CODE_SALT_ENTROPY_BITS);
     const lobbyCode = generateLobbyCode({
       thema: selectedTheme.id,
       gameMode: selectedGameMode.id,
       syncType: syncType === 'live' ? 'live' : 'offline',
       seed,
       salt,
+      wincondition,
+      diagonaal,
+      kaartOpzet,
+      nederlands,
     });
 
     const config = createGameConfig({
@@ -680,6 +727,7 @@ export default function HostSetupScreen({ navigation }) {
       wincondition,
       diagonaal,
       kaartOpzet,
+      nederlands,
       modus: selectedGameMode.id,
       syncType,
       lobbyCode,
@@ -764,6 +812,8 @@ export default function HostSetupScreen({ navigation }) {
                 itemSpacing={setupMetrics.carouselSpacing}
                 itemWidth={setupMetrics.themeCardWidth}
                 keyExtractor={(item) => item.id}
+                loop
+                focusedIndex={selectedThemeIndex}
                 onSnapToItem={setSelectedThemeIndex}
                 renderCard={({ item }) => (
                   <ThemeCard
@@ -813,11 +863,13 @@ export default function HostSetupScreen({ navigation }) {
             </View>
           </View>
 
-          <View pointerEvents={settingsOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
-            <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
-            </Animated.View>
-          </View>
+          {settingsPanelVisible ? (
+            <View pointerEvents={settingsOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
+              <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
+              </Animated.View>
+            </View>
+          ) : null}
         </SafeAreaView>
 
         <View pointerEvents="box-none" style={styles.bottomDock}>
@@ -866,26 +918,90 @@ export default function HostSetupScreen({ navigation }) {
                 },
               ]}
             >
-              <View style={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}>
-                <SettingsRuleSlider
-                  title="Winconditie"
-                  titleIcon={SETTINGS_WIN_CONDITION_TITLE_ICON}
-                  value={wincondition}
-                  options={SETTINGS_WIN_OPTIONS}
-                  onChange={setWincondition}
-                  metrics={setupMetrics}
-                />
+              <Animated.ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.settingsMenuScroll}
+                contentContainerStyle={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}
+                scrollEventThrottle={Platform.OS === 'android' ? 32 : 16}
+                removeClippedSubviews={Platform.OS === 'android'}
+                onLayout={(event) => {
+                  const viewportHeight = event.nativeEvent.layout.height;
+                  setSettingsScrollMetrics((current) => (
+                    current.viewportHeight === viewportHeight
+                      ? current
+                      : { ...current, viewportHeight }
+                  ));
+                }}
+                onContentSizeChange={(_, contentHeight) => {
+                  setSettingsScrollMetrics((current) => (
+                    current.contentHeight === contentHeight
+                      ? current
+                      : { ...current, contentHeight }
+                  ));
+                }}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { y: settingsScrollY } } }],
+                  { useNativeDriver: true }
+                )}
+              >
+                {showClassicRuleSettings ? (
+                  <>
+                    <SettingsRuleSlider
+                      title="Winconditie"
+                      titleIcon={SETTINGS_WIN_CONDITION_TITLE_ICON}
+                      value={wincondition}
+                      options={SETTINGS_WIN_OPTIONS}
+                      onChange={setWincondition}
+                      metrics={setupMetrics}
+                    />
+
+                    <SettingsRuleSlider
+                      title="Diagonaal"
+                      titleIcon={SETTINGS_DIAGONAL_TITLE_ICON}
+                      value={diagonaal}
+                      options={SETTINGS_DIAGONAL_OPTIONS}
+                      onChange={setDiagonaal}
+                      metrics={setupMetrics}
+                      variant="diagonal"
+                    />
+                  </>
+                ) : null}
 
                 <SettingsRuleSlider
-                  title="Diagonaal"
-                  titleIcon={SETTINGS_DIAGONAL_TITLE_ICON}
-                  value={diagonaal}
-                  options={SETTINGS_DIAGONAL_OPTIONS}
-                  onChange={setDiagonaal}
+                  title="Nederlands"
+                  titleIcon={SETTINGS_DUTCH_ITEMS_TITLE}
+                  value={nederlands}
+                  options={SETTINGS_DUTCH_OPTIONS}
+                  onChange={setNederlands}
                   metrics={setupMetrics}
-                  variant="diagonal"
+                  variant="dutch"
                 />
-              </View>
+
+                {showClassicRuleSettings ? (
+                  <SettingsRuleSlider
+                    title="Kaarten"
+                    titleIcon={SETTINGS_CARD_LAYOUT_TITLE_ICON}
+                    value={kaartOpzet}
+                    options={SETTINGS_CARD_LAYOUT_OPTIONS}
+                    onChange={setKaartOpzet}
+                    metrics={setupMetrics}
+                    variant="cardLayout"
+                  />
+                ) : null}
+              </Animated.ScrollView>
+              {settingsScrollbarVisible ? (
+                <View pointerEvents="none" style={styles.settingsScrollbarTrack}>
+                  <Animated.View
+                    style={[
+                      styles.settingsScrollbarThumb,
+                      {
+                        height: settingsScrollbarThumbHeight,
+                        transform: [{ translateY: settingsScrollbarTranslateY }],
+                      },
+                    ]}
+                  />
+                </View>
+              ) : null}
             </Animated.View>
           </Animated.View>
           {!settingsPanelVisible ? (
@@ -1035,7 +1151,9 @@ export default function HostSetupScreen({ navigation }) {
                   },
                 });
                 setCreateLobbyConfirmVisible(false);
-                setCreateLobbyReveal(null);
+                setTimeout(() => {
+                  setCreateLobbyReveal(null);
+                }, 80);
               }}
             />
           ) : null}
@@ -1092,6 +1210,7 @@ function ThemeCard({ item, metrics, isPremium = false, onLockedPress }) {
     ? [
         styles.carouselCardTitleWrapEmbedded,
         metrics.isTablet && styles.carouselCardTitleWrapEmbeddedTablet,
+        item.id === 'verkeersborden' && styles.carouselCardTitleWrapEmbeddedWide,
       ]
     : {
         top: Math.round((metrics.isTablet ? 34 : 26) * metrics.scale),
@@ -1099,9 +1218,10 @@ function ThemeCard({ item, metrics, isPremium = false, onLockedPress }) {
         right: Math.round(12 * metrics.scale),
       };
   const titleScale = getEmbeddedThemeTitleScale(item.id);
+  const isTrafficSignsTitle = item.id === 'verkeersborden';
   const titleTextStyle = {
     fontSize: Math.round(28 * metrics.scale * titleScale),
-    lineHeight: Math.round((usesEmbeddedFrame ? 40 : 34) * metrics.scale * titleScale),
+    lineHeight: Math.round((isTrafficSignsTitle ? 32 : usesEmbeddedFrame ? 40 : 34) * metrics.scale * titleScale),
     ...(usesEmbeddedFrame ? getEmbeddedThemeTitleStyle(item.id) : { color: '#ffffff' }),
   };
 
@@ -1116,38 +1236,55 @@ function ThemeCard({ item, metrics, isPremium = false, onLockedPress }) {
         ]}
       >
         {themeImage ? (
-          <ImageBackground
-            source={themeImage}
-            resizeMode={usesEmbeddedFrame ? 'contain' : 'cover'}
-            fadeDuration={0}
-            imageStyle={[
-              styles.carouselCardImage,
-              usesEmbeddedFrame && styles.carouselCardImageEmbedded,
-            ]}
+          <View
             style={[
               styles.carouselCardBody,
               usesEmbeddedFrame && styles.carouselCardBodyEmbedded,
               cardBodyStyle,
             ]}
           >
+            <ExpoImage
+              source={themeImage}
+              contentFit={usesEmbeddedFrame ? 'contain' : 'cover'}
+              cachePolicy="memory-disk"
+              transition={0}
+              style={[
+                styles.carouselCardImageFill,
+                styles.carouselCardImage,
+                usesEmbeddedFrame && styles.carouselCardImageEmbedded,
+              ]}
+            />
             {usesEmbeddedFrame ? null : <View style={styles.carouselCardOverlay} />}
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
             <View style={[styles.carouselCardTitleWrap, titleStyle]}>
-              <Text style={[styles.carouselCardTitle, titleTextStyle]}>{item.title}</Text>
+              <Text
+                allowFontScaling={false}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+                maxFontSizeMultiplier={1}
+                style={[
+                  styles.carouselCardTitle,
+                  titleTextStyle,
+                  isTrafficSignsTitle && styles.carouselCardTitleNoWrap,
+                ]}
+              >
+                {item.title}
+              </Text>
             </View>
-          </ImageBackground>
+          </View>
         ) : (
           <View style={[styles.carouselCardBody, cardBodyStyle, { backgroundColor: item.surface }]}>
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
             <View style={[styles.carouselCardTitleWrap, titleStyle]}>
               <Text style={[styles.carouselCardTitle, titleTextStyle]}>{item.title}</Text>
@@ -1169,24 +1306,34 @@ function ChoiceChip({ label, selected, onPress }) {
 
 function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metrics, variant = 'win' }) {
   const isDiagonal = variant === 'diagonal';
+  const isDutch = variant === 'dutch';
+  const isCardLayout = variant === 'cardLayout';
   const [railWidth, setRailWidth] = useState(0);
   const selectorTranslateX = useRef(new Animated.Value(0)).current;
   const selectorScale = useRef(new Animated.Value(1)).current;
   const selectedIndex = Math.max(0, options.findIndex((option) => option.id === value));
   const optionCount = options.length;
   const selectorWidth = railWidth > 0 ? railWidth / optionCount : 0;
-  const frameSource = isDiagonal
-    ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
-    : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
-  const frameAspectRatio = isDiagonal ? (919 / 1475) : (935 / 1490);
-  const selectorColors = isDiagonal
-    ? ['#A553FF', '#7B24D8', '#4F1196']
-    : ['#62D629', '#2EAA0F', '#146E06'];
-  const titleShadowColor = isDiagonal ? '#4A0A83' : '#155F04';
+  const frameSource = isDutch
+    ? SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS
+    : isCardLayout
+      ? SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT
+      : isDiagonal
+        ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
+        : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
+  const frameAspectRatio = isDutch ? (992 / 1586) : isCardLayout ? (1024 / 1536) : isDiagonal ? (919 / 1475) : (935 / 1490);
+  const selectorColors = isDutch
+    ? ['#FFB02A', '#FF7A00', '#C84A00']
+    : isCardLayout
+      ? ['#40B8FF', '#1086E8', '#0050B5']
+      : isDiagonal
+        ? ['#A553FF', '#7B24D8', '#4F1196']
+        : ['#62D629', '#2EAA0F', '#146E06'];
+  const titleShadowColor = isDutch ? '#A64000' : isCardLayout ? '#004C9F' : isDiagonal ? '#4A0A83' : '#155F04';
   const frameWidth = Math.round(clamp(metrics.scale * 346, 314, metrics.isTablet ? 520 : 382));
   const frameHeight = Math.round(frameWidth * frameAspectRatio);
-  const selectorVisualWidth = isDiagonal ? selectorWidth : selectorWidth * 1.06;
-  const selectorVisualOffset = isDiagonal ? 0 : selectorWidth * -0.03;
+  const selectorVisualWidth = isDiagonal || isDutch || isCardLayout ? selectorWidth : selectorWidth * 1.06;
+  const selectorVisualOffset = isDiagonal || isDutch || isCardLayout ? 0 : selectorWidth * -0.03;
 
   function animateSelectorToIndex(index) {
     if (!selectorWidth) {
@@ -1264,7 +1411,7 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             style={[
               styles.settingsRuleTitle,
               {
-                fontSize: Math.round((metrics.isTablet ? 32 : 29) * metrics.scale),
+                fontSize: Math.round((isDutch ? (metrics.isTablet ? 30 : 27) : isCardLayout ? (metrics.isTablet ? 30 : 27) : (metrics.isTablet ? 32 : 29)) * metrics.scale),
                 textShadowColor: titleShadowColor,
               },
             ]}
@@ -1278,8 +1425,20 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             style={[
               styles.settingsRuleTitleIcon,
               {
-                width: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 1.14) : Math.round(metrics.settingsTitleIconSize * 0.92),
-                height: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 0.92) : Math.round(metrics.settingsTitleIconSize * 0.92),
+                width: isDiagonal
+                  ? Math.round(metrics.settingsTitleIconSize * 1.14)
+                  : isDutch
+                    ? Math.round(metrics.settingsTitleIconSize * 1.18)
+                    : isCardLayout
+                      ? Math.round(metrics.settingsTitleIconSize * 0.96)
+                    : Math.round(metrics.settingsTitleIconSize * 0.92),
+                height: isDiagonal
+                  ? Math.round(metrics.settingsTitleIconSize * 0.92)
+                  : isDutch
+                    ? Math.round(metrics.settingsTitleIconSize * 0.98)
+                    : isCardLayout
+                      ? Math.round(metrics.settingsTitleIconSize * 0.96)
+                    : Math.round(metrics.settingsTitleIconSize * 0.92),
               },
             ]}
           />
@@ -1321,13 +1480,18 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             {options.map((option, index) => {
               const selected = option.id === value;
               const isLongLabel = option.label.length >= 9;
-              const baseLabelSize = isDiagonal ? 25 : (metrics.isTablet ? 22 : 20);
+              const hasImage = Boolean(option.image);
+              const baseLabelSize = isDiagonal ? 25 : isDutch ? 18 : isCardLayout ? 18 : (metrics.isTablet ? 22 : 20);
               const labelSize = option.label.length >= 9
-                ? 17
+                ? (isDutch || isCardLayout ? 15 : 17)
                 : baseLabelSize;
               const optionImageSize = isDiagonal
                 ? Math.round(metrics.settingsSliderDiagonalImageSize * 0.84)
-                : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
+                : isDutch
+                  ? Math.round(metrics.settingsSliderImageSize * 1.02)
+                  : isCardLayout
+                    ? Math.round(metrics.settingsSliderImageSize * 1.04)
+                  : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
 
               return (
                 <Pressable
@@ -1336,27 +1500,29 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
                   style={styles.settingsRuleOption}
                 >
                   <View style={styles.settingsRuleOptionContent}>
-                    <Image
-                      source={option.image}
-                      resizeMode="contain"
-                      fadeDuration={0}
-                      style={[
-                        styles.settingsRuleOptionImage,
-                        {
-                          width: optionImageSize,
-                          height: optionImageSize,
-                        },
-                      ]}
-                    />
+                    {hasImage ? (
+                      <Image
+                        source={option.image}
+                        resizeMode="contain"
+                        fadeDuration={0}
+                        style={[
+                          styles.settingsRuleOptionImage,
+                          {
+                            width: optionImageSize,
+                            height: optionImageSize,
+                          },
+                        ]}
+                      />
+                    ) : null}
                     <Text
-                      numberOfLines={1}
+                      numberOfLines={isDutch || isCardLayout ? 2 : 1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.58}
                       style={[
                         styles.settingsRuleOptionLabel,
                         {
                           fontSize: Math.round(labelSize * metrics.scale),
-                          lineHeight: Math.round((labelSize + 9) * metrics.scale),
+                          lineHeight: Math.round((labelSize + (isDutch || isCardLayout ? 5 : 9)) * metrics.scale),
                         },
                         selected && styles.settingsRuleOptionLabelSelected,
                       ]}
@@ -1370,6 +1536,51 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
           </View>
         </View>
       </ImageBackground>
+    </View>
+  );
+}
+
+function SettingsTextSegment({ title, value, options, onChange, metrics }) {
+  return (
+    <View style={styles.settingsTextSection}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.76}
+        style={[
+          styles.settingsTextTitle,
+          { fontSize: Math.round((metrics.isTablet ? 24 : 21) * metrics.scale) },
+        ]}
+      >
+        {title}
+      </Text>
+      <View style={styles.settingsTextOptionsRow}>
+        {options.map((option) => {
+          const selected = option.id === value;
+          return (
+            <Pressable
+              key={String(option.id)}
+              onPress={() => onChange(option.id)}
+              style={[
+                styles.settingsTextOption,
+                selected && styles.settingsTextOptionSelected,
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={[
+                  styles.settingsTextOptionLabel,
+                  selected && styles.settingsTextOptionLabelSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -1428,6 +1639,12 @@ function GameModeCardArt({
   const hover = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (ANDROID_DISABLE_SETUP_IDLE_MOTION) {
+      hover.stopAnimation();
+      hover.setValue(0);
+      return undefined;
+    }
+
     if (
       mode.id !== 'klassiek'
       && mode.id !== 'claim'
@@ -2392,6 +2609,8 @@ const styles = StyleSheet.create({
     left: -8,
     right: -8,
     bottom: 0,
+    zIndex: 24,
+    elevation: 24,
   },
   collapsedPanelPressTarget: {
     position: 'absolute',
@@ -2577,11 +2796,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'transparent',
     borderWidth: 0,
-    shadowColor: '#3B0504',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 14,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    zIndex: 24,
+    elevation: 24,
   },
   rulesPanelImage: {
     ...StyleSheet.absoluteFillObject,
@@ -2682,16 +2901,79 @@ const styles = StyleSheet.create({
   panelContentGloss: {
     ...StyleSheet.absoluteFillObject,
   },
+  settingsMenuScroll: {
+    flex: 1,
+    marginTop: 18,
+    marginBottom: 52,
+  },
   settingsMenuBody: {
     alignItems: 'center',
     width: '100%',
     paddingTop: 36,
     paddingBottom: 28,
   },
+  settingsScrollbarTrack: {
+    position: 'absolute',
+    top: 28,
+    right: 34,
+    bottom: 82,
+    width: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.12)',
+    overflow: 'hidden',
+  },
+  settingsScrollbarThumb: {
+    width: '100%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.34)',
+  },
   settingsRuleSection: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  settingsTextSection: {
+    width: '86%',
+    maxWidth: 382,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 2,
+    borderColor: 'rgba(45, 127, 178, 0.3)',
+  },
+  settingsTextTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  settingsTextOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  settingsTextOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: '#E8F5FF',
+    borderWidth: 2,
+    borderColor: '#B7D8EF',
+  },
+  settingsTextOptionSelected: {
+    backgroundColor: '#159B3B',
+    borderColor: '#0B6B27',
+  },
+  settingsTextOptionLabel: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  settingsTextOptionLabelSelected: {
+    color: '#FFFFFF',
   },
   settingsRuleFrame: {
     alignItems: 'center',
@@ -2923,6 +3205,11 @@ const styles = StyleSheet.create({
   carouselCardImage: {
     borderRadius: 22,
   },
+  carouselCardImageFill: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   carouselCardImageEmbedded: {
     borderRadius: 0,
   },
@@ -2959,6 +3246,10 @@ const styles = StyleSheet.create({
     minHeight: 46,
     justifyContent: 'center',
   },
+  carouselCardTitleWrapEmbeddedWide: {
+    left: '-5%',
+    right: '-5%',
+  },
   carouselCardTitleWrapEmbeddedTablet: {
     top: '4.6%',
   },
@@ -2970,5 +3261,10 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.38)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 5,
+  },
+  carouselCardTitleNoWrap: {
+    width: '100%',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
 });

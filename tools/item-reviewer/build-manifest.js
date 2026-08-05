@@ -4,6 +4,20 @@ const path = require('path');
 const root = path.resolve(__dirname, '..', '..');
 const imagesRoot = path.join(root, 'assets', 'images');
 const outputPath = path.join(__dirname, 'items.js');
+const newItemsFolder = 'NieuweItems';
+const netherlandsSpecificItemIds = new Set([
+  'ambulance',
+  'brandweerauto',
+  'brievenbus',
+  'fietspad',
+  'fietspaddestoel',
+  'nederlandse vlag',
+  'politie auto',
+  'politieagent',
+  'trein',
+  'victor veilig',
+  'weg met groene lijn',
+]);
 
 const themes = [
   { id: 'algemeen', label: 'Algemeen' },
@@ -12,12 +26,30 @@ const themes = [
   { id: 'platteland', label: 'Platteland', folder: 'Platteland' },
   { id: 'vakantie', label: 'Vakantie', folder: 'Vakantie' },
   { id: 'winter', label: 'Winter', folder: 'Winter' },
+  { id: 'bergen', label: 'Bergen', folder: 'Bergen' },
   { id: 'voertuigen', label: 'Voertuigen', folder: 'Voertuigen' },
   { id: 'verkeersborden', label: 'Verkeersborden', folder: 'Verkeersborden' },
 ];
 
 const itemThemeFolders = themes.filter((theme) => theme.folder);
 const byName = new Map();
+
+function getDisplayName(file) {
+  return path.basename(file, path.extname(file)).replace(/-/g, ' ');
+}
+
+function createItem(id, name) {
+  return {
+    id,
+    name,
+    originalNames: [name],
+    originalThemes: [],
+    themes: [],
+    nederlands: netherlandsSpecificItemIds.has(id),
+    isNew: false,
+    images: [],
+  };
+}
 
 for (const theme of itemThemeFolders) {
   const folderPath = path.join(imagesRoot, theme.folder);
@@ -31,19 +63,12 @@ for (const theme of itemThemeFolders) {
     .sort((left, right) => left.localeCompare(right, 'nl'));
 
   for (const file of files) {
-    const baseName = path.basename(file, path.extname(file));
+    const baseName = getDisplayName(file);
     const id = baseName.toLowerCase();
     const imagePath = `../../assets/images/${theme.folder}/${file}`;
 
     if (!byName.has(id)) {
-      byName.set(id, {
-        id,
-        name: baseName,
-        originalNames: [baseName],
-        originalThemes: [],
-        themes: [],
-        images: [],
-      });
+      byName.set(id, createItem(id, baseName));
     }
 
     const item = byName.get(id);
@@ -65,7 +90,38 @@ for (const theme of itemThemeFolders) {
   }
 }
 
+const newItemsPath = path.join(imagesRoot, newItemsFolder);
+if (fs.existsSync(newItemsPath)) {
+  const files = fs
+    .readdirSync(newItemsPath)
+    .filter((file) => file.toLowerCase().endsWith('.png'))
+    .sort((left, right) => left.localeCompare(right, 'nl'));
+
+  for (const file of files) {
+    const baseName = getDisplayName(file);
+    const id = baseName.toLowerCase();
+    const imagePath = `../../assets/images/${newItemsFolder}/${file}`;
+
+    if (!byName.has(id)) {
+      byName.set(id, createItem(id, baseName));
+    }
+
+    const item = byName.get(id);
+    item.isNew = true;
+    item.images.push({
+      themeId: null,
+      themeLabel: 'Nieuw',
+      path: imagePath,
+      filename: file,
+      sourceFolder: newItemsFolder,
+    });
+  }
+}
+
 const items = Array.from(byName.values()).sort((left, right) => {
+  if (left.isNew !== right.isNew) {
+    return left.isNew ? -1 : 1;
+  }
   return left.name.localeCompare(right.name, 'nl');
 });
 

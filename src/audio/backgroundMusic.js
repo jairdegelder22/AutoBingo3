@@ -25,6 +25,17 @@ let currentTrackName = null;
 let gameMusicStoppedForBingo = false;
 let gameMusicShouldFadeIn = false;
 
+function cancelTrackFades(trackName) {
+  if (!trackName) {
+    return;
+  }
+
+  fadeTokens[trackName] = (fadeTokens[trackName] ?? 0) + 1;
+  fadeInTokens[trackName] = (fadeInTokens[trackName] ?? 0) + 1;
+  fadePromises[trackName] = null;
+  fadeInPromises[trackName] = null;
+}
+
 function getPlayer(trackName) {
   const track = TRACKS[trackName];
 
@@ -53,10 +64,7 @@ function stopBackgroundMusicImmediately(trackName = currentTrackName) {
     return;
   }
 
-  fadeTokens[trackName] = (fadeTokens[trackName] ?? 0) + 1;
-  fadeInTokens[trackName] = (fadeInTokens[trackName] ?? 0) + 1;
-  fadePromises[trackName] = null;
-  fadeInPromises[trackName] = null;
+  cancelTrackFades(trackName);
 
   try {
     players[trackName].pause();
@@ -212,6 +220,7 @@ export async function playBackgroundMusic(trackName, settings) {
       return;
     }
 
+    cancelTrackFades(trackName);
     currentTrackName = trackName;
     player.loop = true;
     const shouldFadeIn = (
@@ -219,9 +228,7 @@ export async function playBackgroundMusic(trackName, settings) {
       || (trackName === 'game' && gameMusicShouldFadeIn)
     );
 
-    if (!fadeInPromises[trackName]) {
-      player.volume = shouldFadeIn ? 0 : TRACKS[trackName].volume;
-    }
+    player.volume = shouldFadeIn ? 0 : TRACKS[trackName].volume;
 
     if (!player.playing) {
       player.play();
