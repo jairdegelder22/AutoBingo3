@@ -4,6 +4,13 @@ import { configureAudioPlaybackMode } from './audioSession';
 const SOUND_EFFECTS = {
   bingoCheer: require('../../assets/audio/bingo-cheer.mp3'),
   bingoItemCheck: require('../../assets/audio/bingo-item-check.mp3'),
+  bingoItemCheckPitch1: require('../../assets/audio/bingo-item-check-pitch-1.mp3'),
+  bingoItemCheckPitch2: require('../../assets/audio/bingo-item-check-pitch-2.mp3'),
+  bingoItemCheckPitch3: require('../../assets/audio/bingo-item-check-pitch-3.mp3'),
+  bingoItemCheckPitch4: require('../../assets/audio/bingo-item-check-pitch-4.mp3'),
+  bingoItemCheckPitch5: require('../../assets/audio/bingo-item-check-pitch-5.mp3'),
+  bingoItemCheckPitch6: require('../../assets/audio/bingo-item-check-pitch-6.mp3'),
+  bingoItemCheckPitch7: require('../../assets/audio/bingo-item-check-pitch-7.mp3'),
   gameSettingsKlapIn: require('../../assets/audio/game-settings-klap-in.mp3'),
   gameSettingsKlapUit: require('../../assets/audio/game-settings-klap-uit.mp3'),
   glossyButtonClick: require('../../assets/audio/glossy-button-click.mp3'),
@@ -13,6 +20,7 @@ const SOUND_EFFECTS = {
   scrollGeluid: require('../../assets/audio/scroll-geluid.wav'),
   settingsGearClick: require('../../assets/audio/settings-gear-click.wav'),
   navTabSwitchClick: require('../../assets/audio/nav-tab-switch-click.mp3'),
+  skinUnlockBell: require('../../assets/audio/skin-unlock-bell.mp3'),
 };
 
 const players = {};
@@ -130,6 +138,7 @@ export async function playSoundEffect(soundName, settings, options = {}) {
     applyPlaybackOptions(player, settings, options);
     player.loop = options.loop === true;
     await player.seekTo(0);
+    applyPlaybackOptions(player, settings, options);
     player.play();
   } catch (_error) {
     // Keep UI actions responsive even if audio is unavailable on a device.
@@ -151,6 +160,7 @@ export async function playPooledSoundEffect(soundName, settings, poolSize = 6, o
 
     applyPlaybackOptions(player, settings, options);
     await player.seekTo(0);
+    applyPlaybackOptions(player, settings, options);
     player.play();
   } catch (_error) {
     // Keep scrolling smooth even if audio is unavailable on a device.

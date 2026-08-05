@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated, Easing, Modal, StyleSheet, Text, View, Pressable,
-  Image, ImageBackground, Dimensions,
+  Image, ImageBackground, Dimensions, Platform, useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
@@ -18,7 +19,7 @@ import * as Haptics from '../src/settings/haptics';
 import CircularReveal from '../components/CircularReveal';
 import GlossyButton from '../src/components/GlossyButton';
 import PopupPanel from '../src/components/PopupPanel';
-import { getRandomIcons } from './themeIcons';
+import { getRandomItems } from './themeIcons';
 import { PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getPlayerThemes, withDefaultPlayerNames } from './gameFlowConfig';
 import { getBoardState, setBoardCell, subscribeToBoardState } from '../src/services/liveLobbyService';
@@ -27,6 +28,7 @@ import useOnlineConnectionStatus from '../src/hooks/useOnlineConnectionStatus';
 import ConnectionWarningOverlay from '../src/components/ConnectionWarningOverlay';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
 import { recordFinishedGameForSkinChallenges } from '../src/challenges/skinChallenges';
+import { preloadImageAssets } from '../src/assets/preloadImages';
 import {
   playPooledSoundEffect,
   playSoundEffect,
@@ -37,7 +39,50 @@ import {
 import { stopGameBackgroundMusicForBingo } from '../src/audio/backgroundMusic';
 
 const STANDARD_GRID_SIZE = 4;
+const RECENT_BINGO_ITEMS_STORAGE_KEY = 'autobingo-recent-bingo-item-ids-v1';
+const RECENT_BINGO_ITEMS_LIMIT = 64;
 const CLAIM_GRID_SIZE = 4;
+
+function readCachedRecentBingoItemIds() {
+  return Array.isArray(globalThis.__AUTOBINGO_RECENT_BINGO_ITEM_IDS)
+    ? globalThis.__AUTOBINGO_RECENT_BINGO_ITEM_IDS
+    : [];
+}
+
+async function loadRecentBingoItemIds() {
+  try {
+    const storedValue = await AsyncStorage.getItem(RECENT_BINGO_ITEMS_STORAGE_KEY);
+    const parsed = JSON.parse(storedValue ?? '[]');
+    if (Array.isArray(parsed)) {
+      globalThis.__AUTOBINGO_RECENT_BINGO_ITEM_IDS = [...new Set([
+        ...readCachedRecentBingoItemIds(),
+        ...parsed,
+      ])]
+        .filter((itemId) => typeof itemId === 'string')
+        .slice(0, RECENT_BINGO_ITEMS_LIMIT);
+    }
+  } catch (error) {
+    console.warn('Kon recente bingo-items niet laden.', error);
+  }
+}
+
+async function rememberRecentBingoItems(boardItems) {
+  const currentRecentIds = readCachedRecentBingoItemIds();
+  const nextIds = boardItems
+    .flat()
+    .map((item) => item?.id)
+    .filter((itemId) => typeof itemId === 'string');
+  const mergedIds = [...new Set([...nextIds, ...currentRecentIds])].slice(0, RECENT_BINGO_ITEMS_LIMIT);
+
+  globalThis.__AUTOBINGO_RECENT_BINGO_ITEM_IDS = mergedIds;
+
+  try {
+    await AsyncStorage.setItem(RECENT_BINGO_ITEMS_STORAGE_KEY, JSON.stringify(mergedIds));
+  } catch (error) {
+    console.warn('Kon recente bingo-items niet opslaan.', error);
+  }
+}
+
 const { width, height } = Dimensions.get('window');
 const { isTablet: IS_TABLET_GAME, tabletScale: GAME_TABLET_SCALE } = getResponsiveMetrics(width, height);
 const GAME_BACK_BUTTON = require('../assets/images/navigation/back-button.png');
@@ -103,12 +148,22 @@ const TWO_PLAYER_VERTICAL_RESERVE = TOP_CONTROLS_HEIGHT + OUTER_PADDING + 58;
 const BINGO_LINE_DRAW_DURATION_MS = 1450;
 const BINGO_CHEER_SOUND = 'bingoCheer';
 const BINGO_ITEM_CHECK_SOUND = 'bingoItemCheck';
+const BINGO_LINE_STEP_SOUNDS = [
+  'bingoItemCheck',
+  'bingoItemCheckPitch1',
+  'bingoItemCheckPitch2',
+  'bingoItemCheckPitch3',
+  'bingoItemCheckPitch4',
+  'bingoItemCheckPitch5',
+  'bingoItemCheckPitch6',
+  'bingoItemCheckPitch7',
+];
 const HOLD_DOWN_TICKING_SOUND = 'holdDownTicking';
-const HOLD_DOWN_TICKING_VOLUME_MULTIPLIER = 0.55;
+const SKIN_UNLOCK_BELL_SOUND = 'skinUnlockBell';
 const BINGO_ITEM_CHECK_SOUND_POOL_SIZE = 16;
-const BINGO_LINE_PITCH_STEP = Math.pow(2, 1 / 12);
 const COLOR_BINGO_SPLASH_IMAGE_LIFT_Y = IS_TABLET_GAME ? -28 : -22;
 const UNCHECK_HOLD_DURATION_MS = 3000;
+const IS_ANDROID = Platform.OS === 'android';
 const COLLECTIVE_COLOR_HOLD_RATIO = 0.34;
 const COLLECTIVE_COLOR_SEGMENT_MS = 4300;
 const COLLECTIVE_WIPE_SOFTNESS = 0.42;
@@ -128,17 +183,18 @@ const BINGO_BOARD_SCALE_BY_SKIN = {
   default: 1.09,
 };
 
-function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default') {
-  const availableWidth = width - (compact ? OUTER_PADDING * 2 : 4);
+function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default', viewport = {}) {
+  const viewportWidth = viewport.width ?? width;
+  const viewportHeight = viewport.height ?? height;
+  const viewportIsTablet = viewport.isTablet ?? IS_TABLET_GAME;
+  const availableWidth = viewportWidth - (compact ? OUTER_PADDING * 2 : 4);
   const availableHeight = compact
-    ? (height - TWO_PLAYER_VERTICAL_RESERVE - TWO_PLAYER_MIDDLE_ROW_HEIGHT) / 2
-    : height - TOP_CONTROLS_HEIGHT - 4;
+    ? (viewportHeight - TWO_PLAYER_VERTICAL_RESERVE - TWO_PLAYER_MIDDLE_ROW_HEIGHT) / 2
+    : viewportHeight - TOP_CONTROLS_HEIGHT - 4;
   const boardPlayArea = BINGO_BOARD_PLAY_AREA;
   const boardScale = BINGO_BOARD_SCALE_BY_SKIN[skin] ?? BINGO_BOARD_SCALE_BY_SKIN.default;
   const maxDisplayBoardSize = Math.max(compact ? 218 : 240, Math.min(availableWidth, availableHeight));
-  const boardSize = compact
-    ? Math.floor(maxDisplayBoardSize / boardScale)
-    : Math.floor(maxDisplayBoardSize);
+  const boardSize = Math.floor(maxDisplayBoardSize / boardScale);
   const displayBoardSize = Math.floor(boardSize * boardScale);
   const playArea = {
     left: displayBoardSize * boardPlayArea.left,
@@ -147,8 +203,8 @@ function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default') {
     height: displayBoardSize * boardPlayArea.height,
   };
   const gap = boardPlayArea.gap ?? (compact ? 5 : 6);
-  const padding = boardPlayArea.padding ?? (compact ? 7 : 9);
-  const targetGridSize = Math.floor(Math.min(playArea.width, playArea.height) * (boardPlayArea.gridScale ?? 0.96));
+  const padding = viewportIsTablet ? 7 : 5;
+  const targetGridSize = Math.floor(Math.min(playArea.width, playArea.height) * (viewportIsTablet ? 0.96 : 1));
   const cellSize = Math.floor((targetGridSize - padding * 2 - gap * (gridSize - 1)) / gridSize);
   const gridPixelSize = gridSize * cellSize + (gridSize - 1) * gap + padding * 2;
 
@@ -163,9 +219,12 @@ function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default') {
   };
 }
 
-function getClaimBingoBoardImageLayout(gridSize) {
-  const availableWidth = width - 4;
-  const availableHeight = height - TOP_CONTROLS_HEIGHT - OUTER_PADDING - (IS_TABLET_GAME ? 360 : 300);
+function getClaimBingoBoardImageLayout(gridSize, viewport = {}) {
+  const viewportWidth = viewport.width ?? width;
+  const viewportHeight = viewport.height ?? height;
+  const viewportIsTablet = viewport.isTablet ?? IS_TABLET_GAME;
+  const availableWidth = viewportWidth - 4;
+  const availableHeight = viewportHeight - TOP_CONTROLS_HEIGHT - OUTER_PADDING - (viewportIsTablet ? 360 : 300);
   const boardPlayArea = BINGO_BOARD_PLAY_AREA;
   const boardScale = BINGO_BOARD_SCALE_BY_SKIN.neutral ?? BINGO_BOARD_SCALE_BY_SKIN.default;
   const maxDisplayBoardSize = Math.max(260, Math.min(availableWidth, availableHeight));
@@ -178,8 +237,8 @@ function getClaimBingoBoardImageLayout(gridSize) {
     height: displayBoardSize * boardPlayArea.height,
   };
   const gap = boardPlayArea.gap ?? 5;
-  const padding = boardPlayArea.padding ?? 5;
-  const targetGridSize = Math.floor(Math.min(playArea.width, playArea.height) * (boardPlayArea.gridScale ?? 1));
+  const padding = viewportIsTablet ? 7 : 5;
+  const targetGridSize = Math.floor(Math.min(playArea.width, playArea.height) * (viewportIsTablet ? 0.96 : 1));
   const cellSize = Math.floor((targetGridSize - padding * 2 - gap * (gridSize - 1)) / gridSize);
   const gridPixelSize = gridSize * cellSize + (gridSize - 1) * gap + padding * 2;
 
@@ -536,7 +595,7 @@ function buildClaimLeaderboard(players) {
 }
 
 function SparkBurst({ progress, color, cellSize, visible }) {
-  const sparkCount = 12;
+  const sparkCount = IS_ANDROID ? 8 : 12;
   const radius = cellSize * 0.22;
   const sparkLength = Math.max(10, cellSize * 0.16);
   const center = cellSize / 2;
@@ -887,8 +946,11 @@ function BingoCell({
       }
     } else if (!checked) {
       setUndoCompleted(false);
+      setUndoVisible(false);
       fillRevealProgress.stopAnimation();
       fillRevealProgress.setValue(0);
+      undoProgress.stopAnimation();
+      undoProgress.setValue(0);
     }
 
     previousChecked.current = checked;
@@ -1000,9 +1062,6 @@ function BingoCell({
     undoProgress.setValue(0);
     setUndoCompleted(false);
     setUndoVisible(true);
-    void playSoundEffect(HOLD_DOWN_TICKING_SOUND, settings, {
-      volumeMultiplier: HOLD_DOWN_TICKING_VOLUME_MULTIPLIER,
-    });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Animated.spring(scale, {
       toValue: 1.055,
@@ -1065,26 +1124,29 @@ function BingoCell({
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       setUndoCompleted(true);
-      setUndoVisible(false);
-      undoProgress.setValue(0);
+      undoProgress.setValue(1);
+      fillRevealProgress.stopAnimation();
+      fillRevealProgress.setValue(0);
+      scale.setValue(1);
+      rotate.setValue(0);
+      suppressNextPressRef.current = true;
+      onUndo?.();
       Animated.sequence([
         Animated.timing(scale, {
-          toValue: 1.1,
-          duration: 80,
+          toValue: 1.12,
+          duration: 85,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.spring(scale, {
           toValue: 1,
           friction: 5,
-          tension: 160,
+          tension: 170,
           useNativeDriver: true,
         }),
       ]).start();
-      rotate.setValue(0);
-      suppressNextPressRef.current = true;
-      onUndo?.();
     });
   }
 
@@ -1173,13 +1235,13 @@ function BingoCell({
           },
           checked
             ? {
-                backgroundColor: checkedGradient ? 'transparent' : '#FFFDF7',
+                backgroundColor: checkedGradient ? 'transparent' : '#F3F0E8',
                 borderColor: 'transparent',
               }
-            : { backgroundColor: '#FFFDF7', borderColor: 'transparent' },
+            : { backgroundColor: '#F3F0E8', borderColor: 'transparent' },
         ]}
         delayLongPress={320}
-        onLongPress={handleLongPress}
+        onLongPress={checked && canUndo ? handleLongPress : undefined}
         onPress={handlePress}
         onPressOut={() => {
           if (undoAnimationRef.current) {
@@ -1220,18 +1282,25 @@ function BingoCell({
             />
           </View>
         ) : null}
-        <Image
-          source={icon}
+        <View
           style={[
-            styles.cellIcon,
+            styles.cellIconWrap,
             {
               width: cellSize * 0.82,
               height: cellSize * 0.82,
             },
           ]}
-          resizeMode="contain"
-          fadeDuration={0}
-        />
+          pointerEvents="none"
+          collapsable={false}
+        >
+          <Image
+            source={icon}
+            style={styles.cellIcon}
+            resizeMode="contain"
+            resizeMethod="resize"
+            fadeDuration={0}
+          />
+        </View>
         <CellFlash
           progress={sparkProgress}
           color={flashColor}
@@ -1304,6 +1373,14 @@ function CellInspectOverlay({ cell, progress, onClose }) {
     inputRange: [0, 1],
     outputRange: [startSize * 0.82, targetSize * 0.82],
   });
+  const labelTop = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [cell.rect.y + startSize + 10, targetTop + targetSize + 14],
+  });
+  const labelOpacity = progress.interpolate({
+    inputRange: [0, 0.36, 1],
+    outputRange: [0, 0, 1],
+  });
   const checkedBorderColor = cell.checkedBorderColor ?? cell.checkedGradient?.borderColor ?? darkenHex(cell.checkedColor);
 
   return (
@@ -1360,6 +1437,25 @@ function CellInspectOverlay({ cell, progress, onClose }) {
           ]}
         />
       </Animated.View>
+      {cell.label ? (
+        <Animated.Text
+          pointerEvents="none"
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+          style={[
+            styles.inspectCellLabel,
+            {
+              left: targetLeft + 12,
+              top: labelTop,
+              width: targetSize - 24,
+              opacity: labelOpacity,
+            },
+          ]}
+        >
+          {cell.label}
+        </Animated.Text>
+      ) : null}
     </View>
   );
 }
@@ -1461,6 +1557,10 @@ const POLICE_BINGO_SPLASH = require('../assets/logo (bingo-politie).png');
 const FIRETRUCK_BINGO_SPLASH = require('../assets/logo (bingo-brandweer).png');
 const AMBULANCE_BINGO_SPLASH = require('../assets/logo (bingo-ambulance).png');
 const BINGO_LIGHT_LOTTIE = require('../assets/animations/bingo-light.json');
+const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
+const CHALLENGE_SKIN_UNLOCK_IMAGE = require('../assets/images/players/challenge-skin-lock-swing-open.png');
+const CHALLENGE_UNLOCK_STAR_BLUE = require('../assets/images/players/challenge-unlock-star-blue.png');
+const WINNER_SKIN_UNLOCK_DELAY_MS = 1120;
 const BINGO_SPLASH_BY_SKIN = {
   geel: YELLOW_BINGO_SPLASH,
   rood: RED_BINGO_SPLASH,
@@ -1524,10 +1624,21 @@ const BINGO_SPLASH_LAYOUT_BY_SKIN = {
 function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = false, screenOverlay = false }) {
   const entrance = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(1)).current;
+  const [logoReady, setLogoReady] = useState(false);
   const logoSplash = BINGO_SPLASH_BY_SKIN[skin] ?? null;
   const splashLayout = BINGO_SPLASH_LAYOUT_BY_SKIN[skin] ?? null;
 
   useEffect(() => {
+    entrance.setValue(0);
+    pulse.setValue(1);
+    setLogoReady(!logoSplash);
+  }, [entrance, logoSplash, pulse, visibleKey]);
+
+  useEffect(() => {
+    if (logoSplash && !logoReady) {
+      return undefined;
+    }
+
     let pulseAnimation = null;
     entrance.setValue(0);
     pulse.setValue(1);
@@ -1563,7 +1674,7 @@ function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = fal
     return () => {
       pulseAnimation?.stop();
     };
-  }, [entrance, pulse, visibleKey]);
+  }, [entrance, logoReady, logoSplash, pulse, visibleKey]);
 
   const opacity = entrance.interpolate({
     inputRange: [0, 0.08, 1],
@@ -1603,21 +1714,26 @@ function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = fal
           },
         ]}
       >
-        <LottieView
-          key={`bingo-light:${visibleKey}`}
-          source={BINGO_LIGHT_LOTTIE}
-          autoPlay
-          loop={false}
-          resizeMode="contain"
-          style={[
-            styles.bingoLogoLight,
-            compact && styles.bingoLogoLightCompact,
-          ]}
-        />
+        {logoReady ? (
+          <LottieView
+            key={`bingo-light:${visibleKey}`}
+            source={BINGO_LIGHT_LOTTIE}
+            autoPlay
+            loop={false}
+            resizeMode="contain"
+            style={[
+              styles.bingoLogoLight,
+              compact && styles.bingoLogoLightCompact,
+            ]}
+          />
+        ) : null}
         <Animated.View style={[styles.bingoLogoPulseWrap, { transform: [{ translateY: logoImageOffsetY }, { scale: pulse }] }]}>
           <Image
             source={logoSplash}
             resizeMode="contain"
+            fadeDuration={0}
+            onLoad={() => setLogoReady(true)}
+            onError={() => setLogoReady(true)}
             style={styles.bingoLogoImage}
           />
         </Animated.View>
@@ -1926,6 +2042,340 @@ function WinnerFocusBackdrop() {
       pointerEvents="none"
       style={[styles.winnerFocusBackdrop, { opacity }]}
     />
+  );
+}
+
+const UNLOCK_STAR_POINTS = [
+  { left: '18%', top: '12%', size: 34, x: -26, y: -22 },
+  { left: '72%', top: '11%', size: 28, x: 24, y: -24 },
+  { left: '12%', top: '43%', size: 25, x: -30, y: 0 },
+  { left: '78%', top: '42%', size: 38, x: 30, y: 6 },
+  { left: '25%', top: '70%', size: 26, x: -18, y: 24 },
+  { left: '66%', top: '71%', size: 31, x: 20, y: 26 },
+];
+
+function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
+  const entrance = useRef(new Animated.Value(0)).current;
+  const progressFill = useRef(new Animated.Value(0)).current;
+  const lockJump = useRef(new Animated.Value(0)).current;
+  const closedLockOpacity = useRef(new Animated.Value(1)).current;
+  const openLockOpacity = useRef(new Animated.Value(0)).current;
+  const openLockPulse = useRef(new Animated.Value(0)).current;
+  const carReveal = useRef(new Animated.Value(0)).current;
+  const starBurst = useRef(new Animated.Value(0)).current;
+  const [progressTextCurrent, setProgressTextCurrent] = useState(unlock?.previous?.current ?? 0);
+  const previousValue = unlock?.previous?.current ?? 0;
+  const currentValue = unlock?.current?.current ?? previousValue;
+  const targetValue = unlock?.current?.target ?? 1;
+  const previousRatio = targetValue > 0 ? Math.max(0, Math.min(1, previousValue / targetValue)) : 1;
+  const currentRatio = targetValue > 0 ? Math.max(0, Math.min(1, currentValue / targetValue)) : 1;
+  const revealScale = entrance.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.86, 1],
+  });
+  const revealTranslateY = entrance.interpolate({
+    inputRange: [0, 1],
+    outputRange: [28, 0],
+  });
+  const lockTranslateY = lockJump.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, IS_TABLET_GAME ? -14 : -12],
+  });
+  const lockScale = lockJump.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.035],
+  });
+  const lockedCarOpacity = carReveal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.46, 1],
+  });
+  const lockedCarScale = carReveal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.04],
+  });
+  const openLockPulseScale = openLockPulse.interpolate({
+    inputRange: [0, 0.38, 1],
+    outputRange: [1, 1.46, 1],
+  });
+
+  useEffect(() => {
+    let lockAnimation = null;
+    const timers = [];
+
+    entrance.setValue(0);
+    progressFill.setValue(0);
+    lockJump.setValue(0);
+    closedLockOpacity.setValue(1);
+    openLockOpacity.setValue(0);
+    openLockPulse.setValue(0);
+    carReveal.setValue(0);
+    starBurst.setValue(0);
+    setProgressTextCurrent(previousValue);
+
+    Animated.spring(entrance, {
+      toValue: 1,
+      friction: 6,
+      tension: 105,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.timing(progressFill, {
+      toValue: 1,
+      duration: 1120,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+
+    timers.push(setTimeout(() => {
+      setProgressTextCurrent(currentValue);
+    }, 960));
+
+    timers.push(setTimeout(() => {
+      timers.push(setTimeout(() => {
+        void playSoundEffect(SKIN_UNLOCK_BELL_SOUND, settings, {
+          volumeMultiplier: 0.58,
+        });
+      }, 1120));
+
+      lockAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(lockJump, {
+            toValue: 1,
+            duration: 130,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(lockJump, {
+            toValue: 0,
+            duration: 190,
+            easing: Easing.bounce,
+            useNativeDriver: true,
+          }),
+          Animated.delay(120),
+        ]),
+        { iterations: 3 }
+      );
+      lockAnimation.start(() => {
+        lockJump.setValue(0);
+        openLockPulse.setValue(0);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        Animated.parallel([
+          Animated.timing(closedLockOpacity, {
+            toValue: 0,
+            duration: 1,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.timing(openLockOpacity, {
+              toValue: 1,
+              duration: 1,
+              easing: Easing.linear,
+              useNativeDriver: true,
+            }),
+            Animated.timing(openLockPulse, {
+              toValue: 1,
+              duration: 620,
+              easing: Easing.out(Easing.back(1.35)),
+              useNativeDriver: true,
+            }),
+            Animated.timing(openLockOpacity, {
+              toValue: 0,
+              duration: 260,
+              easing: Easing.in(Easing.cubic),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(carReveal, {
+            toValue: 1,
+            duration: 720,
+            easing: Easing.out(Easing.back(1.25)),
+            useNativeDriver: true,
+          }),
+          Animated.timing(starBurst, {
+            toValue: 1,
+            duration: 920,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    }, 1320));
+
+    timers.push(setTimeout(() => {
+      Animated.timing(entrance, {
+        toValue: 0,
+        duration: 360,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) {
+          onDismiss?.();
+        }
+      });
+    }, 5200));
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      lockAnimation?.stop();
+    };
+  }, [
+    carReveal,
+    closedLockOpacity,
+    currentValue,
+    entrance,
+    lockJump,
+    onDismiss,
+    openLockOpacity,
+    openLockPulse,
+    previousValue,
+    progressFill,
+    starBurst,
+  ]);
+
+  if (!unlock) {
+    return null;
+  }
+
+  return (
+    <View pointerEvents="auto" style={styles.skinUnlockLayer}>
+      <Animated.View style={[styles.skinUnlockBackdrop, { opacity: entrance }]} />
+      <Pressable style={styles.skinUnlockDismissArea} onPress={onDismiss}>
+        <Animated.View
+          style={[
+            styles.skinUnlockContent,
+            {
+              opacity: entrance,
+              transform: [{ translateY: revealTranslateY }, { scale: revealScale }],
+            },
+          ]}
+        >
+          <View style={styles.skinUnlockStage}>
+            {UNLOCK_STAR_POINTS.map((star, index) => {
+              const starOpacity = starBurst.interpolate({
+                inputRange: [0, 0.18 + index * 0.03, 1],
+                outputRange: [0, 1, 0],
+                extrapolate: 'clamp',
+              });
+              const starTranslateX = starBurst.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, star.x],
+              });
+              const starTranslateY = starBurst.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, star.y],
+              });
+              const starScale = starBurst.interpolate({
+                inputRange: [0, 0.35, 1],
+                outputRange: [0.4, 1.18, 0.72],
+              });
+
+              return (
+                <Animated.Image
+                  key={`unlock-star-${index}`}
+                  source={CHALLENGE_UNLOCK_STAR_BLUE}
+                  resizeMode="contain"
+                  style={[
+                    styles.skinUnlockStar,
+                    {
+                      left: star.left,
+                      top: star.top,
+                      width: star.size,
+                      height: star.size,
+                      opacity: starOpacity,
+                      transform: [
+                        { translateX: starTranslateX },
+                        { translateY: starTranslateY },
+                        { scale: starScale },
+                      ],
+                    },
+                  ]}
+                />
+              );
+            })}
+            <Animated.Image
+              source={PLAYER_IMAGES[unlock.skin] ?? PLAYER_IMAGES.groen}
+              resizeMode="contain"
+              fadeDuration={0}
+              style={[
+                styles.skinUnlockCar,
+                {
+                  opacity: lockedCarOpacity,
+                  transform: [{ scale: lockedCarScale }],
+                },
+              ]}
+            />
+            <Animated.Image
+              source={CHALLENGE_SKIN_LOCK_IMAGE}
+              resizeMode="contain"
+              fadeDuration={0}
+              style={[
+                styles.skinUnlockClosedLock,
+                {
+                  opacity: closedLockOpacity,
+                  transform: [
+                    { translateY: lockTranslateY },
+                    { scale: lockScale },
+                  ],
+                },
+              ]}
+            />
+            <Animated.Image
+              source={CHALLENGE_SKIN_UNLOCK_IMAGE}
+              resizeMode="contain"
+              fadeDuration={0}
+              style={[
+                styles.skinUnlockOpenLock,
+                {
+                  opacity: openLockOpacity,
+                  transform: [
+                    { translateY: lockTranslateY },
+                    { scale: lockScale },
+                    { scale: openLockPulseScale },
+                  ],
+                },
+              ]}
+            />
+          </View>
+          <Animated.View style={[styles.skinUnlockChallengeTextBlock, { opacity: entrance }]}>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.76}
+              style={[styles.skinUnlockChallengeName, { fontFamily }]}
+            >
+              {unlock.title}
+            </Text>
+            <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              style={[styles.skinUnlockChallengeText, { fontFamily }]}
+            >
+              {unlock.description}
+            </Text>
+            <View style={styles.skinUnlockChallengeProgressRow}>
+              <View style={styles.skinUnlockChallengeProgressTrack}>
+                <Animated.View
+                  style={[
+                    styles.skinUnlockChallengeProgressFill,
+                    {
+                      width: progressFill.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [`${previousRatio * 100}%`, `${currentRatio * 100}%`],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.skinUnlockChallengeProgressText, { fontFamily }]}>
+                {progressTextCurrent} / {targetValue}
+              </Text>
+            </View>
+          </Animated.View>
+        </Animated.View>
+      </Pressable>
+    </View>
   );
 }
 
@@ -3032,6 +3482,7 @@ export default function BingoCardScreen({
   rules,
   wincondition,
   diagonaal,
+  nederlands,
   aantalSpelersOpDitApparaat,
   kaartOpzet,
   onGameBack,
@@ -3042,6 +3493,13 @@ export default function BingoCardScreen({
   canReplay = true,
   isLiveLobbyHost = true,
 }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { isTablet: isTabletGame } = getResponsiveMetrics(screenWidth, screenHeight);
+  const boardViewport = useMemo(() => ({
+    width: screenWidth,
+    height: screenHeight,
+    isTablet: isTabletGame,
+  }), [isTabletGame, screenHeight, screenWidth]);
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
   const { settings } = useAppSettings();
   const normalizedMode = typeof modus === 'string' ? modus.toLowerCase() : '';
@@ -3131,14 +3589,29 @@ export default function BingoCardScreen({
     ),
     [collectiveGradientPlayers, displayPlayers, resolvedPlayerColors]
   );
-  const [sharedIcons] = useState(() => getRandomIcons(resolvedTheme, boardCellCount, resolvedSeed));
-  const [playerIcons] = useState(() =>
+  const itemOptions = useMemo(() => ({
+    nederlands: nederlands !== false,
+    recentItemIds: readCachedRecentBingoItemIds(),
+  }), [nederlands]);
+  const [sharedItems] = useState(() => getRandomItems(resolvedTheme, boardCellCount, resolvedSeed, itemOptions));
+  const sharedIcons = useMemo(() => sharedItems.map((item) => item.icon), [sharedItems]);
+  const [playerItemEntries] = useState(() =>
     kaartOpzet === 'ander-thema'
-      ? derivedThemes.map((playerTheme, index) => getRandomIcons(playerTheme, boardCellCount, resolvedSeed + index))
+      ? derivedThemes.map((playerTheme, index) => getRandomItems(playerTheme, boardCellCount, resolvedSeed + index, itemOptions))
       : actieveRegels.sharedCards
-        ? Array.from({ length: resolvedPlayerCount }, () => sharedIcons)
-        : Array.from({ length: resolvedPlayerCount }, (_, index) => getRandomIcons(resolvedTheme, boardCellCount, resolvedSeed + index))
+        ? Array.from({ length: resolvedPlayerCount }, () => sharedItems)
+        : Array.from({ length: resolvedPlayerCount }, (_, index) => getRandomItems(resolvedTheme, boardCellCount, resolvedSeed + index, itemOptions))
   );
+  const playerIcons = useMemo(
+    () => playerItemEntries.map((boardItems) => boardItems.map((item) => item.icon)),
+    [playerItemEntries]
+  );
+  useEffect(() => {
+    void loadRecentBingoItemIds();
+  }, []);
+  useEffect(() => {
+    void rememberRecentBingoItems(playerItemEntries);
+  }, [playerItemEntries]);
   const [playerChecked, setPlayerChecked] = useState(() =>
     Array.from({ length: resolvedPlayerCount }, () => Array(boardCellCount).fill(false))
   );
@@ -3163,6 +3636,8 @@ export default function BingoCardScreen({
   const [celebrationConfettiVisible, setCelebrationConfettiVisible] = useState(false);
   const [celebrationSplashVisible, setCelebrationSplashVisible] = useState(false);
   const [pendingWinnerModalKey, setPendingWinnerModalKey] = useState(null);
+  const [pendingSkinUnlockAnnouncement, setPendingSkinUnlockAnnouncement] = useState(null);
+  const [skinUnlockAnnouncement, setSkinUnlockAnnouncement] = useState(null);
   const [inspectedCell, setInspectedCell] = useState(null);
   const [backConfirmVisible, setBackConfirmVisible] = useState(false);
   const [suppressedCheckPulseKeys, setSuppressedCheckPulseKeys] = useState({});
@@ -3222,12 +3697,22 @@ export default function BingoCardScreen({
     ? resolvedPlayerColors[winnerIndex] ?? 'groen'
     : null;
   const twoPlayerBingoSplashLayout = twoPlayerBingoSplashSkin
-    ? getBingoBoardImageLayout(boardGridSize, false, twoPlayerBingoSplashSkin)
+    ? getBingoBoardImageLayout(boardGridSize, false, twoPlayerBingoSplashSkin, boardViewport)
     : null;
   const botClaimPlayers = useMemo(
     () => claimScores.filter((player) => isBotPlayer(player)),
     [claimScores]
   );
+
+  useEffect(() => {
+    const splashAssets = resolvedPlayerColors
+      .map((skin) => BINGO_SPLASH_BY_SKIN[skin])
+      .filter(Boolean);
+
+    if (splashAssets.length) {
+      preloadImageAssets(splashAssets).catch(() => {});
+    }
+  }, [resolvedPlayerColors]);
   const showBotScoreControls = __DEV__ && isClaimMode && botClaimPlayers.length > 0 && !claimGameFinished;
 
   function getGameElapsedMs() {
@@ -3258,6 +3743,29 @@ export default function BingoCardScreen({
       syncType,
       theme: resolvedTheme,
       mode: normalizedMode,
+    }).then((result) => {
+      const firstUnlock = result?.unlockedSkins?.[0];
+      if (firstUnlock) {
+        setPendingSkinUnlockAnnouncement(firstUnlock);
+      }
+    });
+  }
+
+  function triggerDevSkinUnlockPreview() {
+    setPendingSkinUnlockAnnouncement({
+      skin: 'politie',
+      title: 'Politie',
+      description: 'Spot in totaal 3 keer een politieauto (thema: Stad).',
+      previous: {
+        current: 2,
+        target: 3,
+        completed: false,
+      },
+      current: {
+        current: 3,
+        target: 3,
+        completed: true,
+      },
     });
   }
 
@@ -3276,6 +3784,8 @@ export default function BingoCardScreen({
     setWinnerModalVisible(false);
     setWinnerColor(null);
     setWinnerIndex(null);
+    setPendingSkinUnlockAnnouncement(null);
+    setSkinUnlockAnnouncement(null);
     setSuppressedCheckPulseKeys({});
   }
 
@@ -3522,6 +4032,10 @@ export default function BingoCardScreen({
 
   function startWinnerCelebration(playerIndex, checkedCells, completedLine = null, isFinalBingo = true) {
     const winnerSkin = resolvedPlayerColors[playerIndex] ?? 'groen';
+    const winnerSplashAsset = BINGO_SPLASH_BY_SKIN[winnerSkin];
+    if (winnerSplashAsset) {
+      preloadImageAssets([winnerSplashAsset]).catch(() => {});
+    }
     const winningSequence = orderWinningLineForDraw(completedLine, boardGridSize).length
       ? orderWinningLineForDraw(completedLine, boardGridSize)
       : getPrimaryWinningSequence(checkedCells, actieveRegels, boardGridSize);
@@ -3668,8 +4182,11 @@ export default function BingoCardScreen({
 
   useEffect(() => {
     preloadPooledSoundEffect(BINGO_ITEM_CHECK_SOUND, BINGO_ITEM_CHECK_SOUND_POOL_SIZE);
+    BINGO_LINE_STEP_SOUNDS.forEach((soundName) => {
+      preloadPooledSoundEffect(soundName, BINGO_ITEM_CHECK_SOUND_POOL_SIZE);
+    });
     preloadSoundEffect(BINGO_CHEER_SOUND);
-    preloadSoundEffect(HOLD_DOWN_TICKING_SOUND);
+    preloadSoundEffect(SKIN_UNLOCK_BELL_SOUND);
   }, []);
 
   useEffect(() => {
@@ -3730,6 +4247,21 @@ export default function BingoCardScreen({
     }
   }, [claimGameFinished]);
 
+  useEffect(() => {
+    if (!pendingSkinUnlockAnnouncement || !winnerModalVisible || isClaimMode) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setSkinUnlockAnnouncement(pendingSkinUnlockAnnouncement);
+      setPendingSkinUnlockAnnouncement(null);
+    }, WINNER_SKIN_UNLOCK_DELAY_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isClaimMode, pendingSkinUnlockAnnouncement, winnerModalVisible]);
+
   useEffect(() => () => {
     clearCelebrationTimeouts();
   }, []);
@@ -3739,10 +4271,9 @@ export default function BingoCardScreen({
   }
 
   function playBingoLineStepSound(stepIndex) {
-    void playPooledSoundEffect(BINGO_ITEM_CHECK_SOUND, settings, BINGO_ITEM_CHECK_SOUND_POOL_SIZE, {
-      playbackRate: Math.min(2, BINGO_LINE_PITCH_STEP ** stepIndex),
-      shouldCorrectPitch: false,
-    });
+    const soundName = BINGO_LINE_STEP_SOUNDS[Math.min(stepIndex, BINGO_LINE_STEP_SOUNDS.length - 1)]
+      ?? BINGO_ITEM_CHECK_SOUND;
+    void playPooledSoundEffect(soundName, settings, BINGO_ITEM_CHECK_SOUND_POOL_SIZE);
   }
 
   function playBingoCheerSound() {
@@ -4059,7 +4590,7 @@ export default function BingoCardScreen({
     const checkedColor = PLAYER_HEX[kleur] ?? '#2E8B3F';
     const boardSkin = isCollectiveMode ? 'neutral' : kleur;
     const boardImage = BINGO_BOARD_IMAGES[boardSkin] ?? BINGO_BOARD_IMAGES.groen;
-    const boardLayout = getBingoBoardImageLayout(boardGridSize, compactTwoPlayerLayout, boardSkin);
+    const boardLayout = getBingoBoardImageLayout(boardGridSize, compactTwoPlayerLayout, boardSkin, boardViewport);
     const collectiveBoardGradient = isCollectiveMode
       ? getCollectiveBoardGradient(collectiveGradientPalette, boardGridSize, startedAt, collectiveGradientTick)
       : null;
@@ -4275,7 +4806,7 @@ export default function BingoCardScreen({
     const fallbackSkin = activeClaimPlayer?.skin ?? resolvedPlayerColors[0] ?? 'groen';
     const fallbackColor = PLAYER_HEX[fallbackSkin] ?? '#2E8B3F';
     const boardImage = BINGO_BOARD_IMAGES.neutral;
-    const boardLayout = getClaimBingoBoardImageLayout(boardGridSize);
+    const boardLayout = getClaimBingoBoardImageLayout(boardGridSize, boardViewport);
     const claimPlayerCount = Math.max(1, claimScores.length);
     const claimColumns = claimPlayerCount >= 5 ? 3 : claimPlayerCount === 4 ? 2 : claimPlayerCount >= 3 ? 3 : claimPlayerCount;
     const claimScoreGap = claimPlayerCount >= 5 ? 2 : 8;
@@ -4592,6 +5123,25 @@ export default function BingoCardScreen({
           />
         </View>
       ) : null}
+      {__DEV__ && winnerModalVisible && !isClaimMode && !skinUnlockAnnouncement ? (
+        <View pointerEvents="box-none" style={styles.devSkinUnlockTestLayer}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={triggerDevSkinUnlockPreview}
+            style={styles.devSkinUnlockTestButton}
+          >
+            <Text style={styles.devSkinUnlockTestText}>Test unlock</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {skinUnlockAnnouncement ? (
+        <SkinUnlockAnnouncement
+          unlock={skinUnlockAnnouncement}
+          fontFamily={fredoka}
+          settings={settings}
+          onDismiss={() => setSkinUnlockAnnouncement(null)}
+        />
+      ) : null}
       <CellInspectOverlay
         cell={liveInspectedCell}
         progress={inspectProgress}
@@ -4622,18 +5172,18 @@ const styles = StyleSheet.create({
   },
   gameBackButton: {
     position: 'absolute',
-    top: 18,
-    left: 10,
-    width: 60,
-    height: 60,
+    top: 16,
+    left: 16,
+    width: 54,
+    height: 54,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 90,
     elevation: 90,
   },
   gameBackButtonImage: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
   },
   gameBackButtonShadow: {
     position: 'absolute',
@@ -4784,9 +5334,8 @@ const styles = StyleSheet.create({
   bingoBoardGridOverlay: {
     position: 'absolute',
     backgroundColor: 'transparent',
-    overflow: 'visible',
+    overflow: 'hidden',
     zIndex: 3,
-    elevation: 3,
   },
   bingoSplashOverlay: {
     position: 'absolute',
@@ -4912,24 +5461,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     position: 'relative',
-    borderRadius: 20,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   cell: {
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   cellBorderOverlay: {
     position: 'absolute',
-    borderWidth: 2.25,
+    borderWidth: 1.75,
     zIndex: 20,
-    elevation: 20,
   },
   cellMotionWrap: {
     zIndex: 4,
-    elevation: 4,
     overflow: 'visible',
   },
   checkedFillClip: {
@@ -4982,6 +5529,19 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
     elevation: 26,
   },
+  inspectCellLabel: {
+    position: 'absolute',
+    color: '#FFFDF7',
+    fontSize: 24,
+    lineHeight: 30,
+    textAlign: 'center',
+    textTransform: 'capitalize',
+    textShadowColor: 'rgba(0, 0, 0, 0.42)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+    zIndex: 27,
+    elevation: 27,
+  },
   inspectGradientFill: {
     position: 'absolute',
     top: 0,
@@ -5006,8 +5566,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   cellIcon: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
+  },
+  cellIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
     zIndex: 8,
-    elevation: 8,
   },
   lineTrack: {
     position: 'absolute',
@@ -5051,6 +5618,158 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 32,
     elevation: 32,
+  },
+  devSkinUnlockTestLayer: {
+    position: 'absolute',
+    top: 72,
+    right: 14,
+    zIndex: 54,
+    elevation: 54,
+  },
+  devSkinUnlockTestButton: {
+    minWidth: 104,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(12, 91, 168, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+  },
+  devSkinUnlockTestText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0,
+  },
+  skinUnlockLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 58,
+    elevation: 58,
+  },
+  skinUnlockBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5, 18, 38, 0.76)',
+  },
+  skinUnlockDismissArea: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  skinUnlockContent: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skinUnlockStage: {
+    width: Math.min(width * (IS_TABLET_GAME ? 0.86 : 1.08), IS_TABLET_GAME ? 680 : 470),
+    height: Math.min(width * (IS_TABLET_GAME ? 0.86 : 1.08), IS_TABLET_GAME ? 680 : 470) * 0.58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    marginBottom: -8,
+  },
+  skinUnlockStar: {
+    position: 'absolute',
+  },
+  skinUnlockCar: {
+    width: '92%',
+    height: '100%',
+  },
+  skinUnlockClosedLock: {
+    position: 'absolute',
+    width: IS_TABLET_GAME ? 152 : 120,
+    height: IS_TABLET_GAME ? 152 : 120,
+    top: '34%',
+    left: '50%',
+    marginLeft: IS_TABLET_GAME ? -76 : -60,
+    marginTop: IS_TABLET_GAME ? -76 : -60,
+    zIndex: 5,
+  },
+  skinUnlockOpenLock: {
+    position: 'absolute',
+    width: IS_TABLET_GAME ? 152 : 120,
+    height: IS_TABLET_GAME ? 152 : 120,
+    top: '34%',
+    left: '50%',
+    marginLeft: IS_TABLET_GAME ? -76 : -60,
+    marginTop: IS_TABLET_GAME ? -76 : -60,
+    zIndex: 6,
+  },
+  skinUnlockChallengeTextBlock: {
+    width: Math.min(width - 22, IS_TABLET_GAME ? 650 : 620),
+    minHeight: IS_TABLET_GAME ? 142 : 122,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(18, 32, 52, 0.86)',
+    borderWidth: 2,
+    borderColor: 'rgba(136, 221, 255, 0.74)',
+  },
+  skinUnlockChallengeName: {
+    width: '100%',
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 24,
+    lineHeight: 30,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(0,0,0,0.42)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  skinUnlockChallengeText: {
+    width: '100%',
+    marginTop: 4,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#BDEFFF',
+    textAlign: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  skinUnlockChallengeProgressRow: {
+    width: '100%',
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  skinUnlockChallengeProgressTrack: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.34)',
+  },
+  skinUnlockChallengeProgressFill: {
+    height: '100%',
+    borderRadius: 6,
+    backgroundColor: '#F5C400',
+  },
+  skinUnlockChallengeProgressText: {
+    minWidth: 46,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#FFF7DD',
+    textAlign: 'right',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   modalBackdrop: {
     flex: 1,

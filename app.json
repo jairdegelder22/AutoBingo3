@@ -2,9 +2,9 @@
   "expo": {
     "name": "AutoBingo",
     "slug": "AutoBingo3",
-    "version": "1.0.0",
+    "version": "1.2.8",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.jpeg",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -13,10 +13,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jairdegelder.autobingo"
+      "bundleIdentifier": "com.jairdegelder.autobingo",
+      "buildNumber": "11"
     },
     "android": {
       "package": "com.jairdegelder.autobingo",
+      "versionCode": 11,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -25,6 +27,12 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
+    },
+    "androidNavigationBar": {
+      "visible": "sticky-immersive",
+      "barStyle": "light-content",
+      "backgroundColor": "#000000",
+      "enforceContrast": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,7 +45,7 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "androidAppId": "ca-app-pub-5873918058071695~4181685485",
           "iosAppId": "ca-app-pub-5873918058071695~2488958739"
         }
       ],
@@ -49,7 +57,7 @@
       ]
     ],
     "react-native-google-mobile-ads": {
-      "android_app_id": "ca-app-pub-3940256099942544~3347511713",
+      "android_app_id": "ca-app-pub-5873918058071695~4181685485",
       "ios_app_id": "ca-app-pub-5873918058071695~2488958739"
     },
     "extra": {
