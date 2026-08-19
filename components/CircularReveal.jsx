@@ -145,7 +145,7 @@ const CircularReveal = forwardRef(function CircularReveal(
     return () => {
       progress.removeListener(id);
     };
-  }, [initialProgress, progress]);
+  }, [initialProgress, mode, progress]);
 
   useEffect(() => () => stopAnimation(), [stopAnimation]);
 

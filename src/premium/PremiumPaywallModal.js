@@ -27,7 +27,7 @@ const BENEFITS = [
   },
   {
     key: 'themes',
-    label: 'Extra thema’s',
+    label: '5 extra thema’s',
     image: EXTRA_THEMES_IMAGE,
   },
   {

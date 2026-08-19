@@ -177,6 +177,27 @@ function isMissingLobbySettingsColumn(error) {
 }
 
 async function resetLobbyState(lobbyId, hostPlayerId) {
+  // Claim the reset before changing players or boards. An initial lobby setup
+  // must never be able to overwrite a game that has just been started.
+  const { data: resetRows, error: lobbyResetError } = await supabase
+    .from('lobbies')
+    .update({
+      status: 'waiting',
+      started_at: null,
+    })
+    .eq('id', lobbyId)
+    .neq('status', 'started')
+    .select('id');
+
+  if (lobbyResetError) {
+    console.warn('resetLobbyState lobby reset error', lobbyResetError.message);
+    return false;
+  }
+
+  if (!resetRows?.length) {
+    return false;
+  }
+
   const deletePlayersQuery = supabase
     .from('lobby_players')
     .delete()
@@ -186,16 +207,9 @@ async function resetLobbyState(lobbyId, hostPlayerId) {
     ? deletePlayersQuery.neq('player_id', hostPlayerId)
     : deletePlayersQuery;
 
-  const [{ error: playerDeleteError }, { error: boardDeleteError }, { error: lobbyResetError }] = await Promise.all([
+  const [{ error: playerDeleteError }, { error: boardDeleteError }] = await Promise.all([
     filteredPlayersQuery,
     supabase.from('lobby_board_cells').delete().eq('lobby_id', lobbyId),
-    supabase
-      .from('lobbies')
-      .update({
-        status: 'waiting',
-        started_at: null,
-      })
-      .eq('id', lobbyId),
   ]);
 
   if (playerDeleteError) {
@@ -206,9 +220,7 @@ async function resetLobbyState(lobbyId, hostPlayerId) {
     console.warn('resetLobbyState board delete error', boardDeleteError.message);
   }
 
-  if (lobbyResetError) {
-    console.warn('resetLobbyState lobby reset error', lobbyResetError.message);
-  }
+  return !playerDeleteError && !boardDeleteError;
 }
 
 export async function ensureLobby({ code, config, hostPlayer, resetExisting = true }) {
@@ -447,16 +459,22 @@ export async function startLobby(code) {
     return null;
   }
 
-  const { error } = await supabase
+  const startedAt = new Date().toISOString();
+
+  const { data: startedLobbyRow, error } = await supabase
     .from('lobbies')
     .update({
       status: 'started',
-      started_at: new Date().toISOString(),
+      started_at: startedAt,
     })
-    .eq('id', lobbyRow.id);
+    .eq('id', lobbyRow.id)
+    .select('*')
+    .maybeSingle();
 
-  if (error) {
-    console.warn('startLobby error', error.message);
+  // With RLS, an UPDATE that matches no permitted rows can otherwise look
+  // successful. Only continue when Supabase confirms the started lobby row.
+  if (error || !startedLobbyRow || startedLobbyRow.status !== 'started' || !startedLobbyRow.started_at) {
+    console.warn('startLobby error', error?.message ?? 'Lobby status was not updated to started.');
     return null;
   }
 
@@ -467,10 +485,17 @@ export async function startLobby(code) {
 
   if (boardError) {
     console.warn('startLobby board delete error', boardError.message);
-    return null;
   }
 
-  return getLobbySnapshot(code);
+  // The lobby has already started successfully. A stale board is less harmful
+  // than sending everyone back to the lobby after a transient delete failure.
+  const snapshot = await getLobbySnapshot(code);
+  if (snapshot?.started && snapshot.startedAt) {
+    return snapshot;
+  }
+
+  const playerRows = await fetchPlayersByLobbyId(lobbyRow.id) ?? [];
+  return mapLobbyRowToSnapshot(startedLobbyRow, playerRows);
 }
 
 export async function updateLobbySettings(code, config = {}) {
@@ -547,10 +572,14 @@ export async function restartLobbyGame(code, config = {}) {
 
   if (boardError) {
     console.warn('restartLobbyGame board delete error', boardError.message);
-    return null;
   }
 
-  return getLobbySnapshot(code);
+  const snapshot = await getLobbySnapshot(code);
+  return snapshot ?? mapLobbyRowToSnapshot({
+    ...lobbyRow,
+    status: 'started',
+    started_at: startedAt,
+  });
 }
 
 export async function stopLobbyGame(code) {

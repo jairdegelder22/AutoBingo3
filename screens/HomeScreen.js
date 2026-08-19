@@ -266,6 +266,7 @@ const THEME_REVEAL_COLOR_OVERRIDES = {
   platteland: '#1F6F34',
 };
 const THEME_REVEAL_PRELOAD_TIMEOUT_MS = 650;
+const THEME_DETAIL_READY_TIMEOUT_MS = 4000;
 const LICENSE_PLATE_DASH_SLOT_WEIGHT = 0.44;
 const LICENSE_PLATE_TOTAL_SLOT_UNITS = 8 + LICENSE_PLATE_DASH_SLOT_WEIGHT * 2;
 
@@ -318,20 +319,31 @@ function hasEmbeddedThemeFrame(themeId) {
 }
 
 function getEmbeddedThemeTitleStyle(themeId) {
+  const titleTop = themeId === 'verkeersborden'
+    ? '6.8%'
+    : themeId === 'voertuigen' || themeId === 'platteland'
+    ? '6.2%'
+    : '5.1%';
   const compactTitleStyle = themeId === 'verkeersborden'
     ? {
-        fontSize: 18,
-        lineHeight: 25,
+        left: '4%',
+        right: '4%',
+        fontSize: 23,
+        lineHeight: 30,
       }
     : themeId === 'voertuigen'
     ? {
-        fontSize: 22,
-        lineHeight: 30,
+        left: '6%',
+        right: '6%',
+        fontSize: 28,
+        lineHeight: 36,
       }
     : themeId === 'platteland'
     ? {
-        fontSize: 26,
-        lineHeight: 36,
+        left: '5%',
+        right: '5%',
+        fontSize: 29,
+        lineHeight: 37,
       }
     : null;
 
@@ -339,7 +351,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
     return {
       color: '#111111',
       ...compactTitleStyle,
-      top: '5.1%',
+      top: titleTop,
       letterSpacing: 0.5,
       textShadowColor: 'rgba(255, 255, 255, 0.52)',
       textShadowOffset: { width: 0, height: 1 },
@@ -350,7 +362,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
   return {
     color: '#FFFFFF',
     ...compactTitleStyle,
-    top: '5.1%',
+    top: titleTop,
     letterSpacing: 0.5,
     textShadowColor: '#15539D',
     textShadowOffset: { width: 0, height: 1 },
@@ -900,6 +912,7 @@ function ThemeItemInspectOverlay({ cell, progress, onClose }) {
 
 function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
   const { height, width } = useWindowDimensions();
+  const scrollOffsetYRef = useRef(0);
   const safeWidth = Number.isFinite(width) && width > 0 ? width : FALLBACK_WINDOW_WIDTH;
   const safeHeight = Number.isFinite(height) && height > 0 ? height : FALLBACK_WINDOW_HEIGHT;
   const { isTablet } = getResponsiveMetrics(safeWidth, safeHeight);
@@ -928,6 +941,10 @@ function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
       style={styles.skinRoadScroll}
       showsVerticalScrollIndicator={false}
       bounces={false}
+      scrollEventThrottle={16}
+      onScroll={(event) => {
+        scrollOffsetYRef.current = event.nativeEvent.contentOffset.y;
+      }}
     >
       <View style={[styles.skinShopStage, { height: contentHeight }]}>
         {roadImages.map((imageIndex) => (
@@ -950,6 +967,9 @@ function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
         {items.map((item, index) => {
           const rowIndex = Math.floor(index / 2);
           const columnIndex = index % 2;
+          const tileLeft = columnIndex === 0 ? safeWidth * (isTablet ? 0.055 : 0.035) : safeWidth * (isTablet ? 0.525 : 0.495);
+          const tileTop = topOffset + rowIndex * rowHeight;
+          const tileWidth = safeWidth * (isTablet ? 0.42 : 0.47);
 
           return (
             <SkinShopTile
@@ -959,10 +979,17 @@ function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
               hidden={item.id === inspectedSkinId}
               equipped={item.id === equippedSkin}
               onInspect={onInspect}
+              sourceRect={{
+                x: tileLeft,
+                y: tileTop,
+                width: tileWidth,
+                height: tileHeight,
+                getScrollOffsetY: () => scrollOffsetYRef.current,
+              }}
               style={{
-                left: columnIndex === 0 ? width * (isTablet ? 0.055 : 0.035) : width * (isTablet ? 0.525 : 0.495),
-                top: topOffset + rowIndex * rowHeight,
-                width: width * (isTablet ? 0.42 : 0.47),
+                left: tileLeft,
+                top: tileTop,
+                width: tileWidth,
                 height: tileHeight,
               }}
             />
@@ -973,7 +1000,7 @@ function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
   );
 }
 
-function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, style }) {
+function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, sourceRect, style }) {
   const tileRef = useRef(null);
   const bob = useRef(new Animated.Value(0)).current;
   const isUnlocked = isSkinShopItemUnlocked(item);
@@ -1018,6 +1045,23 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, st
   }, [bob, shouldAnimateIdleMotion]);
 
   function handlePress() {
+    if (sourceRect) {
+      const movingWidth = sourceRect.width * SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO / SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO;
+      const tileImageLeft = sourceRect.x - ((SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO - 1) * sourceRect.width) / 2;
+      const movingImageBleed = ((SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO - 1) * movingWidth) / 2;
+
+      onInspect({
+        skin: item,
+        rect: {
+          x: tileImageLeft + movingImageBleed,
+          y: sourceRect.y - sourceRect.getScrollOffsetY() + (sourceRect.height - tileImageHeight) / 2,
+          width: movingWidth,
+          height: tileImageHeight,
+        },
+      });
+      return;
+    }
+
     tileRef.current?.measureInWindow((x, y, width, height) => {
       const movingWidth = width * SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO / SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO;
       const tileImageLeft = x - ((SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO - 1) * width) / 2;
@@ -1117,7 +1161,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, st
   );
 }
 
-function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPhase = 0 }) {
+function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPhase = 0, pointerEvents = 'auto' }) {
   const jump = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -1162,6 +1206,7 @@ function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPha
 
   return (
     <Animated.View
+      pointerEvents={pointerEvents}
       style={[
         size === 'large' ? styles.challengeSkinLockLarge : styles.challengeSkinLockTile,
         style,
@@ -1259,6 +1304,14 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
     inputRange: [0, 1],
     outputRange: [25, 14],
   });
+  const detailTextOpacity = progress.interpolate({
+    inputRange: [0, 0.58, 1],
+    outputRange: [0, 0, 1],
+  });
+  const challengeTextBlockWidth = Math.max(0, targetWidth - 44);
+  const nameTextBlockWidth = Math.max(0, targetWidth - 68);
+  const challengeTextBlockHeight = 122;
+  const nameTextBlockHeight = 142;
 
   return (
     <View pointerEvents="box-none" style={styles.skinInspectLayer}>
@@ -1280,7 +1333,9 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
           },
         ]}
       >
+        <Pressable style={styles.skinInspectMovingDismissArea} onPress={onClose} />
         <Animated.View
+          pointerEvents="none"
           style={[
             styles.skinInspectMovingShadow,
             {
@@ -1292,6 +1347,7 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
           <SkinCarShadow style={styles.skinInspectShadowSvg} />
         </Animated.View>
         <Animated.Image
+          pointerEvents="none"
           source={skin.image}
           resizeMode="contain"
           style={[
@@ -1308,90 +1364,10 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
             <ChallengeSkinLockOverlay
               size="large"
               progress={progress}
+              pointerEvents="none"
               style={styles.skinInspectChallengeLock}
             />
-            <Animated.View
-              style={[
-                styles.skinInspectChallengeTextBlock,
-                {
-                  opacity: progress,
-                },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.76}
-                style={styles.skinInspectChallengeName}
-              >
-                {skin.label}
-              </Text>
-              <Text
-                numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.82}
-                style={styles.skinInspectChallengeText}
-              >
-                {challengeText}
-              </Text>
-              <View style={styles.skinInspectChallengeProgressRow}>
-                <View style={styles.skinInspectChallengeProgressTrack}>
-                  <View
-                    style={[
-                      styles.skinInspectChallengeProgressFill,
-                      { width: `${challengeRatio * 100}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.skinInspectChallengeProgressText}>
-                  {challengeProgress.current} / {challengeProgress.target}
-                </Text>
-              </View>
-            </Animated.View>
           </>
-        ) : null}
-        {canEquipSkin ? (
-          <Animated.View
-            style={[
-              styles.skinInspectNameBlock,
-              {
-                opacity: progress,
-              },
-            ]}
-          >
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.76}
-              style={styles.skinInspectChallengeName}
-            >
-              {skin.label}
-            </Text>
-            <Text
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.82}
-              style={[
-                styles.skinInspectChallengeText,
-                !skin.challenge && styles.skinInspectReservedChallengeText,
-              ]}
-            >
-              {skin.challenge ?? ' '}
-            </Text>
-            <View style={styles.skinInspectEquipButtonWrap}>
-              <GlossyButton
-                label={isEquipped ? 'Geselecteerd' : 'Selecteer'}
-                variant="green"
-                size="normal"
-                disabled={isEquipped}
-                heightOverride={isTablet ? 64 : 56}
-                horizontalPadding={isTablet ? 34 : 28}
-                labelFontScale={isTablet ? 1.04 : 0.96}
-                soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
-                onPress={() => onEquip?.(skin.id)}
-              />
-            </View>
-          </Animated.View>
         ) : null}
         {isFutureSkin ? (
           <Animated.Text
@@ -1406,13 +1382,108 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
           </Animated.Text>
         ) : null}
       </Animated.View>
+      {isChallengeLocked ? (
+        <Animated.View
+          style={[
+            styles.skinInspectChallengeTextBlock,
+            {
+              left: targetLeft + (targetWidth - challengeTextBlockWidth) / 2,
+              top: targetTop + targetContainerHeight - 8 - challengeTextBlockHeight,
+              right: undefined,
+              bottom: undefined,
+              width: challengeTextBlockWidth,
+              minHeight: challengeTextBlockHeight,
+              opacity: detailTextOpacity,
+            },
+          ]}
+        >
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.76}
+            style={styles.skinInspectChallengeName}
+          >
+            {skin.label}
+          </Text>
+          <Text
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            style={styles.skinInspectChallengeText}
+          >
+            {challengeText}
+          </Text>
+          <View style={styles.skinInspectChallengeProgressRow}>
+            <View style={styles.skinInspectChallengeProgressTrack}>
+              <View
+                style={[
+                  styles.skinInspectChallengeProgressFill,
+                  { width: `${challengeRatio * 100}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.skinInspectChallengeProgressText}>
+              {challengeProgress.current} / {challengeProgress.target}
+            </Text>
+          </View>
+        </Animated.View>
+      ) : null}
+      {canEquipSkin ? (
+        <Animated.View
+          style={[
+            styles.skinInspectNameBlock,
+            {
+              left: targetLeft + (targetWidth - nameTextBlockWidth) / 2,
+              top: targetTop + targetContainerHeight - 10 - nameTextBlockHeight,
+              right: undefined,
+              bottom: undefined,
+              width: nameTextBlockWidth,
+              minHeight: nameTextBlockHeight,
+              opacity: detailTextOpacity,
+            },
+          ]}
+        >
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.76}
+            style={styles.skinInspectChallengeName}
+          >
+            {skin.label}
+          </Text>
+          <Text
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            style={[
+              styles.skinInspectChallengeText,
+              !skin.challenge && styles.skinInspectReservedChallengeText,
+            ]}
+          >
+            {skin.challenge ?? ' '}
+          </Text>
+          <View style={styles.skinInspectEquipButtonWrap}>
+            <GlossyButton
+              label={isEquipped ? 'Geselecteerd' : 'Selecteer'}
+              variant="green"
+              size="normal"
+              disabled={isEquipped}
+              heightOverride={isTablet ? 64 : 56}
+              horizontalPadding={isTablet ? 34 : 28}
+              labelFontScale={isTablet ? 1.04 : 0.96}
+              soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+              onPress={() => onEquip?.(skin.id)}
+            />
+          </View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
 
 function ThemeDetailScreen({ theme, onBack, onReady }) {
   const items = useMemo(() => getThemeIcons(theme.id), [theme.id]);
-  const titleColor = theme.id === 'winter' ? '#274154' : '#FFFFFF';
+  const titleColor = '#FFFFFF';
   const backgroundImage = getThemeDetailBackgroundImage(theme.id);
   const inspectProgress = useRef(new Animated.Value(0)).current;
   const [inspectedItem, setInspectedItem] = useState(null);
@@ -1423,9 +1494,7 @@ function ThemeDetailScreen({ theme, onBack, onReady }) {
   const visibleItemLoadKeysRef = useRef(new Set());
   const readyCalledRef = useRef(false);
   const resolvedBackgroundImage = getResolvedAssetSource(backgroundImage, resolvedSources);
-  const requiredInitialItemCount = Platform.OS === 'android'
-    ? Math.min(items.length, 6)
-    : items.length;
+  const requiredInitialItemCount = Math.min(items.length, 6);
   const resolvedDetailAssets = useMemo(() => ([
     backgroundImage,
     ...items,
@@ -1540,9 +1609,9 @@ function ThemeDetailScreen({ theme, onBack, onReady }) {
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={Platform.OS === 'android'}
           initialNumToRender={requiredInitialItemCount}
-          maxToRenderPerBatch={Platform.OS === 'android' ? 6 : items.length}
-          updateCellsBatchingPeriod={Platform.OS === 'android' ? 24 : 0}
-          windowSize={Platform.OS === 'android' ? 5 : 9}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={24}
+          windowSize={7}
           columnWrapperStyle={styles.themeItemsGridRow}
           contentContainerStyle={styles.themeDetailContent}
           ListHeaderComponent={(
@@ -1806,6 +1875,10 @@ export default function HomeScreen({
   route,
   showDriverWarning = false,
   onDriverWarningComplete = null,
+  tutorialActive = false,
+  tutorialStep = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
 }) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(windowWidth, windowHeight);
@@ -1832,6 +1905,7 @@ export default function HomeScreen({
   const revealRef = useRef(null);
   const themeCoverRevealRef = useRef(null);
   const playButtonWrapRef = useRef(null);
+  const playButtonTargetRef = useRef(null);
   const onlineButtonWrapRef = useRef(null);
   const hostOptionRef = useRef(null);
   const joinOptionRef = useRef(null);
@@ -2086,6 +2160,34 @@ export default function HomeScreen({
     [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !selectedThemeDetail
   );
+
+  const reportTutorialTarget = useCallback((key, targetRef) => {
+    if (!tutorialActive || !onTutorialTargetLayout || !targetRef?.current?.measureInWindow) {
+      return;
+    }
+
+    let attempts = 0;
+    const measure = () => {
+      targetRef.current?.measureInWindow?.((x, y, targetWidth, targetHeight) => {
+        if ((!targetWidth || !targetHeight) && attempts < 8) {
+          attempts += 1;
+          setTimeout(measure, 80);
+          return;
+        }
+
+        onTutorialTargetLayout(key, {
+          x,
+          y,
+          width: targetWidth,
+          height: targetHeight,
+        });
+      });
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(measure);
+    });
+  }, [onTutorialTargetLayout, tutorialActive]);
   const joinPlateSlots = getLicensePlateSlots(normalizedJoinCode);
   const joinPlateWidth = Math.min(windowWidth - (isTablet ? 48 : 18), isTablet ? 760 : 430);
   const joinPlateHeight = joinPlateWidth / (1870 / 520);
@@ -2242,6 +2344,12 @@ export default function HomeScreen({
       }),
     ]).start();
   }, [activeTab, activeTabTranslateX, tabPageTranslateX, tabWidth, windowWidth]);
+
+  useEffect(() => {
+    if (tutorialStep?.target === 'home.play') {
+      reportTutorialTarget('home.play', playButtonTargetRef);
+    }
+  }, [reportTutorialTarget, tutorialStep?.target, windowHeight, windowWidth]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -2884,6 +2992,12 @@ export default function HomeScreen({
         return;
       }
 
+      const joinPlayer = {
+        ...createPlayer({ skin: equippedSkin }),
+        naam: 'Speler 1',
+        skin: equippedSkin,
+      };
+
       const config = createGameConfig({
         thema: liveLobby?.config?.thema ?? decoded.thema,
         modus: liveLobby?.config?.modus ?? decoded.gameMode,
@@ -2904,7 +3018,10 @@ export default function HomeScreen({
           : { eigenVoortgang: false, andermansVoortgang: false },
         startedAt: liveLobby?.startedAt ?? null,
         liveLobbyPlayers: liveLobby?.players ?? [],
+        spelers: [joinPlayer],
       });
+
+      void AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, equippedSkin);
 
       setIsJoinBusy(false);
       isNavigatingRef.current = true;
@@ -2999,7 +3116,6 @@ export default function HomeScreen({
       return;
     }
 
-    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
     pendingOnlineJumpTimeoutRef.current = setTimeout(() => {
       pendingOnlineJumpTimeoutRef.current = null;
       runOnlineCarJumpSequence({ withHaptics: true });
@@ -3023,20 +3139,11 @@ export default function HomeScreen({
     }, 150);
   };
 
-  const handleHostOptionPress = async () => {
+  const handleHostOptionPress = () => {
     void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
 
     if (!isPremium) {
       void openPremiumModal('host');
-      return;
-    }
-
-    const online = await checkOnlineConnection();
-    if (!online) {
-      setConnectionError({
-        title: 'Geen internetverbinding',
-        message: 'Om een online lobby aan te maken, heb je een stabiele internetverbinding nodig.',
-      });
       return;
     }
 
@@ -3086,6 +3193,8 @@ export default function HomeScreen({
 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     pendingThemeBackRef.current = false;
+    themeDetailReadyRef.current = false;
+    themeDetailReadyResolverRef.current = null;
     setPendingThemeDetail(theme);
     setThemeRevealState({
       covering: true,
@@ -3103,6 +3212,31 @@ export default function HomeScreen({
     themeDetailReadyRef.current = true;
     themeDetailReadyResolverRef.current?.();
     themeDetailReadyResolverRef.current = null;
+  }, []);
+
+  const waitForThemeDetailReady = useCallback(() => {
+    if (themeDetailReadyRef.current) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (isReady) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timeoutId);
+        if (themeDetailReadyResolverRef.current === finish) {
+          themeDetailReadyResolverRef.current = null;
+        }
+        resolve(isReady);
+      };
+      const timeoutId = setTimeout(() => finish(false), THEME_DETAIL_READY_TIMEOUT_MS);
+
+      themeDetailReadyResolverRef.current = () => finish(true);
+    });
   }, []);
 
   const handleThemeRoadReady = useCallback(() => {
@@ -3141,26 +3275,22 @@ export default function HomeScreen({
     if (pendingThemeBackRef.current) {
       pendingThemeBackRef.current = false;
 
-      if (Platform.OS === 'android') {
-        try {
-          await Promise.race([
-            preloadImageAssets([
-              THEME_ROAD_BACKGROUND,
-              THEME_LOCK_OVERLAY_OVERVIEW_IMAGE,
-              ...THEME_SHOWCASE_ITEMS.map((item) => item.previewImage).filter(Boolean),
-            ]),
-            new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
-          ]);
-        } catch (_error) {
-          // De thema-overzichtpagina mag alsnog terugkomen als een cache-warmup faalt.
-        }
+      try {
+        await Promise.race([
+          preloadImageAssets([
+            THEME_ROAD_BACKGROUND,
+            THEME_LOCK_OVERLAY_OVERVIEW_IMAGE,
+            ...THEME_SHOWCASE_ITEMS.map((item) => item.previewImage).filter(Boolean),
+          ]),
+          new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
+        ]);
+      } catch (_error) {
+        // De thema-overzichtpagina mag alsnog terugkomen als een cache-warmup faalt.
       }
 
       setThemeRoadRenderKey((current) => current + 1);
       setSelectedThemeDetail(null);
-      if (Platform.OS === 'android') {
-        await new Promise((resolve) => setTimeout(resolve, 80));
-      }
+      await new Promise((resolve) => setTimeout(resolve, 80));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       setThemeRevealState((current) => ({
         ...current,
@@ -3194,26 +3324,23 @@ export default function HomeScreen({
       return;
     }
 
-    if (Platform.OS === 'android') {
-      try {
-        await Promise.race([
-          preloadImageAssets(getThemeDetailAssets(
-            theme.id,
-            theme.previewImage ? [theme.previewImage] : []
-          )),
-          new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
-        ]);
-      } catch (_error) {
-        // Als preload faalt, tonen we de detailpagina alsnog.
-      }
+    try {
+      await Promise.race([
+        preloadImageAssets(getThemeDetailAssets(
+          theme.id,
+          theme.previewImage ? [theme.previewImage] : []
+        )),
+        new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
+      ]);
+    } catch (_error) {
+      // Als preload faalt, tonen we de detailpagina alsnog.
     }
 
+    themeDetailReadyRef.current = false;
+    themeDetailReadyResolverRef.current = null;
     setSelectedThemeDetail(theme);
     setPendingThemeDetail(null);
-    if (Platform.OS === 'android') {
-      await new Promise((resolve) => setTimeout(resolve, 120));
-    }
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await waitForThemeDetailReady();
     setThemeRevealState((current) => ({
       ...current,
       phase: 'uncover',
@@ -3290,7 +3417,7 @@ export default function HomeScreen({
     };
 
     const canStartTabSwipe = (gestureState) => {
-      if (isJoinPlateVisible) {
+      if (isJoinPlateVisible || selectedThemeDetail) {
         return false;
       }
 
@@ -3557,7 +3684,7 @@ export default function HomeScreen({
                       ref={joinCodeInputRef}
                       value={joinCode}
                       onChangeText={(value) => {
-                        const nextCode = normalizeLobbyCode(value);
+                        const nextCode = normalizeLobbyCode(value.replace(/[\r\n]+/g, ''));
                         setJoinCode(nextCode);
                         setJoinError('');
 
@@ -3569,7 +3696,11 @@ export default function HomeScreen({
                       }}
                       autoCapitalize="characters"
                       autoCorrect={false}
+                      autoComplete="off"
                       maxLength={10}
+                      multiline={false}
+                      numberOfLines={1}
+                      scrollEnabled
                       returnKeyType="done"
                       onSubmitEditing={() => {
                         void submitJoinCode();
@@ -3643,26 +3774,28 @@ export default function HomeScreen({
                           ]}
                         />
                       </View>
-                      <GlossyButton
-                        label="Speel"
-                        variant="yellow"
-                        size="large"
-                        labelOffsetY={0}
-                        contentOffsetY={12}
-                        horizontalPadding={28}
-                        heightOverride={actionButtonHeight}
-                        labelFontScale={isTablet ? 1.18 : 1}
-                        hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
-                        disableHaptics
-                        soundEffectName={null}
-                        onPressIn={(event) => {
-                          latestPressPointRef.current = {
-                            x: event.nativeEvent.pageX,
-                            y: event.nativeEvent.pageY,
-                          };
-                        }}
-                        onPress={handlePlayPress}
-                      />
+                      <View ref={playButtonTargetRef} collapsable={false}>
+                        <GlossyButton
+                          label="Speel"
+                          variant="yellow"
+                          size="large"
+                          labelOffsetY={0}
+                          contentOffsetY={12}
+                          horizontalPadding={28}
+                          heightOverride={actionButtonHeight}
+                          labelFontScale={isTablet ? 1.18 : 1}
+                          hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
+                          disableHaptics
+                          soundEffectName={null}
+                          onPressIn={(event) => {
+                            latestPressPointRef.current = {
+                              x: event.nativeEvent.pageX,
+                              y: event.nativeEvent.pageY,
+                            };
+                          }}
+                          onPress={handlePlayPress}
+                        />
+                      </View>
                     </Animated.View>
 
                     <Animated.View
@@ -5020,6 +5153,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  skinInspectMovingDismissArea: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   skinInspectChallengeMovingCar: {
     justifyContent: 'flex-start',

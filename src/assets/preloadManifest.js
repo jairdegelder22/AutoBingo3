@@ -98,6 +98,9 @@ export const SETTINGS_ASSETS = [
   require('../../assets/images/settings/toggles/haptics-off.png'),
   require('../../assets/images/settings/toggles/state-on.png'),
   require('../../assets/images/settings/toggles/state-off.png'),
+  require('../../assets/images/tutorial/tutorial-hand.png'),
+  require('../../assets/images/tutorial/tutorial-speech-bubble.png'),
+  require('../../assets/images/tutorial/tutorial-car-red.png'),
 ];
 
 export const POPUP_PANEL_ASSETS = [

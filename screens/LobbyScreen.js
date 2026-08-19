@@ -21,6 +21,7 @@ import { BackButton, InlineNote, ScreenLayout } from './flowComponents';
 import {
   BASIC_SKIN_OPTIONS,
   EQUIPPED_SKIN_STORAGE_KEY,
+  GAME_RULE_PREFERENCES_STORAGE_KEY,
   PLAYER_SETUP_STORAGE_KEY,
   SKIN_OPTIONS,
   createGameConfig,
@@ -29,6 +30,7 @@ import {
   createPlayer,
   getDefaultPlayerName,
   normalizeCustomPlayerName,
+  serializeGameRulePreferences,
   withDefaultPlayerNames,
 } from './gameFlowConfig';
 import { checkOnlineConnection, deleteLobby, ensureLobby, removePlayers, startLobby, subscribeToLobby, touchPlayerPresence, updateLobbySettings, upsertPlayers } from '../src/services/liveLobbyService';
@@ -58,7 +60,7 @@ import {
 const MAX_PLAYER_NAME_LENGTH = 12;
 const MAX_LOCAL_PLAYERS = 2;
 const MAX_LOBBY_PLAYERS = 6;
-const START_GAME_REVEAL_GREEN = '#159B3B';
+const START_GAME_REVEAL_BLUE = '#1677D2';
 const LEAVE_LOBBY_REVEAL_GREEN = '#159B3B';
 const PLAYER_SILHOUETTE_IMAGE = PLAYER_ADD_SILHOUETTE_IMAGE;
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
@@ -137,10 +139,6 @@ function getNumberedName(prefix, players = []) {
   }
 
   return `${prefix} ${players.length + 1}`;
-}
-
-function isBotPlayer(player) {
-  return typeof player?.playerId === 'string' && player.playerId.startsWith('bot-');
 }
 
 function formatPlayerGridName(value = '', fallbackName = 'Speler') {
@@ -371,7 +369,12 @@ function LobbyGameSettingsPage({
 }) {
   const { height: screenHeight } = useWindowDimensions();
   const selectedThemeIndex = Math.max(0, LOBBY_THEME_CARDS.findIndex((theme) => theme.id === settings.thema));
-  const showClassicRuleSettings = settings.modus === 'klassiek' || settings.modus === 'wegenkaart';
+  const showWinAndDiagonalRuleSettings = (
+    settings.modus === 'klassiek'
+    || settings.modus === 'wegenkaart'
+    || settings.modus === 'collectief'
+  );
+  const showCardLayoutRuleSettings = settings.modus === 'klassiek' || settings.modus === 'wegenkaart';
   const slideY = useRef(new Animated.Value(screenHeight)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const panResponder = useMemo(() => PanResponder.create({
@@ -499,7 +502,7 @@ function LobbyGameSettingsPage({
 
             <View style={styles.settingsBottomPanel}>
               <Text style={styles.settingsBottomPanelTitle}>Spelregels</Text>
-              {showClassicRuleSettings ? (
+              {showWinAndDiagonalRuleSettings ? (
                 <>
                   <Text style={styles.settingsSectionLabel}>Win conditie</Text>
                   <View style={styles.settingsChipRow}>
@@ -539,7 +542,7 @@ function LobbyGameSettingsPage({
                 ))}
               </View>
 
-              {showClassicRuleSettings ? (
+              {showCardLayoutRuleSettings ? (
                 <>
                   <Text style={styles.settingsSectionLabel}>Kaarten</Text>
                   <View style={styles.settingsChipRow}>
@@ -1040,6 +1043,7 @@ export default function LobbyScreen({ navigation, route }) {
     routePlayers ?? [normalizeLocalPlayer(createPlayer({ skin: 'rood' }), 'rood')]
   ));
   const [startConfirmVisible, setStartConfirmVisible] = useState(false);
+  const [startError, setStartError] = useState('');
   const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
   const [gameSettingsVisible, setGameSettingsVisible] = useState(false);
   const [lobbyLayoutReady, setLobbyLayoutReady] = useState(false);
@@ -1109,6 +1113,7 @@ export default function LobbyScreen({ navigation, route }) {
   const [leaveLobbyReveal, setLeaveLobbyReveal] = useState(null);
   const [remoteLobbyExitReveal, setRemoteLobbyExitReveal] = useState(null);
   const [lobbySnapshotReady, setLobbySnapshotReady] = useState(false);
+  const [lobbySetupReady, setLobbySetupReady] = useState(!isLiveLobby);
   const stageCarSize = spelers.length >= 2
     ? Math.round(STAGE_MULTI_CAR_SIZE * (isTablet ? Math.min(tabletScale, 1.22) : 1))
     : Math.round(STAGE_SINGLE_CAR_SIZE * (isTablet ? Math.min(tabletScale, 1.22) : 1));
@@ -1363,8 +1368,12 @@ export default function LobbyScreen({ navigation, route }) {
 
   useEffect(() => {
     if (config?.syncType !== 'live' || !config?.lobbyCode || !storageLoaded || !isLocalHost) {
+      setLobbySetupReady(!isLiveLobby || !isLocalHost);
       return undefined;
     }
+
+    let cancelled = false;
+    setLobbySetupReady(false);
 
     void ensureLobby({
       code: config.lobbyCode,
@@ -1376,9 +1385,15 @@ export default function LobbyScreen({ navigation, route }) {
         role: 'host',
       },
       resetExisting: !config?.liveLobbyPlayers?.length && (config?.startedAt ?? null) === null,
+    }).then((snapshot) => {
+      if (!cancelled) {
+        setLobbySetupReady(Boolean(snapshot));
+      }
     });
 
-    return undefined;
+    return () => {
+      cancelled = true;
+    };
   }, [
     config,
     config?.liveLobbyPlayers?.length,
@@ -1603,7 +1618,9 @@ export default function LobbyScreen({ navigation, route }) {
     return '';
   }, [andereSpelers, isCardCodeMode, spelers]);
 
-  const canStartHost = isLocalHost && !validationError && !liveConnectionOffline;
+  const canStartHost = isLocalHost
+    && !validationError
+    && !liveConnectionOffline;
 
   useEffect(() => {
     if (config?.syncType !== 'live' || !config?.lobbyCode || validationError || liveConnectionOffline) {
@@ -1640,8 +1657,6 @@ export default function LobbyScreen({ navigation, route }) {
     return knownLobbyPlayers.length ? knownLobbyPlayers : spelers;
   }, [config?.syncType, knownLobbyPlayers, spelers]);
   const isSinglePlayerLobby = deelnemers.length <= 1;
-  const canAddBotPlayer = isLiveLobby && isLocalHost && deelnemers.length < MAX_LOBBY_PLAYERS;
-
   const selectedPlayer = selectedPlayerIndex === null ? null : spelers[selectedPlayerIndex];
   const takenSkins = useMemo(
     () => [
@@ -1711,43 +1726,15 @@ export default function LobbyScreen({ navigation, route }) {
     void removePlayers(config.lobbyCode, [playerToRemove.playerId]);
   }
 
-  function handleAddBotPlayer() {
-    if (!canAddBotPlayer || !config?.lobbyCode) {
-      return;
-    }
-
-    const currentPlayers = deelnemers;
-    const usedSkins = new Set(currentPlayers.map((player) => player.skin));
-    const fallbackSkin = SKIN_OPTIONS.find((skin) => !usedSkins.has(skin)) ?? 'groen';
-    const botPlayer = {
-      ...createPlayer({ skin: fallbackSkin }),
-      naam: getNumberedName('Bot', currentPlayers),
-      role: 'guest',
-      playerId: `bot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    };
-
-    if (lobbyPlayerShrinkTimeoutRef.current) {
-      clearTimeout(lobbyPlayerShrinkTimeoutRef.current);
-      lobbyPlayerShrinkTimeoutRef.current = null;
-    }
-
-    setStableLobbyPlayers((current) => {
-      const sourcePlayers = current.length ? current : currentPlayers;
-      return [...sourcePlayers, botPlayer].slice(0, MAX_LOBBY_PLAYERS);
-    });
-    void upsertPlayers(config.lobbyCode, [botPlayer]);
-  }
-
-  async function handleStart() {
+  function handleStart() {
     if (!canStartHost) {
       return;
     }
 
-    if (isLiveLobby) {
-      const online = await checkOnlineConnection(1600);
-      if (!online) {
-        return;
-      }
+    setStartError('');
+
+    if (isLiveLobby && !lobbySetupReady) {
+      setLobbySetupReady(true);
     }
 
     if (isCardCodeMode) {
@@ -1762,6 +1749,7 @@ export default function LobbyScreen({ navigation, route }) {
       });
       return;
     }
+
     setStartConfirmVisible(true);
   }
 
@@ -1780,6 +1768,10 @@ export default function LobbyScreen({ navigation, route }) {
     };
 
     setDraftGameSettings(nextSettings);
+    void AsyncStorage.setItem(
+      GAME_RULE_PREFERENCES_STORAGE_KEY,
+      serializeGameRulePreferences(nextSettings)
+    );
 
     if (!isLiveLobby || !isLocalHost || !config?.lobbyCode || liveConnectionOffline) {
       return;
@@ -1862,6 +1854,8 @@ export default function LobbyScreen({ navigation, route }) {
       return;
     }
 
+    setStartError('');
+
     if (isLiveLobby) {
       const online = await checkOnlineConnection(1600);
       if (!online) {
@@ -1917,30 +1911,45 @@ export default function LobbyScreen({ navigation, route }) {
 
     let startedLobby = null;
     if (config?.syncType === 'live') {
-      const botPlayers = knownLobbyPlayers
-        .filter((player) => isBotPlayer(player))
-        .map((player) => ({
-          ...player,
-          naam: normalizeName(player.naam),
-          role: 'guest',
-        }));
-
       await upsertPlayers(
         config.lobbyCode,
-        [
-          ...normalizedPlayers.map((player, index) => ({ ...player, role: isLocalHost && index === 0 ? 'host' : 'guest' })),
-          ...botPlayers,
-        ]
+        normalizedPlayers.map((player, index) => ({ ...player, role: isLocalHost && index === 0 ? 'host' : 'guest' }))
       );
       startedLobby = await startLobby(config.lobbyCode);
-      if (!startedLobby) {
-        setStartGameReveal(null);
-        setStartConfirmVisible(false);
-        return;
+
+      if (!startedLobby?.started || !startedLobby.startedAt) {
+        const hostPlayer = {
+          ...normalizedPlayers[0],
+          role: 'host',
+        };
+
+        await ensureLobby({
+          code: config.lobbyCode,
+          config: startConfig,
+          hostPlayer,
+          resetExisting: false,
+        });
+        startedLobby = await startLobby(config.lobbyCode);
+      }
+
+      if (!startedLobby?.started || !startedLobby.startedAt) {
+        if (!isSinglePlayerLobby) {
+          setStartError('De lobby kon niet worden gestart. Probeer het nog een keer.');
+          setStartGameReveal(null);
+          setStartConfirmVisible(false);
+          return;
+        }
+
+        startedLobby = {
+          started: true,
+          startedAt: new Date().toISOString(),
+          config: startConfig,
+          players: normalizedPlayers,
+        };
       }
     }
 
-    navigation.navigate('Spel', {
+    navigation.replace('Spel', {
       config: {
         ...startConfig,
         ...(startedLobby?.config ?? {}),
@@ -1952,14 +1961,14 @@ export default function LobbyScreen({ navigation, route }) {
         startedAt: startedLobby?.startedAt ?? null,
       },
       transition: {
-        color: START_GAME_REVEAL_GREEN,
+        color: START_GAME_REVEAL_BLUE,
         originX: screenWidth / 2,
         originY: screenHeight / 2,
         routeName: 'Spel',
         pauseMs: 80,
-        minSolidMs: 360,
-        settleMs: 120,
-        routeReadySettleMs: 160,
+        minSolidMs: 560,
+        settleMs: 220,
+        routeReadySettleMs: 520,
         transitionKey,
       },
     });
@@ -1986,14 +1995,14 @@ export default function LobbyScreen({ navigation, route }) {
       },
       replayAt: Date.now(),
       transition: {
-        color: START_GAME_REVEAL_GREEN,
+        color: START_GAME_REVEAL_BLUE,
         originX: screenWidth / 2,
         originY: screenHeight / 2,
         routeName: 'Spel',
         pauseMs: 80,
-        minSolidMs: 360,
-        settleMs: 120,
-        routeReadySettleMs: 160,
+        minSolidMs: 560,
+        settleMs: 220,
+        routeReadySettleMs: 520,
         transitionKey,
       },
     });
@@ -2086,6 +2095,9 @@ export default function LobbyScreen({ navigation, route }) {
     if (nextSkin) {
       setTransitionSkin(nextSkin);
       updateSpeler(closingPlayerIndex, { skin: nextSkin });
+      if (closingPlayerIndex === 0) {
+        void AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, nextSkin);
+      }
     }
 
     Animated.parallel([
@@ -2234,6 +2246,7 @@ export default function LobbyScreen({ navigation, route }) {
           </View>
 
           {validationError ? <InlineNote>{validationError}</InlineNote> : null}
+          {startError ? <InlineNote>{startError}</InlineNote> : null}
 
           {!isCardCodeMode ? (
             <PlayerGrid
@@ -2348,7 +2361,7 @@ export default function LobbyScreen({ navigation, route }) {
       <Modal
         visible={startConfirmVisible}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setStartConfirmVisible(false)}
       >
         <View style={styles.confirmBackdrop}>
@@ -2403,7 +2416,7 @@ export default function LobbyScreen({ navigation, route }) {
               {isSinglePlayerLobby ? (
                 <Text style={[styles.confirmText, isTablet && styles.confirmTextTablet]}>
                   Er is maar <Text style={styles.confirmTextStrong}>1 speler</Text>{isCardCodeMode ? ' klaar.' : ' in de lobby.'}
-                  Weet je zeker dat je wilt spelen?
+                  {' '}Weet je zeker dat je wilt spelen?
                 </Text>
               ) : (
                 'Weet je zeker dat je het spel wilt beginnen?'
@@ -2414,7 +2427,7 @@ export default function LobbyScreen({ navigation, route }) {
             <CircularReveal
               key={startGameReveal.transitionKey}
               ref={startGameRevealRef}
-              color={START_GAME_REVEAL_GREEN}
+              color={START_GAME_REVEAL_BLUE}
               originX={startGameReveal.originX}
               originY={startGameReveal.originY}
               onComplete={() => {
@@ -2434,7 +2447,7 @@ export default function LobbyScreen({ navigation, route }) {
         <CircularReveal
           key={startGameReveal.transitionKey}
           ref={startGameRevealRef}
-          color={START_GAME_REVEAL_GREEN}
+          color={START_GAME_REVEAL_BLUE}
           originX={startGameReveal.originX}
           originY={startGameReveal.originY}
           onComplete={() => {

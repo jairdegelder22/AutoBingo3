@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
   Easing,
@@ -28,12 +29,20 @@ import { usePremium } from '../src/premium/PremiumContext';
 import { getThemeCardImage, THEME_CARD_IMAGES, THEME_LOCK_OVERLAY_IMAGE } from '../assets/images/theme-cards/themeCardImages';
 import {
   createGameConfig,
+  createPlayer,
   DEFAULT_ZICHTBAARHEID,
+  EQUIPPED_SKIN_STORAGE_KEY,
+  GAME_RULE_PREFERENCES_STORAGE_KEY,
+  PREFERRED_PLAYER_NAME_STORAGE_KEY,
+  SKIN_OPTIONS,
+  parseStoredGameRulePreferences,
+  serializeGameRulePreferences,
+  normalizeCustomPlayerName,
 } from './gameFlowConfig';
 import { THEMES } from './themeCatalog';
 import { LOBBY_CODE_SALT_ENTROPY_BITS, generateLobbyCode } from '../src/utils/lobbyCode';
 import { getResponsiveMetrics } from '../src/utils/responsive';
-import { checkOnlineConnection } from '../src/services/liveLobbyService';
+import { ensureLobby } from '../src/services/liveLobbyService';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
 import { playSoundEffect, preloadSoundEffect } from '../src/audio/soundEffects';
 import { HOST_ASSETS } from '../src/assets/preloadManifest';
@@ -239,6 +248,7 @@ export default function HostSetupScreen({ navigation }) {
   const [diagonaal, setDiagonaal] = useState(true);
   const [kaartOpzet, setKaartOpzet] = useState('zelfde');
   const [nederlands, setNederlands] = useState(true);
+  const [gameRulePreferencesLoaded, setGameRulePreferencesLoaded] = useState(false);
   const [createLobbyConfirmVisible, setCreateLobbyConfirmVisible] = useState(false);
   const [connectionErrorVisible, setConnectionErrorVisible] = useState(false);
   const [createLobbyReveal, setCreateLobbyReveal] = useState(null);
@@ -341,7 +351,12 @@ export default function HostSetupScreen({ navigation }) {
   const selectedGameMode = GAME_MODE_CARDS[selectedGameModeIndex] ?? GAME_MODE_CARDS[0];
   const liveSyncEnabled = selectedGameMode?.requiresWifi ?? true;
   const isCardCodeMode = selectedGameMode?.id === 'wegenkaart';
-  const showClassicRuleSettings = selectedGameMode?.id === 'klassiek' || selectedGameMode?.id === 'wegenkaart';
+  const showWinAndDiagonalRuleSettings = (
+    selectedGameMode?.id === 'klassiek'
+    || selectedGameMode?.id === 'wegenkaart'
+    || selectedGameMode?.id === 'collectief'
+  );
+  const showCardLayoutRuleSettings = selectedGameMode?.id === 'klassiek' || selectedGameMode?.id === 'wegenkaart';
   const selectedThemeLocked = Boolean(selectedTheme?.id && PREMIUM_THEME_IDS.has(selectedTheme.id) && !isPremium);
   const selectedThemeAvailable = !selectedThemeLocked;
 
@@ -373,6 +388,42 @@ export default function HostSetupScreen({ navigation }) {
   const handleHostWarmupReady = useCallback(() => {
     setHostAssetsReady(true);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    AsyncStorage.getItem(GAME_RULE_PREFERENCES_STORAGE_KEY).then((storedValue) => {
+      if (cancelled) {
+        return;
+      }
+
+      const preferences = parseStoredGameRulePreferences(storedValue);
+      setWincondition(preferences.wincondition);
+      setDiagonaal(preferences.diagonaal);
+      setKaartOpzet(preferences.kaartOpzet);
+      setNederlands(preferences.nederlands);
+      setGameRulePreferencesLoaded(true);
+    }).catch(() => {
+      if (!cancelled) {
+        setGameRulePreferencesLoaded(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!gameRulePreferencesLoaded) {
+      return;
+    }
+
+    void AsyncStorage.setItem(
+      GAME_RULE_PREFERENCES_STORAGE_KEY,
+      serializeGameRulePreferences({ wincondition, diagonaal, kaartOpzet, nederlands })
+    );
+  }, [diagonaal, gameRulePreferencesLoaded, kaartOpzet, nederlands, wincondition]);
 
   useEffect(() => {
     if (!hostLayoutReady || !hostAssetsReady) {
@@ -629,6 +680,45 @@ export default function HostSetupScreen({ navigation }) {
     });
   }
 
+  function closeGameModePickerWithReturn() {
+    if (gameModeMotion || gameModePickerExiting) {
+      return;
+    }
+
+    void Haptics.selectionAsync();
+    setGameModePickerExiting(true);
+
+    requestAnimationFrame(async () => {
+      const mode = selectedGameMode;
+      const from = await measureNode(gameModeChoiceRefs.current[mode.id]);
+      const to = await measureNode(setupGameModeCardRef.current);
+
+      if (!stageGameModeMotion({ mode, from, to })) {
+        closeGameModePicker(true);
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          gameModePickerItemProgress[mode.id]?.stopAnimation();
+          gameModePickerItemProgress[mode.id]?.setValue(0);
+          setHiddenGameModeChoiceId(mode.id);
+          void animateGameModePickerItemsOut(mode.id);
+          playStagedGameModeMotion({
+            duration: 460,
+            onComplete: () => {
+              setSetupGameModeDetached(false);
+              requestAnimationFrame(() => {
+                setGameModeMotion(null);
+                closeGameModePicker(true);
+              });
+            },
+          });
+        });
+      });
+    });
+  }
+
   function selectGameMode(modeId) {
     if (gameModeMotion || gameModePickerExiting) {
       return;
@@ -641,7 +731,7 @@ export default function HostSetupScreen({ navigation }) {
     }
 
     if (nextIndex === selectedGameModeIndex) {
-      closeGameModePicker(true);
+      closeGameModePickerWithReturn();
       return;
     }
 
@@ -691,14 +781,6 @@ export default function HostSetupScreen({ navigation }) {
       return;
     }
 
-    if (liveSyncEnabled) {
-      const online = await checkOnlineConnection();
-      if (!online) {
-        setConnectionErrorVisible(true);
-        return;
-      }
-    }
-
     setCreateLobbyConfirmVisible(true);
   }
 
@@ -721,6 +803,19 @@ export default function HostSetupScreen({ navigation }) {
       kaartOpzet,
       nederlands,
     });
+    void AsyncStorage.setItem(
+      GAME_RULE_PREFERENCES_STORAGE_KEY,
+      serializeGameRulePreferences({ wincondition, diagonaal, kaartOpzet, nederlands })
+    );
+
+    const [storedEquippedSkin, storedPreferredName] = await Promise.all([
+      AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY),
+      AsyncStorage.getItem(PREFERRED_PLAYER_NAME_STORAGE_KEY),
+    ]);
+    const hostPlayer = createPlayer({
+      naam: normalizeCustomPlayerName(storedPreferredName),
+      skin: SKIN_OPTIONS.includes(storedEquippedSkin) ? storedEquippedSkin : 'rood',
+    });
 
     const config = createGameConfig({
       thema: selectedTheme.id,
@@ -737,7 +832,7 @@ export default function HostSetupScreen({ navigation }) {
       zichtbaarheid: liveSyncEnabled
         ? { ...DEFAULT_ZICHTBAARHEID }
         : { eigenVoortgang: false, andermansVoortgang: false },
-      spelers: [],
+      spelers: [hostPlayer],
     });
 
     const origin = (
@@ -750,8 +845,18 @@ export default function HostSetupScreen({ navigation }) {
         y: screenHeight / 2,
       });
 
+    const liveLobbySetupPromise = liveSyncEnabled
+      ? ensureLobby({
+          code: lobbyCode,
+          config,
+          hostPlayer,
+          resetExisting: true,
+        }).catch(() => null)
+      : Promise.resolve(null);
+
     setCreateLobbyReveal({
       config,
+      liveLobbySetupPromise,
       originX: origin.x,
       originY: origin.y,
       transitionKey: `host-lobby-${Date.now()}`,
@@ -944,7 +1049,7 @@ export default function HostSetupScreen({ navigation }) {
                   { useNativeDriver: true }
                 )}
               >
-                {showClassicRuleSettings ? (
+                {showWinAndDiagonalRuleSettings ? (
                   <>
                     <SettingsRuleSlider
                       title="Winconditie"
@@ -977,7 +1082,7 @@ export default function HostSetupScreen({ navigation }) {
                   variant="dutch"
                 />
 
-                {showClassicRuleSettings ? (
+                {showCardLayoutRuleSettings ? (
                   <SettingsRuleSlider
                     title="Kaarten"
                     titleIcon={SETTINGS_CARD_LAYOUT_TITLE_ICON}
@@ -1020,7 +1125,7 @@ export default function HostSetupScreen({ navigation }) {
           <Animated.View style={[styles.gameModePickerLayer, { opacity: gameModePickerOpacity }]}>
             <Pressable
               style={StyleSheet.absoluteFill}
-              onPress={() => selectGameMode(selectedGameMode.id)}
+              onPress={closeGameModePickerWithReturn}
             />
             <View
               pointerEvents="box-none"
@@ -1066,7 +1171,7 @@ export default function HostSetupScreen({ navigation }) {
       <Modal
         visible={createLobbyConfirmVisible}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => {
           if (!createLobbyReveal) {
             setCreateLobbyConfirmVisible(false);
@@ -1114,6 +1219,7 @@ export default function HostSetupScreen({ navigation }) {
                       onPress={(event) => {
                         void handleConfirmCreateLobbyPress(event);
                       }}
+                      soundEffectName="onlineHornMode"
                       disabled={Boolean(createLobbyReveal)}
                       heightOverride={setupMetrics.isTablet ? 84 : 54}
                       horizontalPadding={setupMetrics.isTablet ? 38 : 18}
@@ -1135,17 +1241,33 @@ export default function HostSetupScreen({ navigation }) {
               color={CONFIRM_CREATE_LOBBY_REVEAL_GREEN}
               originX={createLobbyReveal.originX}
               originY={createLobbyReveal.originY}
-              onComplete={() => {
+              onComplete={async () => {
+                const setupSnapshot = await createLobbyReveal.liveLobbySetupPromise;
+                if (liveSyncEnabled && !setupSnapshot) {
+                  setCreateLobbyConfirmVisible(false);
+                  setCreateLobbyReveal(null);
+                  setConnectionErrorVisible(true);
+                  return;
+                }
+
+                const lobbyConfig = setupSnapshot
+                  ? {
+                      ...createLobbyReveal.config,
+                      liveLobbyPlayers: setupSnapshot.players ?? [],
+                      startedAt: setupSnapshot.startedAt ?? null,
+                    }
+                  : createLobbyReveal.config;
+
                 navigation.navigate('Lobby', {
-                  config: createLobbyReveal.config,
+                  config: lobbyConfig,
                   transition: {
                     color: CONFIRM_CREATE_LOBBY_REVEAL_GREEN,
                     originX: screenWidth / 2,
                     originY: screenHeight / 2,
                     routeName: 'Lobby',
                     pauseMs: 0,
-                    minSolidMs: 260,
-                    settleMs: 120,
+                    minSolidMs: 420,
+                    settleMs: 180,
                     preloaded: true,
                     transitionKey: createLobbyReveal.transitionKey,
                   },
@@ -1174,22 +1296,24 @@ export default function HostSetupScreen({ navigation }) {
       >
         <View style={styles.confirmBackdrop}>
           <PopupPanel
-            title="Geen internetverbinding"
+            title="Online lobby niet aangemaakt"
             fontFamily="FredokaOne_400Regular"
             compact
+            actionsStyle={styles.connectionErrorActions}
             actions={(
               <View style={styles.confirmGlossyButton}>
                 <GlossyButton
                   label="Oké"
                   variant="green"
-                  heightOverride={setupMetrics.isTablet ? 76 : 58}
+                  heightOverride={setupMetrics.isTablet ? 74 : 52}
                   horizontalPadding={setupMetrics.isTablet ? 38 : 26}
+                  labelFontScale={setupMetrics.isTablet ? 1 : 0.92}
                   onPress={() => setConnectionErrorVisible(false)}
                 />
               </View>
             )}
           >
-            Om een online lobby aan te maken, heb je een stabiele internetverbinding nodig.
+            De online lobby kon niet worden aangemaakt. Probeer het nog een keer.
           </PopupPanel>
         </View>
       </Modal>
@@ -1219,9 +1343,11 @@ function ThemeCard({ item, metrics, isPremium = false, onLockedPress }) {
       };
   const titleScale = getEmbeddedThemeTitleScale(item.id);
   const isTrafficSignsTitle = item.id === 'verkeersborden';
+  const isLongThemeTitle = item.id === 'platteland';
   const titleTextStyle = {
-    fontSize: Math.round(28 * metrics.scale * titleScale),
-    lineHeight: Math.round((isTrafficSignsTitle ? 32 : usesEmbeddedFrame ? 40 : 34) * metrics.scale * titleScale),
+    fontSize: Math.round((usesEmbeddedFrame ? 32 : 28) * metrics.scale * titleScale),
+    lineHeight: Math.round((isTrafficSignsTitle ? 34 : usesEmbeddedFrame ? 42 : 34) * metrics.scale * titleScale),
+    ...(usesEmbeddedFrame ? { width: '100%' } : null),
     ...(usesEmbeddedFrame ? getEmbeddedThemeTitleStyle(item.id) : { color: '#ffffff' }),
   };
 
@@ -1265,8 +1391,8 @@ function ThemeCard({ item, metrics, isPremium = false, onLockedPress }) {
               <Text
                 allowFontScaling={false}
                 numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.5}
+                adjustsFontSizeToFit={isTrafficSignsTitle || isLongThemeTitle}
+                minimumFontScale={isLongThemeTitle ? 0.8 : 0.72}
                 maxFontSizeMultiplier={1}
                 style={[
                   styles.carouselCardTitle,
@@ -2791,6 +2917,10 @@ const styles = StyleSheet.create({
   },
   confirmGlossyButton: {
     flex: 1,
+  },
+  connectionErrorActions: {
+    marginTop: 10,
+    transform: [{ translateY: -14 }],
   },
   panelShell: {
     overflow: 'hidden',

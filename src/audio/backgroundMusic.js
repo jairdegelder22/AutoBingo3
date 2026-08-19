@@ -21,6 +21,7 @@ const fadePromises = {};
 const fadeInPromises = {};
 const fadeTokens = {};
 const fadeInTokens = {};
+const playbackRecoveryTokens = {};
 let currentTrackName = null;
 let gameMusicStoppedForBingo = false;
 let gameMusicShouldFadeIn = false;
@@ -65,6 +66,7 @@ function stopBackgroundMusicImmediately(trackName = currentTrackName) {
   }
 
   cancelTrackFades(trackName);
+  playbackRecoveryTokens[trackName] = (playbackRecoveryTokens[trackName] ?? 0) + 1;
 
   try {
     players[trackName].pause();
@@ -88,6 +90,8 @@ export async function fadeOutBackgroundMusic(trackName = currentTrackName, durat
   if (!trackName || !players[trackName]) {
     return;
   }
+
+  playbackRecoveryTokens[trackName] = (playbackRecoveryTokens[trackName] ?? 0) + 1;
 
   if (fadePromises[trackName]) {
     return fadePromises[trackName];
@@ -190,6 +194,51 @@ function fadeInBackgroundMusic(trackName, durationMs = FADE_IN_DURATION_MS) {
   return fadeInPromises[trackName];
 }
 
+function schedulePlaybackRecovery(trackName, settings) {
+  const player = players[trackName];
+
+  if (!player || !shouldPlayMusic(settings)) {
+    return;
+  }
+
+  const recoveryToken = (playbackRecoveryTokens[trackName] ?? 0) + 1;
+  playbackRecoveryTokens[trackName] = recoveryToken;
+
+  [140, 520, 1100].forEach((delayMs) => {
+    setTimeout(async () => {
+      try {
+        if (playbackRecoveryTokens[trackName] !== recoveryToken) {
+          return;
+        }
+
+        if (currentTrackName !== trackName || (trackName === 'game' && gameMusicStoppedForBingo)) {
+          return;
+        }
+
+        if (player.playing) {
+          return;
+        }
+
+        await configureAudioPlaybackMode({ force: true });
+
+        if (playbackRecoveryTokens[trackName] !== recoveryToken || currentTrackName !== trackName) {
+          return;
+        }
+
+        player.loop = true;
+
+        if (!fadeInPromises[trackName] && !fadePromises[trackName]) {
+          player.volume = TRACKS[trackName]?.volume ?? 0.35;
+        }
+
+        player.play();
+      } catch (_error) {
+        // A later recovery attempt or route change can try again.
+      }
+    }, delayMs);
+  });
+}
+
 export async function playBackgroundMusic(trackName, settings) {
   if (!shouldPlayMusic(settings)) {
     stopAllBackgroundMusicImmediately();
@@ -234,6 +283,8 @@ export async function playBackgroundMusic(trackName, settings) {
       player.play();
     }
 
+    schedulePlaybackRecovery(trackName, settings);
+
     if (shouldFadeIn) {
       if (trackName === 'game') {
         gameMusicShouldFadeIn = false;
@@ -257,6 +308,7 @@ export async function playGameBackgroundMusic(settings) {
 export async function resetGameBackgroundMusicForNewRound() {
   gameMusicStoppedForBingo = false;
   gameMusicShouldFadeIn = true;
+  playbackRecoveryTokens.game = (playbackRecoveryTokens.game ?? 0) + 1;
   fadeTokens.game = (fadeTokens.game ?? 0) + 1;
   fadeInTokens.game = (fadeInTokens.game ?? 0) + 1;
   fadePromises.game = null;

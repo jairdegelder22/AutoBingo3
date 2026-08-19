@@ -33,7 +33,7 @@ const APP_VERSION = require('../app.json').expo.version;
 const SETTINGS_MENU_ASPECT_RATIO = 975 / 1614;
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function SettingsScreen({ navigation, onClose, visible = true }) {
+export default function SettingsScreen({ navigation, onClose, onTutorial, visible = true }) {
   const { settings, updateSetting } = useAppSettings();
   const {
     available: premiumAvailable,
@@ -192,9 +192,9 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
     },
     {
       key: 'tutorial',
-      label: 'Tutorial',
+      label: 'Handleiding',
       icon: SETTINGS_TUTORIAL_IMAGE,
-      onPress: () => Alert.alert('Tutorial', 'Tutorial komt later.'),
+      onPress: onTutorial ?? (() => Alert.alert('Handleiding', 'Handleiding komt later.')),
     },
     {
       key: 'restore-premium',
@@ -591,6 +591,7 @@ function SettingsShortcutButton({ label, icon, onPress, height, iconSize, iconRi
 
 function UnlockCodeModal({ visible, onClose, onRedeem }) {
   const { width, height } = useWindowDimensions();
+  const codeInputRef = useRef(null);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -693,19 +694,37 @@ function UnlockCodeModal({ visible, onClose, onRedeem }) {
             <Text style={styles.codeMessage}>
               Vul een speciale code in om extra's op dit apparaat vrij te spelen.
             </Text>
-            <TextInput
-              value={code}
-              onChangeText={(nextCode) => {
-                setCode(nextCode);
-                setResult(null);
-              }}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              editable={!busy}
-              style={styles.codeInput}
-            />
+            <Pressable style={styles.codeInputShell} onPress={() => codeInputRef.current?.focus()}>
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={styles.codeInputText}
+              >
+                {code}
+              </Text>
+              <TextInput
+                ref={codeInputRef}
+                value={code}
+                onChangeText={(nextCode) => {
+                  setCode(nextCode.replace(/[\r\n]+/g, '').toUpperCase());
+                  setResult(null);
+                }}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                autoComplete="off"
+                keyboardType="visible-password"
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                editable={!busy}
+                multiline={false}
+                numberOfLines={1}
+                scrollEnabled={false}
+                blurOnSubmit={false}
+                caretHidden
+                contextMenuHidden
+                style={styles.codeHiddenInput}
+              />
+            </Pressable>
             <View style={styles.codeActions}>
               <View style={styles.codeActionButton}>
                 <GlossyButton
@@ -903,20 +922,44 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: 'center',
   },
-  codeInput: {
+  codeInputShell: {
     zIndex: 1,
     width: '100%',
-    minHeight: 58,
+    height: 58,
     marginTop: 24,
     borderRadius: 16,
     borderWidth: 3,
     borderColor: '#1A75BA',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
+    paddingVertical: 0,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  codeInputText: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 18,
+    lineHeight: 24,
     color: '#17364A',
-    textAlign: 'center',
+    textAlign: 'left',
+    includeFontPadding: false,
+    overflow: 'hidden',
+  },
+  codeHiddenInput: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 0,
+    height: 58,
+    color: 'transparent',
+    opacity: 0.02,
+    fontSize: 18,
+    lineHeight: 24,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    textAlign: 'left',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   codeResult: {
     fontFamily: 'FredokaOne_400Regular',

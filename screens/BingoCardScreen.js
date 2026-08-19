@@ -42,6 +42,8 @@ const STANDARD_GRID_SIZE = 4;
 const RECENT_BINGO_ITEMS_STORAGE_KEY = 'autobingo-recent-bingo-item-ids-v1';
 const RECENT_BINGO_ITEMS_LIMIT = 64;
 const CLAIM_GRID_SIZE = 4;
+const CLAIM_TARGET_TILE_COUNT = 12;
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 function readCachedRecentBingoItemIds() {
   return Array.isArray(globalThis.__AUTOBINGO_RECENT_BINGO_ITEM_IDS)
@@ -519,6 +521,31 @@ function getNewCompletedLines(previousChecked, nextChecked, rules, gridSize = ST
   return changedLines.length ? changedLines : newLines;
 }
 
+function getNearBingoCellIndexes(checked, rules, gridSize = STANDARD_GRID_SIZE) {
+  if (gridSize !== STANDARD_GRID_SIZE || findBingo(checked, rules, gridSize)) {
+    return new Set();
+  }
+
+  const cellIndexes = new Set();
+
+  for (let cellIndex = 0; cellIndex < checked.length; cellIndex += 1) {
+    if (checked[cellIndex]) {
+      continue;
+    }
+
+    const nextChecked = [...checked];
+    nextChecked[cellIndex] = true;
+
+    if (!findBingo(nextChecked, rules, gridSize)) {
+      continue;
+    }
+
+    cellIndexes.add(cellIndex);
+  }
+
+  return cellIndexes;
+}
+
 function getPrimaryWinningSequence(checked, rules, gridSize = STANDARD_GRID_SIZE) {
   if (gridSize !== STANDARD_GRID_SIZE) {
     return [];
@@ -812,6 +839,9 @@ function BingoCell({
   checkedGradient,
   checkedBorderColor,
   icon,
+  nearBingoHighlight = false,
+  nearBingoProgress = null,
+  nearBingoGradient = null,
   onPress,
   onUndo,
   canUndo = true,
@@ -819,13 +849,20 @@ function BingoCell({
   celebrationPulseKey,
   suppressCheckPulseKey,
   checkedFillInset = 1.5,
+  tutorialTargetKey = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
 }) {
   const { settings } = useAppSettings();
+  const cellRef = useRef(null);
   const scale = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
+  const nearBingoNudge = useRef(new Animated.Value(0)).current;
   const sparkProgress = useRef(new Animated.Value(0)).current;
   const fillRevealProgress = useRef(new Animated.Value(checked ? 1 : 0)).current;
+  const nearBingoAppear = useRef(new Animated.Value(nearBingoHighlight && !checked ? 1 : 0)).current;
   const undoProgress = useRef(new Animated.Value(0)).current;
+  const [nearBingoVisible, setNearBingoVisible] = useState(nearBingoHighlight && !checked);
   const [sparksVisible, setSparksVisible] = useState(false);
   const [undoVisible, setUndoVisible] = useState(false);
   const [undoCompleted, setUndoCompleted] = useState(false);
@@ -836,7 +873,115 @@ function BingoCell({
   const undoAnimationRef = useRef(null);
   const undoShakeAnimationRef = useRef(null);
   const undoPulseIntervalRef = useRef(null);
+  const nearBingoNudgeTimeoutRef = useRef(null);
+  const nearBingoNudgeIntervalRef = useRef(null);
+  const nearBingoAppearTokenRef = useRef(0);
   const suppressNextPressRef = useRef(false);
+
+  useEffect(() => {
+    if (!tutorialTargetKey || !onTutorialTargetLayout || !cellRef.current?.measureInWindow) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      cellRef.current?.measureInWindow?.((x, y, width, height) => {
+        onTutorialTargetLayout(tutorialTargetKey, { x, y, width, height });
+      });
+    });
+  }, [cellSize, onTutorialTargetLayout, tutorialTargetKey]);
+
+  useEffect(() => {
+    nearBingoAppearTokenRef.current += 1;
+    const appearToken = nearBingoAppearTokenRef.current;
+    nearBingoAppear.stopAnimation();
+
+    if (nearBingoHighlight && !checked) {
+      setNearBingoVisible(true);
+      nearBingoAppear.setValue(0);
+      Animated.timing(nearBingoAppear, {
+        toValue: 1,
+        duration: 360,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+
+    Animated.timing(nearBingoAppear, {
+      toValue: 0,
+      duration: 280,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished && nearBingoAppearTokenRef.current === appearToken) {
+        setNearBingoVisible(false);
+      }
+    });
+  }, [checked, nearBingoAppear, nearBingoHighlight]);
+
+  useEffect(() => {
+    function clearNearBingoNudgeTimers() {
+      if (nearBingoNudgeTimeoutRef.current) {
+        clearTimeout(nearBingoNudgeTimeoutRef.current);
+        nearBingoNudgeTimeoutRef.current = null;
+      }
+
+      if (nearBingoNudgeIntervalRef.current) {
+        clearInterval(nearBingoNudgeIntervalRef.current);
+        nearBingoNudgeIntervalRef.current = null;
+      }
+    }
+
+    clearNearBingoNudgeTimers();
+    nearBingoNudge.stopAnimation();
+    nearBingoNudge.setValue(0);
+
+    if (!nearBingoHighlight || checked) {
+      return clearNearBingoNudgeTimers;
+    }
+
+    const runNudge = () => {
+      nearBingoNudge.stopAnimation();
+      nearBingoNudge.setValue(0);
+      Animated.sequence([
+        Animated.timing(nearBingoNudge, {
+          toValue: -1,
+          duration: 58,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(nearBingoNudge, {
+          toValue: 1,
+          duration: 82,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(nearBingoNudge, {
+          toValue: -0.62,
+          duration: 70,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(nearBingoNudge, {
+          toValue: 0.32,
+          duration: 62,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(nearBingoNudge, {
+          toValue: 0,
+          duration: 112,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    };
+
+    nearBingoNudgeTimeoutRef.current = setTimeout(runNudge, 1050);
+    nearBingoNudgeIntervalRef.current = setInterval(runNudge, 5200);
+
+    return clearNearBingoNudgeTimers;
+  }, [checked, nearBingoHighlight, nearBingoNudge]);
 
   function runCelebrationPulse({
     scalePeak = 1.16,
@@ -979,12 +1124,22 @@ function BingoCell({
       clearInterval(undoPulseIntervalRef.current);
       undoPulseIntervalRef.current = null;
     }
+    if (nearBingoNudgeTimeoutRef.current) {
+      clearTimeout(nearBingoNudgeTimeoutRef.current);
+      nearBingoNudgeTimeoutRef.current = null;
+    }
+    if (nearBingoNudgeIntervalRef.current) {
+      clearInterval(nearBingoNudgeIntervalRef.current);
+      nearBingoNudgeIntervalRef.current = null;
+    }
     void stopSoundEffect(HOLD_DOWN_TICKING_SOUND);
     scale.setValue(1);
     rotate.setValue(0);
+    nearBingoNudge.stopAnimation();
     fillRevealProgress.stopAnimation();
+    nearBingoAppear.stopAnimation();
     undoProgress.stopAnimation();
-  }, [fillRevealProgress, rotate, scale, undoProgress]);
+  }, [fillRevealProgress, nearBingoAppear, nearBingoNudge, rotate, scale, undoProgress]);
 
   const rotateDeg = rotate.interpolate({
     inputRange: [-1, 0, 1],
@@ -1000,6 +1155,39 @@ function BingoCell({
     : withAlpha(darkenHex(checkedColor, 0.88), 0.34);
   const sparkColor = mixHex(accentColor, '#ffffff', 0.28);
   const flashColor = mixHex(accentColor, '#ffffff', 0.45);
+  const nearBingoStrokeWidth = Math.max(4, Math.round(cellSize * 0.05));
+  const nearBingoRectOffset = nearBingoStrokeWidth / 2;
+  const nearBingoRectSize = cellSize - nearBingoRectOffset * 2;
+  const nearBingoRadius = Math.max(8, cellBorderRadius - nearBingoStrokeWidth / 2);
+  const nearBingoPerimeter = Math.max(
+    1,
+    4 * (nearBingoRectSize - 2 * nearBingoRadius) + 2 * Math.PI * nearBingoRadius
+  );
+  const nearBingoGradientId = 'near-bingo-border-gradient';
+  const nearBingoColor = nearBingoGradient ? `url(#${nearBingoGradientId})` : accentColor;
+  const nearBingoTrailLength = Math.max(38, Math.round(nearBingoPerimeter * 0.2));
+  const nearBingoTrailGap = Math.max(1, nearBingoPerimeter - nearBingoTrailLength);
+  const nearBingoAnimation = nearBingoProgress ?? fillRevealProgress;
+  const nearBingoTrailOffset = nearBingoAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -nearBingoPerimeter],
+  });
+  const nearBingoSecondTrailOffset = nearBingoAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [nearBingoPerimeter * 0.52, -nearBingoPerimeter * 0.48],
+  });
+  const nearBingoAppearScale = nearBingoAppear.interpolate({
+    inputRange: [0, 0.58, 1],
+    outputRange: [1, 1.035, 1],
+  });
+  const nearBingoNudgeRotate = nearBingoNudge.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-3.6deg', '0deg', '3.6deg'],
+  });
+  const nearBingoNudgeScale = nearBingoNudge.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: [1.012, 1, 1.012],
+  });
   const undoCoverHeight = undoProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, cellSize],
@@ -1133,6 +1321,7 @@ function BingoCell({
       rotate.setValue(0);
       suppressNextPressRef.current = true;
       onUndo?.();
+      onTutorialAction?.('game.cellHeld');
       Animated.sequence([
         Animated.timing(scale, {
           toValue: 1.12,
@@ -1206,6 +1395,7 @@ function BingoCell({
       return;
     }
 
+    onTutorialAction?.('game.cellTapped');
     onPress();
   }
 
@@ -1218,10 +1408,18 @@ function BingoCell({
 
   return (
     <Animated.View
+      ref={cellRef}
+      collapsable={false}
       style={[
         styles.cellMotionWrap,
         {
-          transform: [{ scale }, { rotate: rotateDeg }],
+          transform: [
+            { scale },
+            { scale: nearBingoAppearScale },
+            { scale: nearBingoNudgeScale },
+            { rotate: rotateDeg },
+            { rotate: nearBingoNudgeRotate },
+          ],
         },
       ]}
     >
@@ -1307,6 +1505,74 @@ function BingoCell({
           cellSize={cellSize}
           visible={sparksVisible}
         />
+        {nearBingoVisible ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.nearBingoCellBorder,
+              { opacity: nearBingoAppear },
+            ]}
+          >
+            <Svg
+              width={cellSize}
+              height={cellSize}
+              viewBox={`0 0 ${cellSize} ${cellSize}`}
+              style={StyleSheet.absoluteFill}
+            >
+              {nearBingoGradient ? (
+                <Defs>
+                  <SvgLinearGradient
+                    id={nearBingoGradientId}
+                    x1={`${nearBingoGradient.x1 * 100}%`}
+                    y1={`${nearBingoGradient.y1 * 100}%`}
+                    x2={`${nearBingoGradient.x2 * 100}%`}
+                    y2={`${nearBingoGradient.y2 * 100}%`}
+                  >
+                    {nearBingoGradient.colors.map((color, index) => (
+                      <Stop
+                        key={`near-bingo-stop-${index}`}
+                        offset={`${(nearBingoGradient.locations?.[index] ?? index / Math.max(1, nearBingoGradient.colors.length - 1)) * 100}%`}
+                        stopColor={color}
+                      />
+                    ))}
+                  </SvgLinearGradient>
+                </Defs>
+              ) : null}
+              <AnimatedRect
+                x={nearBingoRectOffset}
+                y={nearBingoRectOffset}
+                width={nearBingoRectSize}
+                height={nearBingoRectSize}
+                rx={nearBingoRadius}
+                ry={nearBingoRadius}
+                fill="none"
+                stroke={nearBingoColor}
+                strokeWidth={nearBingoStrokeWidth}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={`${nearBingoTrailLength} ${nearBingoTrailGap}`}
+                strokeDashoffset={nearBingoTrailOffset}
+                strokeOpacity={0.96}
+              />
+              <AnimatedRect
+                x={nearBingoRectOffset}
+                y={nearBingoRectOffset}
+                width={nearBingoRectSize}
+                height={nearBingoRectSize}
+                rx={nearBingoRadius}
+                ry={nearBingoRadius}
+                fill="none"
+                stroke={nearBingoColor}
+                strokeWidth={nearBingoStrokeWidth}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={`${nearBingoTrailLength} ${nearBingoTrailGap}`}
+                strokeDashoffset={nearBingoSecondTrailOffset}
+                strokeOpacity={0.96}
+              />
+            </Svg>
+          </Animated.View>
+        ) : null}
         <SparkBurst
           progress={sparkProgress}
           color={sparkColor}
@@ -1942,7 +2208,7 @@ function WinnerActionOverlay({
             variant="green"
             onPress={onReplay}
             fontFamily={fontFamily}
-            label="Play"
+            label="Speel"
           />
           <WinnerMenuButton
             progress={settingsButtonProgress}
@@ -1959,7 +2225,7 @@ function WinnerActionOverlay({
             onPress={onMenu}
             onPressIn={rememberPressPoint}
             fontFamily={fontFamily}
-            label="Home"
+            label="Hoofdmenu"
             getPressOrigin={() => latestPressPointRef.current}
           />
         </View>
@@ -3113,31 +3379,7 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
                     </>
                   ) : (
                     <>
-                      <View style={[
-                        styles.claimPodiumScoreBlock,
-                        isMediumPodium && styles.claimPodiumScoreBlockMedium,
-                      ]}>
-                        <LinearGradient
-                          pointerEvents="none"
-                          colors={[
-                            mixHex(playerColor, '#ffffff', 0.46),
-                            playerColor,
-                            darkenHex(playerColor, 0.68),
-                          ]}
-                          locations={[0, 0.48, 1]}
-                          start={{ x: 0.5, y: 0 }}
-                          end={{ x: 0.5, y: 1 }}
-                          style={[
-                            styles.claimPodiumGlossyBase,
-                          ]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.claimPodiumGlossyFace,
-                            { backgroundColor: playerColor },
-                          ]}
-                        />
+                      <View style={styles.claimPodiumScoreBlock}>
                         <ClaimPodiumCounter
                           value={player.tileCount}
                           progress={growHeight}
@@ -3248,7 +3490,7 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
           progress={playButtonProgress}
           disabled={!canReplay}
           variant="green"
-          label="Play"
+          label="Speel"
           onPress={() => {
               if (!canReplay) {
                 return;
@@ -3274,7 +3516,7 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
         <WinnerMenuButton
           progress={homeButtonProgress}
           variant="yellow"
-          label="Home"
+          label="Hoofdmenu"
           onPressIn={rememberPressPoint}
           getPressOrigin={() => latestPressPointRef.current}
           onPress={() => {
@@ -3354,10 +3596,6 @@ function getRulesFromProps({
 
 function getLocalPlayerKey(player, index) {
   return player?.playerId ?? `local:${index}`;
-}
-
-function isBotPlayer(player) {
-  return typeof player?.playerId === 'string' && player.playerId.startsWith('bot-');
 }
 
 function ActiveCollectiveCellGradient({ gradient, cellSize, borderRadius, visible }) {
@@ -3492,6 +3730,10 @@ export default function BingoCardScreen({
   settingsLabel = 'Instellingen',
   canReplay = true,
   isLiveLobbyHost = true,
+  tutorialActive = false,
+  tutorialStep = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
 }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { isTablet: isTabletGame } = getResponsiveMetrics(screenWidth, screenHeight);
@@ -3589,17 +3831,18 @@ export default function BingoCardScreen({
     ),
     [collectiveGradientPlayers, displayPlayers, resolvedPlayerColors]
   );
+  const usesSharedBoard = isCollectiveMode || isClaimMode || actieveRegels.sharedCards;
   const itemOptions = useMemo(() => ({
     nederlands: nederlands !== false,
-    recentItemIds: readCachedRecentBingoItemIds(),
-  }), [nederlands]);
+    recentItemIds: usesSharedBoard ? [] : readCachedRecentBingoItemIds(),
+  }), [nederlands, usesSharedBoard]);
   const [sharedItems] = useState(() => getRandomItems(resolvedTheme, boardCellCount, resolvedSeed, itemOptions));
   const sharedIcons = useMemo(() => sharedItems.map((item) => item.icon), [sharedItems]);
   const [playerItemEntries] = useState(() =>
-    kaartOpzet === 'ander-thema'
-      ? derivedThemes.map((playerTheme, index) => getRandomItems(playerTheme, boardCellCount, resolvedSeed + index, itemOptions))
-      : actieveRegels.sharedCards
-        ? Array.from({ length: resolvedPlayerCount }, () => sharedItems)
+    usesSharedBoard
+      ? Array.from({ length: resolvedPlayerCount }, () => sharedItems)
+      : kaartOpzet === 'ander-thema'
+        ? derivedThemes.map((playerTheme, index) => getRandomItems(playerTheme, boardCellCount, resolvedSeed + index, itemOptions))
         : Array.from({ length: resolvedPlayerCount }, (_, index) => getRandomItems(resolvedTheme, boardCellCount, resolvedSeed + index, itemOptions))
   );
   const playerIcons = useMemo(
@@ -3642,6 +3885,17 @@ export default function BingoCardScreen({
   const [backConfirmVisible, setBackConfirmVisible] = useState(false);
   const [suppressedCheckPulseKeys, setSuppressedCheckPulseKeys] = useState({});
   const [collectiveGradientTick, setCollectiveGradientTick] = useState(0);
+  const nearBingoSpin = useRef(new Animated.Value(0)).current;
+  const showNearBingoHints = !isClaimMode;
+  const nearBingoHints = useMemo(
+    () => (
+      showNearBingoHints
+        ? playerChecked.map((checked) => getNearBingoCellIndexes(checked, actieveRegels, boardGridSize))
+        : Array.from({ length: resolvedPlayerCount }, () => new Set())
+    ),
+    [actieveRegels, boardGridSize, playerChecked, resolvedPlayerCount, showNearBingoHints]
+  );
+  const hasNearBingoHints = nearBingoHints.some((cellIndexes) => cellIndexes.size > 0);
   const inspectProgress = useRef(new Animated.Value(0)).current;
   const inspectAnimationRef = useRef(null);
   const playerCheckedRef = useRef(playerChecked);
@@ -3654,6 +3908,7 @@ export default function BingoCardScreen({
   const winnerRouteRevealRef = useRef(null);
   const pendingWinnerRouteActionRef = useRef(null);
   const winnerRouteRevealBusyRef = useRef(false);
+  const boardAreaRef = useRef(null);
   const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
   const claimChecked = playerChecked[0] ?? Array(boardCellCount).fill(false);
   const claimOwners = playerClaimOwners[0] ?? Array(boardCellCount).fill(null);
@@ -3663,8 +3918,27 @@ export default function BingoCardScreen({
     || Boolean(pendingWinnerModalKey)
     || celebrationSplashVisible
     || celebrationConfettiVisible
-    || lineCelebrations.length > 0
   );
+
+  useEffect(() => {
+    if (!tutorialActive || tutorialStep?.target !== 'game.boardArea' || !onTutorialTargetLayout) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      boardAreaRef.current?.measureInWindow?.((x, y, width, height) => {
+        onTutorialTargetLayout('game.boardArea', { x, y, width, height });
+      });
+    });
+  }, [
+    compactTwoPlayerLayout,
+    onTutorialTargetLayout,
+    screenHeight,
+    screenWidth,
+    tutorialActive,
+    tutorialStep?.target,
+    winnerModalVisible,
+  ]);
   const claimScores = useMemo(() => {
     const scoreMap = new Map(displayPlayers.map((player) => [player.playerId, 0]));
 
@@ -3691,7 +3965,8 @@ export default function BingoCardScreen({
     () => claimOwners.filter(Boolean).length,
     [claimOwners]
   );
-  const claimGameFinished = isClaimMode && claimedTileCount === boardCellCount;
+  const claimTargetTileCount = Math.min(CLAIM_TARGET_TILE_COUNT, boardCellCount);
+  const claimGameFinished = isClaimMode && claimedTileCount >= claimTargetTileCount;
   const activeClaimPlayer = resolvedPlayers[0] ?? null;
   const twoPlayerBingoSplashSkin = compactTwoPlayerLayout && celebrationSplashVisible && winnerIndex != null
     ? resolvedPlayerColors[winnerIndex] ?? 'groen'
@@ -3699,11 +3974,6 @@ export default function BingoCardScreen({
   const twoPlayerBingoSplashLayout = twoPlayerBingoSplashSkin
     ? getBingoBoardImageLayout(boardGridSize, false, twoPlayerBingoSplashSkin, boardViewport)
     : null;
-  const botClaimPlayers = useMemo(
-    () => claimScores.filter((player) => isBotPlayer(player)),
-    [claimScores]
-  );
-
   useEffect(() => {
     const splashAssets = resolvedPlayerColors
       .map((skin) => BINGO_SPLASH_BY_SKIN[skin])
@@ -3713,8 +3983,6 @@ export default function BingoCardScreen({
       preloadImageAssets(splashAssets).catch(() => {});
     }
   }, [resolvedPlayerColors]);
-  const showBotScoreControls = __DEV__ && isClaimMode && botClaimPlayers.length > 0 && !claimGameFinished;
-
   function getGameElapsedMs() {
     const parsedStartedAt = typeof startedAt === 'string' ? Date.parse(startedAt) : Number.NaN;
     const startTime = Number.isFinite(parsedStartedAt) ? parsedStartedAt : localGameStartedAtRef.current;
@@ -3748,24 +4016,6 @@ export default function BingoCardScreen({
       if (firstUnlock) {
         setPendingSkinUnlockAnnouncement(firstUnlock);
       }
-    });
-  }
-
-  function triggerDevSkinUnlockPreview() {
-    setPendingSkinUnlockAnnouncement({
-      skin: 'politie',
-      title: 'Politie',
-      description: 'Spot in totaal 3 keer een politieauto (thema: Stad).',
-      previous: {
-        current: 2,
-        target: 3,
-        completed: false,
-      },
-      current: {
-        current: 3,
-        target: 3,
-        completed: true,
-      },
     });
   }
 
@@ -3815,94 +4065,6 @@ export default function BingoCardScreen({
       origin: revealOrigin,
       key: Date.now(),
     });
-  }
-
-  function boostClaimScores(targetPlayers, amountPerPlayer = 1) {
-    if (!isClaimMode || claimGameFinished || !targetPlayers.length) {
-      return;
-    }
-    if (liveSyncEnabled && liveConnectionOffline) {
-      return;
-    }
-
-    const freeIndexes = claimOwners
-      .map((ownerPlayerId, index) => (ownerPlayerId ? -1 : index))
-      .filter((index) => index >= 0);
-    const boosts = [];
-
-    targetPlayers.forEach((player) => {
-      if (!player?.playerId) {
-        return;
-      }
-
-      for (let boostIndex = 0; boostIndex < amountPerPlayer && freeIndexes.length > 0; boostIndex += 1) {
-        const randomFreeIndex = Math.floor(Math.random() * freeIndexes.length);
-        const [cellIndex] = freeIndexes.splice(randomFreeIndex, 1);
-        boosts.push({
-          cellIndex,
-          playerId: player.playerId,
-        });
-      }
-    });
-
-    if (!boosts.length) {
-      return;
-    }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    setPlayerChecked((current) => {
-      const next = current.map((cells) => {
-        const nextCells = [...cells];
-        boosts.forEach(({ cellIndex }) => {
-          nextCells[cellIndex] = true;
-        });
-        return nextCells;
-      });
-      playerCheckedRef.current = next;
-      return next;
-    });
-
-    setPlayerClaimOwners((current) => {
-      const sourceOwners = current[0] ?? Array(boardCellCount).fill(null);
-      const nextOwners = [...sourceOwners];
-
-      boosts.forEach(({ cellIndex, playerId }) => {
-        if (!nextOwners[cellIndex]) {
-          nextOwners[cellIndex] = playerId;
-        }
-      });
-
-      return current.map(() => [...nextOwners]);
-    });
-
-    if (liveSyncEnabled && !liveConnectionOffline) {
-      const claimBoardKey = boardKeys[0];
-
-      boosts.forEach(({ cellIndex, playerId }) => {
-        const claimPendingKey = `${claimBoardKey}:${cellIndex}`;
-
-        setPendingLocalBoardCell(claimPendingKey, {
-          checked: true,
-          playerId,
-        });
-
-        void setBoardCell({
-          code: lobbyCode,
-          boardKey: claimBoardKey,
-          cellIndex,
-          checked: true,
-          playerId,
-          boardSize: boardCellCount,
-        }).then((syncedBoardState) => {
-          if (syncedBoardState) {
-            applyLiveBoardState(syncedBoardState);
-          } else {
-            clearPendingLocalBoardCell(claimPendingKey);
-          }
-        });
-      });
-    }
   }
 
   useEffect(() => {
@@ -4204,6 +4366,30 @@ export default function BingoCardScreen({
   }, [isCollectiveMode]);
 
   useEffect(() => {
+    if (!hasNearBingoHints) {
+      nearBingoSpin.stopAnimation();
+      nearBingoSpin.setValue(0);
+      return undefined;
+    }
+
+    nearBingoSpin.setValue(0);
+    const spin = Animated.loop(
+      Animated.timing(nearBingoSpin, {
+        toValue: 1,
+        duration: 4600,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      })
+    );
+
+    spin.start();
+
+    return () => {
+      spin.stop();
+    };
+  }, [hasNearBingoHints, nearBingoSpin]);
+
+  useEffect(() => {
     if (isClaimMode) {
       setPlayerWinLines(Array.from({ length: resolvedPlayerCount }, () => []));
       resetWinnerCelebrationState();
@@ -4261,6 +4447,20 @@ export default function BingoCardScreen({
       clearTimeout(timeoutId);
     };
   }, [isClaimMode, pendingSkinUnlockAnnouncement, winnerModalVisible]);
+
+  useEffect(() => {
+    if (!tutorialActive || tutorialStep?.id !== 'game-finish' || !winnerModalVisible || isClaimMode) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      onTutorialAction?.('game.bingoShown');
+    }, 700);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isClaimMode, onTutorialAction, tutorialActive, tutorialStep?.id, winnerModalVisible]);
 
   useEffect(() => () => {
     clearCelebrationTimeouts();
@@ -4591,6 +4791,7 @@ export default function BingoCardScreen({
     const boardSkin = isCollectiveMode ? 'neutral' : kleur;
     const boardImage = BINGO_BOARD_IMAGES[boardSkin] ?? BINGO_BOARD_IMAGES.groen;
     const boardLayout = getBingoBoardImageLayout(boardGridSize, compactTwoPlayerLayout, boardSkin, boardViewport);
+    const nearBingoCells = nearBingoHints[playerIndex] ?? new Set();
     const collectiveBoardGradient = isCollectiveMode
       ? getCollectiveBoardGradient(collectiveGradientPalette, boardGridSize, startedAt, collectiveGradientTick)
       : null;
@@ -4718,6 +4919,9 @@ export default function BingoCardScreen({
               checkedGradient={checkedGradient}
               checkedBorderColor={isCollectiveMode && ownerColor ? ownerColor : undefined}
               icon={icon}
+              nearBingoHighlight={nearBingoCells.has(iconIndex)}
+              nearBingoProgress={nearBingoSpin}
+              nearBingoGradient={isCollectiveMode ? checkedGradient : null}
               suppressCheckPulseKey={suppressedCheckPulseKeys[`${checkPulseBoardIndex}:${iconIndex}`]}
               celebrationPulseKey={
                 lineCelebrations.find((celebration) => (
@@ -4741,6 +4945,9 @@ export default function BingoCardScreen({
               }}
               cellSize={boardLayout.cellSize}
               checkedFillInset={isCollectiveMode ? 1.5 : 0}
+              tutorialTargetKey={tutorialActive && playerIndex === 0 && iconIndex === 0 ? 'game.cell.0' : null}
+              onTutorialTargetLayout={onTutorialTargetLayout}
+              onTutorialAction={tutorialStep?.target === 'game.cell.0' ? onTutorialAction : null}
             />
           );
         })}
@@ -4807,44 +5014,45 @@ export default function BingoCardScreen({
     const fallbackColor = PLAYER_HEX[fallbackSkin] ?? '#2E8B3F';
     const boardImage = BINGO_BOARD_IMAGES.neutral;
     const boardLayout = getClaimBingoBoardImageLayout(boardGridSize, boardViewport);
-    const claimPlayerCount = Math.max(1, claimScores.length);
-    const claimColumns = claimPlayerCount >= 5 ? 3 : claimPlayerCount === 4 ? 2 : claimPlayerCount >= 3 ? 3 : claimPlayerCount;
-    const claimScoreGap = claimPlayerCount >= 5 ? 2 : 8;
-    const claimScoreboardWidth = Math.min(width - OUTER_PADDING * 2, 430);
-    const claimCardWidth = Math.floor((claimScoreboardWidth - claimScoreGap * (claimColumns - 1)) / claimColumns);
-    const claimCarWidth = Math.min(claimPlayerCount >= 5 ? 118 : 154, claimCardWidth + 18);
-    const claimCarHeight = Math.round(claimCarWidth * 0.7);
-    const claimCarMinHeight = Math.round(claimCarHeight * 0.78);
-    const claimNameFontSize = claimPlayerCount >= 5 ? 13 : 15;
-    const claimScoreFontSize = claimPlayerCount >= 5 ? 24 : 27;
+    let remainingProgressTiles = claimTargetTileCount;
+    const claimProgressSegments = claimScores
+      .map((player) => {
+        const tileCount = Math.min(Math.max(0, player.tileCount), remainingProgressTiles);
+        remainingProgressTiles -= tileCount;
+
+        return {
+          playerId: player.playerId,
+          tileCount,
+          color: PLAYER_HEX[player.skin] ?? fallbackColor,
+        };
+      })
+      .filter((segment) => segment.tileCount > 0);
 
     return (
       <View style={styles.claimContent}>
-        <View
-          style={[
-            styles.claimScoreboard,
-            {
-              width: claimScoreboardWidth,
-              gap: claimScoreGap,
-              columnGap: claimScoreGap,
-              rowGap: claimPlayerCount >= 5 ? 0 : 8,
-              marginBottom: claimPlayerCount >= 5 ? 4 : 12,
-            },
-          ]}
-        >
-          {claimScores.map((player) => (
-            <ClaimScoreCard
-              key={player.playerId}
-              player={player}
-              fredoka={fredoka}
-              cardWidth={claimCardWidth}
-              carWidth={claimCarWidth}
-              carHeight={claimCarHeight}
-              carMinHeight={claimCarMinHeight}
-              nameFontSize={claimNameFontSize}
-              scoreFontSize={claimScoreFontSize}
-            />
-          ))}
+        <View style={styles.claimProgressCounter}>
+          <Text
+            style={[
+              styles.claimProgressCounterText,
+              { fontFamily: fredoka },
+            ]}
+          >
+            {Math.min(claimedTileCount, claimTargetTileCount)} / {claimTargetTileCount}
+          </Text>
+          <View style={styles.claimProgressTrack}>
+            {claimProgressSegments.map((segment) => (
+              <View
+                key={segment.playerId}
+                style={[
+                  styles.claimProgressSegment,
+                  {
+                    width: `${(segment.tileCount / claimTargetTileCount) * 100}%`,
+                    backgroundColor: segment.color,
+                  },
+                ]}
+              />
+            ))}
+          </View>
         </View>
 
         <View style={styles.claimBoardWrap}>
@@ -4899,46 +5107,15 @@ export default function BingoCardScreen({
                     canUndo={canUndoClaimCell}
                     cellSize={boardLayout.cellSize}
                     checkedFillInset={0}
+                    tutorialTargetKey={tutorialActive && iconIndex === 0 ? 'game.cell.0' : null}
+                    onTutorialTargetLayout={onTutorialTargetLayout}
+                    onTutorialAction={tutorialStep?.target === 'game.cell.0' ? onTutorialAction : null}
                   />
                 );
               })}
             </View>
           </ImageBackground>
         </View>
-
-        {showBotScoreControls && (
-          <View style={styles.claimBotScoreControls}>
-            <Text style={[styles.claimBotScoreTitle, { fontFamily: fredoka }]}>
-              Botpunten
-            </Text>
-            <View style={styles.claimBotScoreButtonRow}>
-              <Pressable
-                style={styles.claimBotScoreButton}
-                onPress={() => boostClaimScores(botClaimPlayers, 1)}
-              >
-                <Text style={[styles.claimBotScoreButtonText, { fontFamily: fredoka }]}>
-                  Alle +1
-                </Text>
-              </Pressable>
-              {botClaimPlayers.map((botPlayer) => (
-                <Pressable
-                  key={`bot-boost-${botPlayer.playerId}`}
-                  style={styles.claimBotScoreButton}
-                  onPress={() => boostClaimScores([botPlayer], 1)}
-                >
-                  <Text
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.72}
-                    style={[styles.claimBotScoreButtonText, { fontFamily: fredoka }]}
-                  >
-                    {botPlayer.naam} +1
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
 
       </View>
     );
@@ -4990,7 +5167,7 @@ export default function BingoCardScreen({
         transparent
         animationType="fade"
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, styles.claimResultBackdrop]}>
           <ClaimResultsPodium
             players={rankedClaimPlayers}
             fredoka={fredoka}
@@ -5051,7 +5228,7 @@ export default function BingoCardScreen({
 
       <View style={styles.topControls} />
 
-      <View style={styles.cardsColumn}>
+      <View ref={boardAreaRef} collapsable={false} style={styles.cardsColumn}>
         {isClaimMode ? renderClaimBoard() : compactTwoPlayerLayout ? (
           <View style={styles.twoPlayerStack}>
             {renderBoard(0)}
@@ -5103,35 +5280,33 @@ export default function BingoCardScreen({
             canReplay={canReplay}
             settingsLabel={settingsLabel}
             onReplay={() => {
+              if (tutorialStep?.id === 'game-winner-actions') {
+                onTutorialAction?.('game.winnerMenuSelected');
+              }
               keepWinnerOverlayForRouteAction();
               startWinnerRouteReveal((revealOrigin) => {
                 onReplay?.(revealOrigin);
               }, { x: width / 2, y: height / 2 }, GAME_BACK_CONFIRM_REVEAL_COLOR);
             }}
             onSettings={(origin) => {
+              if (tutorialStep?.id === 'game-winner-actions') {
+                onTutorialAction?.('game.winnerMenuSelected');
+              }
               keepWinnerOverlayForRouteAction();
               startWinnerRouteReveal((revealOrigin) => {
                 onSettings?.(revealOrigin);
               }, origin, '#1A7BD4');
             }}
             onMenu={(origin) => {
+              if (tutorialStep?.id === 'game-winner-actions') {
+                onTutorialAction?.('game.winnerMenuSelected');
+              }
               keepWinnerOverlayForRouteAction();
               startWinnerRouteReveal((revealOrigin) => {
                 onMenu?.(revealOrigin);
               }, origin, '#F5C400');
             }}
           />
-        </View>
-      ) : null}
-      {__DEV__ && winnerModalVisible && !isClaimMode && !skinUnlockAnnouncement ? (
-        <View pointerEvents="box-none" style={styles.devSkinUnlockTestLayer}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={triggerDevSkinUnlockPreview}
-            style={styles.devSkinUnlockTestButton}
-          >
-            <Text style={styles.devSkinUnlockTestText}>Test unlock</Text>
-          </Pressable>
         </View>
       ) : null}
       {skinUnlockAnnouncement ? (
@@ -5267,48 +5442,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   claimBoardImageFrame: {
-    marginBottom: 18,
+    marginBottom: 8,
   },
-  claimBotScoreControls: {
-    width: '92%',
-    maxWidth: 420,
-    marginTop: -6,
+  claimProgressCounter: {
+    minWidth: 136,
     alignItems: 'center',
-  },
-  claimBotScoreTitle: {
-    fontSize: 13,
-    lineHeight: 16,
-    color: '#5C6472',
-    marginBottom: 5,
-  },
-  claimBotScoreButtonRow: {
-    width: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 6,
+    marginTop: -2,
+    marginBottom: 8,
   },
-  claimBotScoreButton: {
-    minWidth: 74,
-    maxWidth: 118,
-    height: 30,
-    paddingHorizontal: 10,
+  claimProgressCounterText: {
+    fontSize: 30,
+    lineHeight: 34,
+    color: '#FFFDF7',
+    textAlign: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(39, 57, 75, 0.52)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  claimProgressTrack: {
+    width: 172,
+    height: 12,
     borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1F2937',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    overflow: 'hidden',
+    marginTop: 5,
+    backgroundColor: 'rgba(255, 253, 247, 0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.72)',
+    flexDirection: 'row',
   },
-  claimBotScoreButtonText: {
-    fontSize: 12,
-    lineHeight: 14,
-    color: '#FFFFFF',
+  claimProgressSegment: {
+    height: '100%',
   },
   playerSection: {
     alignItems: 'center',
@@ -5479,6 +5644,15 @@ const styles = StyleSheet.create({
     zIndex: 4,
     overflow: 'visible',
   },
+  nearBingoCellBorder: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 24,
+    elevation: 24,
+  },
   checkedFillClip: {
     position: 'absolute',
     overflow: 'hidden',
@@ -5619,31 +5793,6 @@ const styles = StyleSheet.create({
     zIndex: 32,
     elevation: 32,
   },
-  devSkinUnlockTestLayer: {
-    position: 'absolute',
-    top: 72,
-    right: 14,
-    zIndex: 54,
-    elevation: 54,
-  },
-  devSkinUnlockTestButton: {
-    minWidth: 104,
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(12, 91, 168, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.72)',
-  },
-  devSkinUnlockTestText: {
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0,
-  },
   skinUnlockLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 58,
@@ -5778,6 +5927,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     padding: 24,
   },
+  claimResultBackdrop: {
+    paddingHorizontal: IS_TABLET_GAME ? 40 : 18,
+  },
   backConfirmBackdrop: {
     justifyContent: 'center',
     padding: 10,
@@ -5877,15 +6029,15 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  claimResultTitle: {
-    fontSize: 26,
-    marginBottom: 0,
-    color: '#111827',
-  },
   claimWinnerHeader: {
     width: '100%',
     alignItems: 'center',
     marginBottom: 2,
+  },
+  claimResultTitle: {
+    fontSize: 26,
+    marginBottom: 0,
+    color: '#111827',
   },
   claimWinnerNameWrap: {
     width: '100%',
@@ -5924,7 +6076,6 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   claimResultStageCrowded: {
-    minHeight: 258,
     gap: 0,
     paddingHorizontal: 8,
     marginTop: -6,
@@ -5981,39 +6132,21 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   claimPodiumScoreBlock: {
-    width: '94%',
+    width: 92,
     height: 54,
     alignItems: 'center',
     justifyContent: 'center',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    overflow: 'hidden',
+    paddingTop: 2,
+    backgroundColor: '#F7EEDC',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#C99B57',
+    overflow: 'visible',
     shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 7,
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
-  },
-  claimPodiumScoreBlockMedium: {
-    width: '104%',
-  },
-  claimPodiumGlossyBase: {
-    ...StyleSheet.absoluteFillObject,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  claimPodiumGlossyFace: {
-    position: 'absolute',
-    left: 8,
-    right: 8,
-    top: 5,
-    height: 12,
-    borderRadius: 999,
-    opacity: 0.34,
   },
   claimPodiumGrowBlock: {
     position: 'absolute',

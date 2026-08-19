@@ -71,7 +71,7 @@ const ITEM_CATALOG = [
     themes: ["stad","voertuigen"],
     excludedThemes: [],
     weight: 2,
-    themeWeights: {"voertuigen":3},
+    themeWeights: {"voertuigen":2},
     defaultIcon: require("../assets/images/stad/ambulance.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/ambulance.png"),
@@ -107,7 +107,7 @@ const ITEM_CATALOG = [
     themes: ["algemeen","voertuigen"],
     excludedThemes: ["stad","verkeersborden"],
     weight: 1,
-    themeWeights: {"algemeen":3,"voertuigen":3},
+    themeWeights: {"algemeen":3,"voertuigen":4},
     defaultIcon: require("../assets/images/Snelweg/auto met aanhangwagen.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/auto met aanhangwagen.png"),
@@ -144,7 +144,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","platteland","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"snelweg":2,"platteland":4,"voertuigen":3},
+    themeWeights: {"snelweg":2,"platteland":4,"voertuigen":2},
     defaultIcon: require("../assets/images/Snelweg/auto met paardenwagen.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/auto met paardenwagen.png"),
@@ -168,7 +168,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"snelweg":4,"voertuigen":3},
+    themeWeights: {"snelweg":4,"voertuigen":2},
     defaultIcon: require("../assets/images/Voertuigen/autotransporter.png"),
     iconsByTheme: {
       voertuigen: require("../assets/images/Voertuigen/autotransporter.png"),
@@ -184,6 +184,28 @@ const ITEM_CATALOG = [
     defaultIcon: require("../assets/images/stad/bakfiets.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/bakfiets.png"),
+    },
+  },
+  {
+    id: "autosnelweg bord",
+    name: "begin autosnelweg bord",
+    themes: ["snelweg","verkeersborden"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"snelweg":4,"verkeersborden":3},
+    defaultIcon: require("../assets/images/NieuweItems/autosnelweg-bord.png"),
+    iconsByTheme: {
+    },
+  },
+  {
+    id: "bestelbus",
+    name: "bestelbus",
+    themes: ["algemeen"],
+    excludedThemes: ["verkeersborden"],
+    weight: 3,
+    themeWeights: {"algemeen":3},
+    defaultIcon: require("../assets/images/NieuweItems/bestelbus.png"),
+    iconsByTheme: {
     },
   },
   {
@@ -221,12 +243,23 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "wegwijzerbord",
+    name: "bord boven snelweg",
+    themes: ["snelweg","verkeersborden"],
+    excludedThemes: [],
+    weight: 5,
+    themeWeights: {"snelweg":5},
+    defaultIcon: require("../assets/images/NieuweItems/wegwijzerbord.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "brandweerauto",
     name: "brandweerauto",
     themes: ["stad","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"stad":2,"voertuigen":3},
+    themeWeights: {"stad":2,"voertuigen":2},
     defaultIcon: require("../assets/images/stad/brandweerauto.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/brandweerauto.png"),
@@ -274,7 +307,7 @@ const ITEM_CATALOG = [
     themes: ["voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"voertuigen":2},
+    themeWeights: {"voertuigen":1},
     defaultIcon: require("../assets/images/Voertuigen/bulldozer.png"),
     iconsByTheme: {
       voertuigen: require("../assets/images/Voertuigen/bulldozer.png"),
@@ -298,7 +331,7 @@ const ITEM_CATALOG = [
     themes: ["algemeen","voertuigen"],
     excludedThemes: ["verkeersborden"],
     weight: 1,
-    themeWeights: {"algemeen":5,"voertuigen":3},
+    themeWeights: {"algemeen":5,"voertuigen":4},
     defaultIcon: require("../assets/images/Snelweg/busje.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/busje.png"),
@@ -311,7 +344,7 @@ const ITEM_CATALOG = [
     themes: ["algemeen","voertuigen"],
     excludedThemes: ["winter","verkeersborden"],
     weight: 1,
-    themeWeights: {"algemeen":4,"voertuigen":3},
+    themeWeights: {"algemeen":4,"voertuigen":4},
     defaultIcon: require("../assets/images/Voertuigen/cabrio.png"),
     iconsByTheme: {
       voertuigen: require("../assets/images/Voertuigen/cabrio.png"),
@@ -323,7 +356,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","vakantie","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"vakantie":5,"snelweg":1,"voertuigen":3},
+    themeWeights: {"vakantie":5,"snelweg":1,"voertuigen":4},
     defaultIcon: require("../assets/images/Vakantie/camper.png"),
     iconsByTheme: {
       vakantie: require("../assets/images/Vakantie/camper.png"),
@@ -348,7 +381,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","vakantie","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"snelweg":1,"vakantie":5,"voertuigen":3},
+    themeWeights: {"snelweg":1,"vakantie":5,"voertuigen":4},
     defaultIcon: require("../assets/images/Vakantie/caravan.png"),
     iconsByTheme: {
       vakantie: require("../assets/images/Vakantie/caravan.png"),
@@ -361,7 +394,7 @@ const ITEM_CATALOG = [
     themes: ["voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"voertuigen":3},
+    themeWeights: {"voertuigen":2},
     defaultIcon: require("../assets/images/Voertuigen/cementwagen.png"),
     iconsByTheme: {
       voertuigen: require("../assets/images/Voertuigen/cementwagen.png"),
@@ -437,6 +470,28 @@ const ITEM_CATALOG = [
     defaultIcon: require("../assets/images/Verkeersborden/eenrichtingsverkeer rechtdoor.png"),
     iconsByTheme: {
       verkeersborden: require("../assets/images/Verkeersborden/eenrichtingsverkeer rechtdoor.png"),
+    },
+  },
+  {
+    id: "einde autosnelweg bord",
+    name: "einde autosnelweg bord",
+    themes: ["snelweg","verkeersborden"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"snelweg":3,"verkeersborden":3},
+    defaultIcon: require("../assets/images/NieuweItems/einde-autosnelweg-bord.png"),
+    iconsByTheme: {
+    },
+  },
+  {
+    id: "zwart wit markeringsbord",
+    name: "einde vluchtstrook bord",
+    themes: ["snelweg","verkeersborden"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"snelweg":2,"verkeersborden":1},
+    defaultIcon: require("../assets/images/NieuweItems/zwart-wit-markeringsbord.png"),
+    iconsByTheme: {
     },
   },
   {
@@ -559,6 +614,17 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "rood wit baken",
+    name: "geleidenbaken",
+    themes: ["snelweg","stad","vakantie"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"stad":1,"vakantie":1},
+    defaultIcon: require("../assets/images/NieuweItems/rood-wit-baken.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "gesloten voor fietsers",
     name: "gesloten voor fietsers",
     themes: ["stad","verkeersborden"],
@@ -657,10 +723,10 @@ const ITEM_CATALOG = [
   {
     id: "graafmachine",
     name: "graafmachine",
-    themes: ["voertuigen"],
+    themes: ["snelweg","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"voertuigen":3},
+    themeWeights: {"voertuigen":4,"snelweg":1},
     defaultIcon: require("../assets/images/Voertuigen/graafmachine.png"),
     iconsByTheme: {
       voertuigen: require("../assets/images/Voertuigen/graafmachine.png"),
@@ -688,6 +754,17 @@ const ITEM_CATALOG = [
     defaultIcon: require("../assets/images/Vakantie/grensbord.png"),
     iconsByTheme: {
       vakantie: require("../assets/images/Vakantie/grensbord.png"),
+    },
+  },
+  {
+    id: "groen pijlbord",
+    name: "groen pijlbord",
+    themes: ["snelweg","verkeersborden"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"snelweg":4,"verkeersborden":3},
+    defaultIcon: require("../assets/images/NieuweItems/groen-pijlbord.png"),
+    iconsByTheme: {
     },
   },
   {
@@ -768,7 +845,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","stad","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"stad":2,"voertuigen":3,"snelweg":1},
+    themeWeights: {"stad":2,"voertuigen":2,"snelweg":1},
     defaultIcon: require("../assets/images/Platteland/hoogwerker.png"),
     iconsByTheme: {
       platteland: require("../assets/images/Platteland/hoogwerker.png"),
@@ -944,6 +1021,28 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "kerstkrans",
+    name: "kerstkrans",
+    themes: ["winter"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {},
+    defaultIcon: require("../assets/images/NieuweItems/kerstkrans.png"),
+    iconsByTheme: {
+    },
+  },
+  {
+    id: "kerstman",
+    name: "kerstman",
+    themes: ["winter"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {},
+    defaultIcon: require("../assets/images/NieuweItems/kerstman.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "kinderwagen",
     name: "kinderwagen",
     themes: ["stad"],
@@ -1027,25 +1126,12 @@ const ITEM_CATALOG = [
     },
   },
   {
-    id: "lijkwagen",
-    name: "lijkwagen",
-    themes: ["snelweg","voertuigen"],
-    excludedThemes: [],
-    weight: 1,
-    themeWeights: {"snelweg":1,"voertuigen":2},
-    defaultIcon: require("../assets/images/Snelweg/lijkwagen.png"),
-    iconsByTheme: {
-      snelweg: require("../assets/images/Snelweg/lijkwagen.png"),
-      voertuigen: require("../assets/images/Voertuigen/lijkwagen.png"),
-    },
-  },
-  {
     id: "limousine",
     name: "limousine",
     themes: ["voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"voertuigen":2},
+    themeWeights: {"voertuigen":1},
     defaultIcon: require("../assets/images/Voertuigen/limousine.png"),
     iconsByTheme: {
       voertuigen: require("../assets/images/Voertuigen/limousine.png"),
@@ -1093,7 +1179,7 @@ const ITEM_CATALOG = [
     themes: ["platteland","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"platteland":1,"voertuigen":2},
+    themeWeights: {"platteland":1,"voertuigen":1},
     defaultIcon: require("../assets/images/Platteland/man op grasmaaier.png"),
     iconsByTheme: {
       platteland: require("../assets/images/Platteland/man op grasmaaier.png"),
@@ -1129,7 +1215,7 @@ const ITEM_CATALOG = [
     themes: ["algemeen","voertuigen"],
     excludedThemes: ["verkeersborden"],
     weight: 1,
-    themeWeights: {"algemeen":4,"voertuigen":3},
+    themeWeights: {"algemeen":4,"voertuigen":4},
     defaultIcon: require("../assets/images/stad/medium truck.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/medium truck.png"),
@@ -1200,7 +1286,7 @@ const ITEM_CATALOG = [
     themes: ["algemeen","voertuigen"],
     excludedThemes: ["verkeersborden"],
     weight: 1,
-    themeWeights: {"algemeen":4,"voertuigen":3},
+    themeWeights: {"algemeen":4,"voertuigen":4},
     defaultIcon: require("../assets/images/Snelweg/motorrijder.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/motorrijder.png"),
@@ -1280,6 +1366,17 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "parkeerbord",
+    name: "parkeerbord",
+    themes: ["algemeen","stad"],
+    excludedThemes: ["snelweg","voertuigen"],
+    weight: 3,
+    themeWeights: {"stad":4,"algemeen":3},
+    defaultIcon: require("../assets/images/NieuweItems/parkeerbord.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "passagiervliegtuig",
     name: "passagiervliegtuig",
     themes: ["snelweg","vakantie"],
@@ -1303,6 +1400,17 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "pickup",
+    name: "pickup-truck",
+    themes: ["algemeen","voertuigen"],
+    excludedThemes: ["verkeersborden"],
+    weight: 3,
+    themeWeights: {"voertuigen":4},
+    defaultIcon: require("../assets/images/NieuweItems/pickup.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "poes",
     name: "poes",
     themes: ["stad","platteland"],
@@ -1320,7 +1428,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","stad","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"snelweg":2,"stad":3,"voertuigen":3},
+    themeWeights: {"snelweg":2,"stad":2,"voertuigen":2},
     defaultIcon: require("../assets/images/stad/politie auto.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/politie auto.png"),
@@ -1332,7 +1440,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"snelweg":2,"voertuigen":3},
+    themeWeights: {"snelweg":2,"voertuigen":1},
     defaultIcon: require("../assets/images/Snelweg/politie motorrijder.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/politie motorrijder.png"),
@@ -1368,11 +1476,22 @@ const ITEM_CATALOG = [
     themes: ["platteland","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"platteland":1,"voertuigen":2},
+    themeWeights: {"platteland":1,"voertuigen":1},
     defaultIcon: require("../assets/images/Platteland/quad.png"),
     iconsByTheme: {
       platteland: require("../assets/images/Platteland/quad.png"),
       voertuigen: require("../assets/images/Voertuigen/quad.png"),
+    },
+  },
+  {
+    id: "rechts houden bord",
+    name: "rechts houden bord",
+    themes: ["algemeen","verkeersborden"],
+    excludedThemes: ["snelweg","bergen","voertuigen"],
+    weight: 3,
+    themeWeights: {},
+    defaultIcon: require("../assets/images/NieuweItems/rechts-houden-bord.png"),
+    iconsByTheme: {
     },
   },
   {
@@ -1455,6 +1574,19 @@ const ITEM_CATALOG = [
     defaultIcon: require("../assets/images/Platteland/rotondebord.png"),
     iconsByTheme: {
       platteland: require("../assets/images/Platteland/rotondebord.png"),
+    },
+  },
+  {
+    id: "lijkwagen",
+    name: "rouwauto",
+    themes: ["snelweg","voertuigen"],
+    excludedThemes: [],
+    weight: 1,
+    themeWeights: {"snelweg":1,"voertuigen":1},
+    defaultIcon: require("../assets/images/Snelweg/lijkwagen.png"),
+    iconsByTheme: {
+      snelweg: require("../assets/images/Snelweg/lijkwagen.png"),
+      voertuigen: require("../assets/images/Voertuigen/lijkwagen.png"),
     },
   },
   {
@@ -1624,6 +1756,28 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "snelheidsbord 50",
+    name: "snelheidsbord 50",
+    themes: ["algemeen","verkeersborden"],
+    excludedThemes: ["snelweg","voertuigen"],
+    weight: 3,
+    themeWeights: {"algemeen":2},
+    defaultIcon: require("../assets/images/NieuweItems/snelheidsbord-50.png"),
+    iconsByTheme: {
+    },
+  },
+  {
+    id: "snelheidsbord 80",
+    name: "snelheidsbord 80",
+    themes: ["platteland","vakantie","verkeersborden"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"vakantie":2,"verkeersborden":3,"platteland":4},
+    defaultIcon: require("../assets/images/NieuweItems/snelheidsbord-80.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "snelheidsmeter",
     name: "snelheidsmeter",
     themes: ["stad"],
@@ -1641,7 +1795,7 @@ const ITEM_CATALOG = [
     themes: ["bergen","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"bergen":2,"voertuigen":2},
+    themeWeights: {"bergen":2,"voertuigen":1},
     defaultIcon: require("../assets/images/Voertuigen/snowcat.png"),
     iconsByTheme: {
       voertuigen: require("../assets/images/Voertuigen/snowcat.png"),
@@ -1700,7 +1854,7 @@ const ITEM_CATALOG = [
     themes: ["stad","voertuigen"],
     excludedThemes: ["verkeersborden"],
     weight: 1,
-    themeWeights: {"stad":4,"voertuigen":3},
+    themeWeights: {"stad":4,"voertuigen":4},
     defaultIcon: require("../assets/images/stad/bus.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/bus.png"),
@@ -1761,7 +1915,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","stad","platteland","vakantie","winter","bergen","voertuigen"],
     excludedThemes: ["verkeersborden"],
     weight: 1,
-    themeWeights: {"bergen":1,"voertuigen":5,"winter":2,"vakantie":3,"platteland":2,"stad":3,"snelweg":5},
+    themeWeights: {"bergen":1,"voertuigen":4,"winter":2,"vakantie":3,"platteland":2,"stad":2,"snelweg":4},
     defaultIcon: require("../assets/images/Snelweg/tankwagen.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/tankwagen.png"),
@@ -1854,11 +2008,12 @@ const ITEM_CATALOG = [
   {
     id: "trein",
     name: "trein",
-    themes: ["snelweg","voertuigen"],
+    themes: ["snelweg","voertuigen","vakantie"],
     excludedThemes: [],
-    weight: 1,
-    themeWeights: {"snelweg":3,"voertuigen":2},
+    weight: 3,
+    themeWeights: {"voertuigen":2,"snelweg":3,"vakantie":3},
     defaultIcon: require("../assets/images/Snelweg/trein.png"),
+    generalIcon: require("../assets/images/NieuweItems/oranje-trein.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/trein.png"),
     },
@@ -1970,6 +2125,17 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "verkeerskegel",
+    name: "verkeerspion",
+    themes: ["stad","vakantie"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"vakantie":1,"stad":2},
+    defaultIcon: require("../assets/images/NieuweItems/verkeerskegel.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "bolle spiegel",
     name: "verkeersspiegel",
     themes: ["stad","platteland","vakantie","bergen"],
@@ -2036,7 +2202,7 @@ const ITEM_CATALOG = [
     themes: ["snelweg","stad","platteland","vakantie","winter","bergen","voertuigen"],
     excludedThemes: ["verkeersborden"],
     weight: 1,
-    themeWeights: {"voertuigen":3,"bergen":2,"winter":2,"vakantie":4,"platteland":3,"stad":3,"snelweg":5},
+    themeWeights: {"voertuigen":5,"bergen":2,"winter":2,"vakantie":4,"platteland":3,"stad":3,"snelweg":5},
     defaultIcon: require("../assets/images/Snelweg/vrachtwagen.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/vrachtwagen.png"),
@@ -2049,7 +2215,7 @@ const ITEM_CATALOG = [
     themes: ["stad","voertuigen"],
     excludedThemes: [],
     weight: 1,
-    themeWeights: {"stad":3,"voertuigen":3},
+    themeWeights: {"stad":3,"voertuigen":2},
     defaultIcon: require("../assets/images/stad/vuilniswagen.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/vuilniswagen.png"),
@@ -2101,6 +2267,39 @@ const ITEM_CATALOG = [
     defaultIcon: require("../assets/images/Platteland/weg met groene lijn.png"),
     iconsByTheme: {
       platteland: require("../assets/images/Platteland/weg met groene lijn.png"),
+    },
+  },
+  {
+    id: "wegversmalling",
+    name: "wegversmalling",
+    themes: ["stad","platteland"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"stad":2,"platteland":2},
+    defaultIcon: require("../assets/images/NieuweItems/wegversmalling.png"),
+    iconsByTheme: {
+    },
+  },
+  {
+    id: "wegversmalling bord",
+    name: "wegversmalling bord",
+    themes: ["stad","platteland","verkeersborden"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {"stad":2,"verkeersborden":1},
+    defaultIcon: require("../assets/images/NieuweItems/wegversmalling-bord.png"),
+    iconsByTheme: {
+    },
+  },
+  {
+    id: "werkzaamhedenbord",
+    name: "werkzaamhedenbord",
+    themes: ["verkeersborden"],
+    excludedThemes: [],
+    weight: 3,
+    themeWeights: {},
+    defaultIcon: require("../assets/images/NieuweItems/werkzaamhedenbord.png"),
+    iconsByTheme: {
     },
   },
   {
@@ -2222,6 +2421,17 @@ const ITEM_CATALOG = [
     },
   },
   {
+    id: "zendmast",
+    name: "zendmast",
+    themes: ["algemeen"],
+    excludedThemes: ["voertuigen","verkeersborden"],
+    weight: 4,
+    themeWeights: {},
+    defaultIcon: require("../assets/images/NieuweItems/zendmast.png"),
+    iconsByTheme: {
+    },
+  },
+  {
     id: "zonnepanelen",
     name: "zonnepanelen",
     themes: ["snelweg","platteland","vakantie"],
@@ -2249,6 +2459,8 @@ const ITEM_CATALOG = [
 
 const GENERAL_THEME_ID = 'algemeen';
 const THEME_SPECIFIC_RATIO = 0.6;
+const DEFAULT_DIFFICULTY_MIX = { easy: 9, medium: 5, hard: 2 };
+const BOARD_4X4_BLOCKER_POSITIONS = [10, 12, 7, 1, 4, 13, 15];
 const MIX_LIMITS_BY_THEME = {
   default: { verkeersborden: 3, voertuigen: 4 },
   verkeersborden: { voertuigen: 4 },
@@ -2290,12 +2502,16 @@ function isItemAvailableForTheme(item, theme) {
   return isItemExplicitlyInTheme(item, theme) || isItemExplicitlyInTheme(item, GENERAL_THEME_ID);
 }
 
-function getIconForTheme(item, theme) {
+function getIconForTheme(item, theme, options = {}) {
+  if (options.nederlands === false && item.generalIcon) {
+    return item.generalIcon;
+  }
+
   return item.iconsByTheme[theme] ?? item.defaultIcon;
 }
 
 function includeItemForOptions(item, options = {}) {
-  return options.nederlands !== false || !NETHERLANDS_SPECIFIC_ITEM_IDS.has(item.id);
+  return options.nederlands !== false || !NETHERLANDS_SPECIFIC_ITEM_IDS.has(item.id) || Boolean(item.generalIcon);
 }
 
 export function getThemeItems(theme, options = {}) {
@@ -2315,7 +2531,7 @@ export function getThemeItems(theme, options = {}) {
 
 export function getThemeIcons(theme, options = {}) {
   const resolvedTheme = theme || 'snelweg';
-  return getThemeItems(resolvedTheme, options).map((item) => getIconForTheme(item, resolvedTheme));
+  return getThemeItems(resolvedTheme, options).map((item) => getIconForTheme(item, resolvedTheme, options));
 }
 
 function createSeededRandom(seed = 0) {
@@ -2358,6 +2574,41 @@ function getItemSelectionWeight(item, theme, options = {}) {
   return Math.max(0.05, (getThemeSelectionWeight(item, theme) / 3) * getRecentItemPenalty(item, options));
 }
 
+function getDifficultyBucket(item, theme) {
+  const weight = getThemeSelectionWeight(item, theme);
+
+  if (weight >= 4) {
+    return 'easy';
+  }
+
+  if (weight <= 2) {
+    return 'hard';
+  }
+
+  return 'medium';
+}
+
+function getDifficultyTargets(count) {
+  if (count === 16) {
+    return { ...DEFAULT_DIFFICULTY_MIX };
+  }
+
+  if (count <= 3) {
+    return { easy: count, medium: 0, hard: 0 };
+  }
+
+  const hard = Math.max(1, Math.round(count * 0.125));
+  const easy = Math.max(1, Math.round(count * 0.56));
+  return { easy, medium: Math.max(0, count - easy - hard), hard };
+}
+
+function splitByDifficulty(items, theme) {
+  return items.reduce((groups, item) => {
+    groups[getDifficultyBucket(item, theme)].push(item);
+    return groups;
+  }, { easy: [], medium: [], hard: [] });
+}
+
 function weightedShuffleWithSeed(items, seed, theme, options = {}) {
   const random = createSeededRandom(seed);
 
@@ -2366,8 +2617,111 @@ function weightedShuffleWithSeed(items, seed, theme, options = {}) {
       item,
       rank: Math.log(Math.max(random(), 0.0000001)) / getItemSelectionWeight(item, theme, options),
     }))
-    .sort((left, right) => right.rank - left.rank)
+    .sort((left, right) => {
+      const rankDifference = right.rank - left.rank;
+      if (rankDifference !== 0) {
+        return rankDifference;
+      }
+
+      return left.item.id.localeCompare(right.item.id);
+    })
     .map((entry) => entry.item);
+}
+
+function getBucketSeedOffset(bucket) {
+  return bucket === 'easy' ? 17 : bucket === 'medium' ? 31 : 47;
+}
+
+function appendBucketItems(target, candidates, desiredCount, theme, seed, options = {}) {
+  if (desiredCount <= 0) {
+    return target;
+  }
+
+  const shuffledThemeItems = weightedShuffleWithSeed(
+    candidates.filter((item) => isItemExplicitlyInTheme(item, theme)),
+    seed,
+    theme,
+    options
+  );
+  const shuffledGeneralItems = weightedShuffleWithSeed(
+    candidates.filter((item) => (
+      isItemExplicitlyInTheme(item, GENERAL_THEME_ID) && !isItemExplicitlyInTheme(item, theme)
+    )),
+    seed + 101,
+    theme,
+    options
+  );
+  const shuffledFallbackItems = weightedShuffleWithSeed(candidates, seed + 202, theme, options);
+  const targetLength = target.length + desiredCount;
+  const themeTargetLength = target.length + Math.ceil(desiredCount * THEME_SPECIFIC_RATIO);
+
+  appendBalancedUniqueItems(target, shuffledThemeItems, themeTargetLength, theme);
+  appendBalancedUniqueItems(target, shuffledGeneralItems, targetLength, theme);
+  appendBalancedUniqueItems(target, shuffledThemeItems, targetLength, theme);
+  appendBalancedUniqueItems(target, shuffledFallbackItems, targetLength, theme);
+
+  return target;
+}
+
+function selectBalancedItemsByDifficulty(availableItems, theme, count, seed, options = {}) {
+  const targets = getDifficultyTargets(count);
+  const groups = splitByDifficulty(availableItems, theme);
+  const selectedItems = [];
+
+  for (const bucket of ['easy', 'medium', 'hard']) {
+    appendBucketItems(
+      selectedItems,
+      groups[bucket],
+      targets[bucket],
+      theme,
+      seed + getBucketSeedOffset(bucket),
+      options
+    );
+  }
+
+  if (selectedItems.length < count) {
+    appendBalancedUniqueItems(
+      selectedItems,
+      weightedShuffleWithSeed(availableItems, seed + 303, theme, options),
+      count,
+      theme
+    );
+  }
+
+  if (selectedItems.length < count) {
+    appendUniqueItems(
+      selectedItems,
+      weightedShuffleWithSeed(availableItems, seed + 404, theme, options),
+      count
+    );
+  }
+
+  return selectedItems.slice(0, count);
+}
+
+function arrangeItemsForBoard(selectedItems, theme, seed) {
+  if (selectedItems.length !== 16) {
+    return shuffleWithSeed(selectedItems, seed + 505);
+  }
+
+  const hardItems = selectedItems.filter((item) => getDifficultyBucket(item, theme) === 'hard');
+  const mediumItems = selectedItems.filter((item) => getDifficultyBucket(item, theme) === 'medium');
+  const easyItems = selectedItems.filter((item) => getDifficultyBucket(item, theme) === 'easy');
+  const blockers = shuffleWithSeed([...hardItems, ...mediumItems], seed + 606);
+  const easyQueue = shuffleWithSeed(easyItems, seed + 707);
+  const board = Array(16).fill(null);
+
+  for (let index = 0; index < BOARD_4X4_BLOCKER_POSITIONS.length && blockers.length > 0; index += 1) {
+    board[BOARD_4X4_BLOCKER_POSITIONS[index]] = blockers.shift();
+  }
+
+  for (let index = 0; index < board.length; index += 1) {
+    if (!board[index]) {
+      board[index] = easyQueue.shift() ?? blockers.shift() ?? null;
+    }
+  }
+
+  return board.filter(Boolean);
 }
 
 function appendUniqueItems(target, candidates, limit) {
@@ -2448,36 +2802,13 @@ export function getRandomItems(theme, count = 16, seed = 0, options = {}) {
     return [];
   }
 
-  if (resolvedTheme === GENERAL_THEME_ID) {
-    return weightedShuffleWithSeed(availableItems, seed, resolvedTheme, options)
-      .slice(0, count)
-      .map((item) => ({ id: item.id, icon: getIconForTheme(item, resolvedTheme) }));
-  }
+  const selectedItems = selectBalancedItemsByDifficulty(availableItems, resolvedTheme, count, seed, options);
+  const arrangedItems = arrangeItemsForBoard(selectedItems, resolvedTheme, seed);
 
-  const shuffledThemeItems = weightedShuffleWithSeed(
-    availableItems.filter((item) => isItemExplicitlyInTheme(item, resolvedTheme)),
-    seed,
-    resolvedTheme,
-    options
-  );
-  const shuffledGeneralItems = weightedShuffleWithSeed(
-    availableItems.filter((item) => (
-      isItemExplicitlyInTheme(item, GENERAL_THEME_ID) && !isItemExplicitlyInTheme(item, resolvedTheme)
-    )),
-    seed + 101,
-    resolvedTheme,
-    options
-  );
-  const shuffledFallbackItems = weightedShuffleWithSeed(availableItems, seed + 202, resolvedTheme, options);
-  const themeTargetCount = Math.min(count, Math.ceil(count * THEME_SPECIFIC_RATIO));
-  const selectedItems = [];
-
-  appendBalancedUniqueItems(selectedItems, shuffledThemeItems, themeTargetCount, resolvedTheme);
-  appendBalancedUniqueItems(selectedItems, shuffledGeneralItems, count, resolvedTheme);
-  appendBalancedUniqueItems(selectedItems, shuffledThemeItems, count, resolvedTheme);
-  appendUniqueItems(selectedItems, shuffledFallbackItems, count);
-
-  return selectedItems.slice(0, count).map((item) => ({ id: item.id, icon: getIconForTheme(item, resolvedTheme) }));
+  return arrangedItems.slice(0, count).map((item) => ({
+    id: item.id,
+    icon: getIconForTheme(item, resolvedTheme, options),
+  }));
 }
 
 export function getRandomIcons(theme, count = 16, seed = 0, options = {}) {

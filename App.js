@@ -5,6 +5,7 @@ import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one'
 import { Animated, AppState, Easing, Image, ImageBackground, InteractionManager, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import CircularReveal from './components/CircularReveal';
 import GlossyButton from './src/components/GlossyButton';
+import TutorialOverlay, { TUTORIAL_STEPS } from './src/components/TutorialOverlay';
 import WarmupImages from './src/components/WarmupImages';
 import HomeScreen from './screens/HomeScreen';
 import HostSetupScreen from './screens/HostSetupScreen';
@@ -13,7 +14,7 @@ import WaitingScreen from './screens/WaitingScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import BingoCardScreen from './screens/BingoCardScreen';
 import SingleDeviceSetupTestScreen from './src/screens/SingleDeviceSetupTestScreen';
-import { createRandomSalt, createRandomSeed, getPlayerThemes, withDefaultPlayerNames } from './screens/gameFlowConfig';
+import { createGameConfig, createPlayer, createRandomSalt, createRandomSeed, getPlayerThemes, withDefaultPlayerNames } from './screens/gameFlowConfig';
 import { PLAYER_IMAGES } from './assets/images/players/playerImages';
 import { clearBoardState, getLobbySnapshot, removePlayers, restartLobbyGame, stopLobbyGame, subscribeToLobby } from './src/services/liveLobbyService';
 import { AppSettingsProvider, useAppSettings } from './src/settings/AppSettingsContext';
@@ -22,7 +23,11 @@ import { AdsProvider, useAds } from './src/ads/AdProvider';
 import { getResponsiveMetrics } from './src/utils/responsive';
 import useOnlineConnectionStatus from './src/hooks/useOnlineConnectionStatus';
 import LegalConsentGate, { hasAcceptedCurrentLegalTerms } from './src/legal/LegalConsentGate';
-import { playSoundEffect, preloadSoundEffect } from './src/audio/soundEffects';
+import {
+  playSoundEffect,
+  preloadSoundEffect,
+  restoreSoundEffectsAfterInterruption,
+} from './src/audio/soundEffects';
 import {
   fadeOutHomeBackgroundMusic,
   pauseBackgroundMusic,
@@ -158,10 +163,44 @@ function GlobalSettingsButton({
 function BackgroundMusicController({ mode, sessionKey }) {
   const { settings } = useAppSettings();
   const previousGameSessionKeyRef = useRef(null);
+  const previousMusicModeRef = useRef(null);
 
   useEffect(() => {
+    let previousAppState = AppState.currentState;
+    let recoveryTimer = null;
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const returnedToForeground = previousAppState !== 'active' && nextAppState === 'active';
+      previousAppState = nextAppState;
+
+      if (!returnedToForeground) {
+        return;
+      }
+
+      // iOS can drop the audio session while the app is backgrounded or locked.
+      recoveryTimer = setTimeout(() => {
+        void restoreSoundEffectsAfterInterruption();
+        void restoreBackgroundMusicAfterInterruption(settings);
+      }, 120);
+    });
+
+    return () => {
+      if (recoveryTimer) {
+        clearTimeout(recoveryTimer);
+      }
+      subscription.remove();
+    };
+  }, [settings]);
+
+  useEffect(() => {
+    const previousMode = previousMusicModeRef.current;
+    previousMusicModeRef.current = mode;
+
     if (mode === 'home') {
       previousGameSessionKeyRef.current = null;
+      if (previousMode === 'game' || previousMode === 'none') {
+        void restoreSoundEffectsAfterInterruption();
+      }
       void playHomeBackgroundMusic(settings);
       return;
     }
@@ -170,6 +209,10 @@ function BackgroundMusicController({ mode, sessionKey }) {
       const nextSessionKey = sessionKey ?? 'game';
 
       async function startGameMusic() {
+        if (previousMode === 'none') {
+          await restoreSoundEffectsAfterInterruption();
+        }
+
         if (previousGameSessionKeyRef.current !== nextSessionKey) {
           previousGameSessionKeyRef.current = nextSessionKey;
           await resetGameBackgroundMusicForNewRound();
@@ -197,6 +240,7 @@ function AudioAwareAdProvider({ children }) {
   const { settings } = useAppSettings();
 
   const restoreAudioAfterInterstitial = useCallback(() => {
+    void restoreSoundEffectsAfterInterruption();
     void restoreBackgroundMusicAfterInterruption(settings);
   }, [settings]);
 
@@ -430,6 +474,9 @@ export default function App() {
   const [enterTransition, setEnterTransition] = useState(null);
   const [gameMusicReady, setGameMusicReady] = useState(false);
   const [settingsMenuVisible, setSettingsMenuVisible] = useState(false);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(null);
+  const [tutorialTargetRects, setTutorialTargetRects] = useState({});
+  const [tutorialUnlockedSteps, setTutorialUnlockedSteps] = useState({});
   const enterRevealRef = useRef(null);
   const bootRevealRef = useRef(null);
   const settingsWiggle = useRef(new Animated.Value(0)).current;
@@ -443,6 +490,8 @@ export default function App() {
   const currentRouteReadyKey = currentRoute.params?.transition?.transitionKey
     ?? currentRoute.params?.replayAt
     ?? currentRoute.name;
+  const tutorialActive = tutorialStepIndex !== null;
+  const tutorialStep = tutorialActive ? TUTORIAL_STEPS[tutorialStepIndex] : null;
   const legalAccepted = legalStatus === 'accepted';
   const legalRequired = legalStatus === 'required';
   const shouldShowDriverWarning = legalAccepted && currentRoute.name === 'Home' && !driverWarningComplete;
@@ -450,7 +499,8 @@ export default function App() {
   const showGlobalSettingsButton = legalAccepted
     && driverWarningComplete
     && currentRoute.name !== 'Instellingen'
-    && !settingsMenuVisible;
+    && !settingsMenuVisible
+    && !tutorialActive;
   const backgroundMusicMode = !legalAccepted || !driverWarningComplete
     ? 'none'
     : currentRoute.name === 'Spel'
@@ -487,7 +537,10 @@ export default function App() {
     routeReadyRef.current = true;
     routeReadyResolverRef.current?.();
     routeReadyResolverRef.current = null;
-  }, []);
+    if (currentRoute.name === 'Spel') {
+      setGameMusicReady(true);
+    }
+  }, [currentRoute.name]);
 
   const waitForCurrentRouteReady = useCallback((timeoutMs = ROUTE_READY_TIMEOUT_MS) => (
     new Promise((resolve) => {
@@ -581,6 +634,7 @@ export default function App() {
   useLayoutEffect(() => {
     routeReadyRef.current = false;
     routeReadyResolverRef.current = null;
+    setTutorialTargetRects({});
   }, [currentRouteReadyKey]);
 
   useEffect(() => {
@@ -652,6 +706,10 @@ export default function App() {
       return;
     }
 
+    if (enterTransition.routeName && currentRoute.name !== enterTransition.routeName) {
+      return;
+    }
+
     let cancelled = false;
 
     async function revealAfterRouteSettles(settleOverrideMs = null) {
@@ -718,7 +776,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [enterTransition, waitForCurrentRouteReady]);
+  }, [currentRoute.name, currentRoute.params, enterTransition, waitForCurrentRouteReady]);
 
   useEffect(() => () => {
     if (settingsWiggleTimeoutRef.current) {
@@ -889,6 +947,179 @@ export default function App() {
     setSettingsMenuVisible(true);
   }
 
+  function buildTutorialGameConfig() {
+    return createGameConfig({
+      thema: 'snelweg',
+      wincondition: '1rij',
+      diagonaal: true,
+      kaartOpzet: 'zelfde',
+      nederlands: true,
+      modus: 'solo',
+      syncType: 'geen',
+      aantalSpelersOpDitApparaat: 1,
+      spelers: [
+        createPlayer({ naam: 'Speler 1', skin: 'groen' }),
+      ],
+      seed: createRandomSeed(),
+      salt: createRandomSalt(),
+    });
+  }
+
+  function openTutorialRoute(routeName) {
+    if (routeName === 'Home') {
+      setStack([{ name: 'Home', params: {} }]);
+      return;
+    }
+
+    if (routeName === 'SingleDeviceSetupTest') {
+      setStack([{
+        name: 'SingleDeviceSetupTest',
+        params: {
+          initialConfig: buildTutorialGameConfig(),
+          preserveInitialRuleSettings: true,
+        },
+      }]);
+      return;
+    }
+
+    if (routeName === 'Spel') {
+      setStack([{
+        name: 'Spel',
+        params: {
+          config: buildTutorialGameConfig(),
+          replayAt: `tutorial-${Date.now()}`,
+        },
+      }]);
+    }
+  }
+
+  function startTutorialTest() {
+    setSettingsMenuVisible(false);
+    openTutorialRoute('Home');
+    setTutorialUnlockedSteps({});
+    setTutorialStepIndex(0);
+  }
+
+  function closeTutorialTest() {
+    setTutorialStepIndex(null);
+    setTutorialUnlockedSteps({});
+  }
+
+  function handleTutorialTargetLayout(key, rect) {
+    if (!key || !rect || rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    setTutorialTargetRects((current) => {
+      const previous = current[key];
+      const rounded = {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      };
+
+      if (
+        previous
+        && previous.x === rounded.x
+        && previous.y === rounded.y
+        && previous.width === rounded.width
+        && previous.height === rounded.height
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [key]: rounded,
+      };
+    });
+  }
+
+  function handleTutorialAction(actionName) {
+    if (tutorialStep?.finishOnAction && tutorialStep.finishOnAction === actionName) {
+      closeTutorialTest();
+      return;
+    }
+
+    const targetStepId = tutorialStep?.advanceToStepOnAction?.[actionName];
+    if (targetStepId) {
+      const targetIndex = TUTORIAL_STEPS.findIndex((step) => step.id === targetStepId);
+      if (targetIndex >= 0) {
+        const targetStep = TUTORIAL_STEPS[targetIndex];
+        if (targetStep?.routeName && targetStep.routeName !== currentRoute.name) {
+          openTutorialRoute(targetStep.routeName);
+        }
+        setTutorialStepIndex(targetIndex);
+        setTutorialUnlockedSteps((current) => {
+          if (!current[targetStep?.id]) {
+            return current;
+          }
+
+          const next = { ...current };
+          delete next[targetStep.id];
+          return next;
+        });
+      }
+      return;
+    }
+
+    if (tutorialStep?.unlockNextOnAction && tutorialStep.unlockNextOnAction === actionName) {
+      setTutorialUnlockedSteps((current) => ({
+        ...current,
+        [tutorialStep.id]: true,
+      }));
+      return;
+    }
+
+    if (!tutorialStep?.advanceOnAction || tutorialStep.advanceOnAction !== actionName) {
+      return;
+    }
+
+    advanceTutorialTest();
+  }
+
+  function advanceTutorialTest() {
+    if (tutorialStepIndex === null) {
+      return;
+    }
+
+    const nextIndex = tutorialStepIndex + 1;
+
+    if (nextIndex >= TUTORIAL_STEPS.length) {
+      closeTutorialTest();
+      return;
+    }
+
+    const nextStep = TUTORIAL_STEPS[nextIndex];
+    if (nextStep?.routeName && nextStep.routeName !== currentRoute.name) {
+      openTutorialRoute(nextStep.routeName);
+    }
+
+    setTutorialStepIndex(nextIndex);
+    setTutorialUnlockedSteps((current) => {
+      if (!current[nextStep?.id]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[nextStep.id];
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!tutorialStep?.advanceOnRoute || tutorialStep.advanceOnRoute !== currentRoute.name) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      advanceTutorialTest();
+    }, 260);
+
+    return () => clearTimeout(timer);
+  }, [currentRoute.name, tutorialStep?.advanceOnRoute]);
+
   if (!fontsLoaded || !assetsLoaded || legalStatus === 'checking') {
     return (
       <View style={styles.bootScreen}>
@@ -906,12 +1137,20 @@ export default function App() {
       {legalAccepted && driverWarningComplete ? (
         <AudioAwareAdProvider>
             <StatusBar style="dark" hidden />
-            <CurrentScreen navigation={navigation} route={currentRoute} />
+            <CurrentScreen
+              navigation={navigation}
+              route={currentRoute}
+              tutorialActive={tutorialActive}
+              tutorialStep={tutorialStep}
+              onTutorialTargetLayout={handleTutorialTargetLayout}
+              onTutorialAction={handleTutorialAction}
+            />
             <SettingsScreen
               navigation={navigation}
               route={{ name: 'Instellingen', params: {} }}
               visible={settingsMenuVisible}
               onClose={() => setSettingsMenuVisible(false)}
+              onTutorial={startTutorialTest}
             />
         </AudioAwareAdProvider>
       ) : null}
@@ -973,6 +1212,18 @@ export default function App() {
           }}
         />
       ) : null}
+      <TutorialOverlay
+        active={tutorialActive && !enterTransition}
+        step={tutorialStep}
+        stepIndex={tutorialStepIndex ?? 0}
+        totalSteps={TUTORIAL_STEPS.length}
+        targetRects={tutorialTargetRects}
+        nextUnlocked={Boolean(tutorialStep?.id && tutorialUnlockedSteps[tutorialStep.id])}
+        fontFamily="FredokaOne_400Regular"
+        onNext={advanceTutorialTest}
+        onSkip={closeTutorialTest}
+        onAction={handleTutorialAction}
+      />
     </AppSettingsProvider>
   );
 }
@@ -1117,7 +1368,14 @@ const styles = StyleSheet.create({
   },
 });
 
-function GameScreen({ navigation, route }) {
+function GameScreen({
+  navigation,
+  route,
+  tutorialActive,
+  tutorialStep,
+  onTutorialTargetLayout,
+  onTutorialAction,
+}) {
   const { width, height } = useWindowDimensions();
   const { maybeShowInterstitial } = useAds();
   const config = route.params?.config ?? {};
@@ -1342,6 +1600,10 @@ function GameScreen({ navigation, route }) {
       canReplay={canReplayLive}
       settingsLabel={isLiveLobbyGame ? 'Lobby' : 'Instellingen'}
       isLiveLobbyHost={isLocalLiveHost}
+      tutorialActive={tutorialActive}
+      tutorialStep={tutorialStep}
+      onTutorialTargetLayout={onTutorialTargetLayout}
+      onTutorialAction={onTutorialAction}
       playerThemes={
         config.kaartOpzet === 'ander-thema'
           ? getPlayerThemes(config.thema, config.aantalSpelersOpDitApparaat ?? spelers.length)
@@ -1390,6 +1652,7 @@ function GameScreen({ navigation, route }) {
 
         navigation.reset('SingleDeviceSetupTest', {
           initialConfig: config,
+          preserveInitialRuleSettings: true,
           transition,
         });
       }}
@@ -1427,6 +1690,7 @@ function GameScreen({ navigation, route }) {
 
         navigation.reset('SingleDeviceSetupTest', {
           initialConfig: config,
+          preserveInitialRuleSettings: true,
           transition: {
             color: '#1A7BD4',
             originX: width / 2,

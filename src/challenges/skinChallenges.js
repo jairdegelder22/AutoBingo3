@@ -14,7 +14,14 @@ const ITEM_SOURCES = {
   politie: [require('../../assets/images/stad/politie auto.png')],
   ambulance: [require('../../assets/images/stad/ambulance.png')],
   brandweer: [require('../../assets/images/stad/brandweerauto.png')],
-  kerst: [],
+  kerst: [
+    require('../../assets/images/NieuweItems/kerstman.png'),
+    require('../../assets/images/NieuweItems/kerstboom.png'),
+    require('../../assets/images/NieuweItems/huis-met-lichtjes.png'),
+    require('../../assets/images/NieuweItems/kerstkrans.png'),
+    require('../../assets/images/Winter/kerstboom.png'),
+    require('../../assets/images/Winter/huis-met-lichtjes.png'),
+  ],
 };
 
 export const CHALLENGE_SKINS = [
@@ -45,35 +52,35 @@ export const SKIN_CHALLENGES = {
   koe: {
     skin: 'koe',
     title: 'Koe',
-    description: 'Spot in totaal 3 keer een koe (thema: Platteland).',
+    description: 'Spot en vink in totaal drie keer een koe aan.',
     target: 3,
     kind: 'count',
   },
   kerst: {
     skin: 'kerst',
     title: 'Kerst',
-    description: 'Spot in totaal 3 keer een kerst-item.',
+    description: 'Spot en vink in totaal drie keer een kerst-item aan.',
     target: 3,
     kind: 'count',
   },
   politie: {
     skin: 'politie',
     title: 'Politie',
-    description: 'Spot in totaal 3 keer een politieauto (thema: Stad).',
+    description: 'Spot en vink in totaal drie keer een politieauto aan.',
     target: 3,
     kind: 'count',
   },
   ambulance: {
     skin: 'ambulance',
     title: 'Ambulance',
-    description: 'Spot in totaal 3 keer een ambulance (thema: Stad).',
+    description: 'Spot en vink in totaal drie keer een ambulance aan.',
     target: 3,
     kind: 'count',
   },
   brandweer: {
     skin: 'brandweer',
     title: 'Brandweer',
-    description: 'Spot in totaal 3 keer een brandweerauto (thema: Stad).',
+    description: 'Spot en vink in totaal drie keer een brandweerauto aan.',
     target: 3,
     kind: 'count',
   },
@@ -101,14 +108,14 @@ export const SKIN_CHALLENGES = {
   kat: {
     skin: 'kat',
     title: 'Kat',
-    description: 'Spot in totaal 3 keer een kat (thema: Platteland).',
+    description: 'Spot en vink in totaal drie keer een kat aan.',
     target: 3,
     kind: 'count',
   },
   hond: {
     skin: 'hond',
     title: 'Hond',
-    description: 'Spot in totaal 3 keer een hond (thema: Platteland).',
+    description: 'Spot en vink in totaal drie keer een hond aan.',
     target: 3,
     kind: 'count',
   },
@@ -276,6 +283,16 @@ function hasCheckedTargetIcon({ checked = [], icons = [], targets = [] }) {
   return icons.some((icon, index) => checked[index] && targets.includes(icon));
 }
 
+function countCheckedTargetIcons({ checked = [], icons = [], targets = [] }) {
+  if (!targets.length) {
+    return 0;
+  }
+
+  return icons.reduce((count, icon, index) => (
+    checked[index] && targets.includes(icon) ? count + 1 : count
+  ), 0);
+}
+
 function incrementCount(nextProgress, skin, amount = 1) {
   const challenge = SKIN_CHALLENGES[skin];
   const stored = nextProgress.challenges[skin] ?? { count: 0 };
@@ -331,6 +348,17 @@ export async function recordFinishedGameForSkinChallenges(gameResult) {
   }
 
   Object.entries(ITEM_SOURCES).forEach(([skin, targets]) => {
+    if (skin === 'kerst') {
+      const checkedChristmasItemCount = boards.reduce((count, board) => (
+        count + countCheckedTargetIcons({ ...board, targets })
+      ), 0);
+
+      if (checkedChristmasItemCount > 0) {
+        incrementCount(nextProgress, skin, checkedChristmasItemCount);
+      }
+      return;
+    }
+
     if (boards.some((board) => hasCheckedTargetIcon({ ...board, targets }))) {
       incrementCount(nextProgress, skin);
     }

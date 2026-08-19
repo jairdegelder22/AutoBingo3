@@ -61,8 +61,49 @@ export const DEFAULT_ZICHTBAARHEID = {
 };
 
 export const PLAYER_SETUP_STORAGE_KEY = 'autobingo:last-player-setup';
+export const GAME_RULE_PREFERENCES_STORAGE_KEY = 'autobingo:last-game-rule-preferences-v1';
 export const EQUIPPED_SKIN_STORAGE_KEY = 'autobingo:equipped-skin';
 export const PREFERRED_PLAYER_NAME_STORAGE_KEY = 'autobingo:preferred-player-name';
+
+export const DEFAULT_GAME_RULE_PREFERENCES = {
+  wincondition: '1rij',
+  diagonaal: true,
+  kaartOpzet: 'zelfde',
+  nederlands: true,
+};
+
+export function normalizeGameRulePreferences(value = {}) {
+  return {
+    wincondition: WINCONDITION_OPTIONS.some((option) => option.id === value?.wincondition)
+      ? value.wincondition
+      : DEFAULT_GAME_RULE_PREFERENCES.wincondition,
+    diagonaal: typeof value?.diagonaal === 'boolean'
+      ? value.diagonaal
+      : DEFAULT_GAME_RULE_PREFERENCES.diagonaal,
+    kaartOpzet: ['zelfde', 'anders', 'ander-thema'].includes(value?.kaartOpzet)
+      ? value.kaartOpzet
+      : DEFAULT_GAME_RULE_PREFERENCES.kaartOpzet,
+    nederlands: typeof value?.nederlands === 'boolean'
+      ? value.nederlands
+      : DEFAULT_GAME_RULE_PREFERENCES.nederlands,
+  };
+}
+
+export function parseStoredGameRulePreferences(storedValue) {
+  if (typeof storedValue !== 'string') {
+    return DEFAULT_GAME_RULE_PREFERENCES;
+  }
+
+  try {
+    return normalizeGameRulePreferences(JSON.parse(storedValue));
+  } catch (_error) {
+    return DEFAULT_GAME_RULE_PREFERENCES;
+  }
+}
+
+export function serializeGameRulePreferences(value = {}) {
+  return JSON.stringify(normalizeGameRulePreferences(value));
+}
 
 export function createPlayer(overrides = {}) {
   return {
@@ -76,10 +117,7 @@ export function createPlayer(overrides = {}) {
 export function createGameConfig(overrides = {}) {
   return {
     thema: 'snelweg',
-    wincondition: '1rij',
-    diagonaal: true,
-    kaartOpzet: 'zelfde',
-    nederlands: true,
+    ...DEFAULT_GAME_RULE_PREFERENCES,
     modus: 'solo',
     syncType: 'geen',
     lobbyCode: '',

@@ -28,6 +28,8 @@ const defaultBalanceByItemId = {
   quad: { weight: 1 },
   tractor: { weight: 5 },
 };
+const dutchTrainItemId = 'trein';
+const genericTrainItemId = 'oranje trein';
 
 function quote(value) {
   return JSON.stringify(value);
@@ -104,13 +106,35 @@ function buildItem(item) {
     themeWeights,
     nederlands: item.nederlands === true,
     defaultIcon: defaultImage.requirePath,
+    generalIcon: null,
     iconsByTheme,
   };
 }
 
-const items = review.items
+function mergeGenericTrainIntoDutchTrain(catalogItems) {
+  const dutchTrain = catalogItems.find((item) => item.id === dutchTrainItemId);
+  const genericTrain = catalogItems.find((item) => item.id === genericTrainItemId);
+
+  if (!dutchTrain || !genericTrain) {
+    return catalogItems;
+  }
+
+  dutchTrain.name = 'trein';
+  dutchTrain.generalIcon = genericTrain.defaultIcon;
+  dutchTrain.themes = [...new Set([...dutchTrain.themes, ...genericTrain.themes])];
+  dutchTrain.excludedThemes = [...new Set([...dutchTrain.excludedThemes, ...genericTrain.excludedThemes])];
+  dutchTrain.weight = Math.max(dutchTrain.weight, genericTrain.weight);
+  dutchTrain.themeWeights = {
+    ...genericTrain.themeWeights,
+    ...dutchTrain.themeWeights,
+  };
+
+  return catalogItems.filter((item) => item.id !== genericTrainItemId);
+}
+
+const items = mergeGenericTrainIntoDutchTrain(review.items
   .filter((item) => !item.removed)
-  .map(buildItem)
+  .map(buildItem))
   .sort((left, right) => left.name.localeCompare(right.name, 'nl'));
 
 const lines = [];
@@ -127,6 +151,9 @@ for (const item of items) {
   lines.push(`    weight: ${item.weight},`);
   lines.push(`    themeWeights: ${quote(item.themeWeights)},`);
   lines.push(`    defaultIcon: require(${quote(item.defaultIcon)}),`);
+  if (item.generalIcon) {
+    lines.push(`    generalIcon: require(${quote(item.generalIcon)}),`);
+  }
   lines.push('    iconsByTheme: {');
   for (const [themeId, requirePath] of item.iconsByTheme.entries()) {
     lines.push(`      ${themeId}: require(${quote(requirePath)}),`);
@@ -139,6 +166,8 @@ lines.push('];');
 lines.push('');
 lines.push('const GENERAL_THEME_ID = \'algemeen\';');
 lines.push('const THEME_SPECIFIC_RATIO = 0.6;');
+lines.push('const DEFAULT_DIFFICULTY_MIX = { easy: 9, medium: 5, hard: 2 };');
+lines.push('const BOARD_4X4_BLOCKER_POSITIONS = [10, 12, 7, 1, 4, 13, 15];');
 lines.push('const MIX_LIMITS_BY_THEME = {');
 lines.push('  default: { verkeersborden: 3, voertuigen: 4 },');
 lines.push('  verkeersborden: { voertuigen: 4 },');
@@ -166,12 +195,16 @@ lines.push('');
 lines.push('  return isItemExplicitlyInTheme(item, theme) || isItemExplicitlyInTheme(item, GENERAL_THEME_ID);');
 lines.push('}');
 lines.push('');
-lines.push('function getIconForTheme(item, theme) {');
+lines.push('function getIconForTheme(item, theme, options = {}) {');
+lines.push('  if (options.nederlands === false && item.generalIcon) {');
+lines.push('    return item.generalIcon;');
+lines.push('  }');
+lines.push('');
 lines.push('  return item.iconsByTheme[theme] ?? item.defaultIcon;');
 lines.push('}');
 lines.push('');
 lines.push('function includeItemForOptions(item, options = {}) {');
-lines.push('  return options.nederlands !== false || !NETHERLANDS_SPECIFIC_ITEM_IDS.has(item.id);');
+lines.push('  return options.nederlands !== false || !NETHERLANDS_SPECIFIC_ITEM_IDS.has(item.id) || Boolean(item.generalIcon);');
 lines.push('}');
 lines.push('');
 lines.push('export function getThemeItems(theme, options = {}) {');
@@ -191,7 +224,7 @@ lines.push('}');
 lines.push('');
 lines.push('export function getThemeIcons(theme, options = {}) {');
 lines.push('  const resolvedTheme = theme || \'snelweg\';');
-lines.push('  return getThemeItems(resolvedTheme, options).map((item) => getIconForTheme(item, resolvedTheme));');
+lines.push('  return getThemeItems(resolvedTheme, options).map((item) => getIconForTheme(item, resolvedTheme, options));');
 lines.push('}');
 lines.push('');
 lines.push('function createSeededRandom(seed = 0) {');
@@ -234,6 +267,41 @@ lines.push('function getItemSelectionWeight(item, theme, options = {}) {');
 lines.push('  return Math.max(0.05, (getThemeSelectionWeight(item, theme) / 3) * getRecentItemPenalty(item, options));');
 lines.push('}');
 lines.push('');
+lines.push('function getDifficultyBucket(item, theme) {');
+lines.push('  const weight = getThemeSelectionWeight(item, theme);');
+lines.push('');
+lines.push('  if (weight >= 4) {');
+lines.push('    return \'easy\';');
+lines.push('  }');
+lines.push('');
+lines.push('  if (weight <= 2) {');
+lines.push('    return \'hard\';');
+lines.push('  }');
+lines.push('');
+lines.push('  return \'medium\';');
+lines.push('}');
+lines.push('');
+lines.push('function getDifficultyTargets(count) {');
+lines.push('  if (count === 16) {');
+lines.push('    return { ...DEFAULT_DIFFICULTY_MIX };');
+lines.push('  }');
+lines.push('');
+lines.push('  if (count <= 3) {');
+lines.push('    return { easy: count, medium: 0, hard: 0 };');
+lines.push('  }');
+lines.push('');
+lines.push('  const hard = Math.max(1, Math.round(count * 0.125));');
+lines.push('  const easy = Math.max(1, Math.round(count * 0.56));');
+lines.push('  return { easy, medium: Math.max(0, count - easy - hard), hard };');
+lines.push('}');
+lines.push('');
+lines.push('function splitByDifficulty(items, theme) {');
+lines.push('  return items.reduce((groups, item) => {');
+lines.push('    groups[getDifficultyBucket(item, theme)].push(item);');
+lines.push('    return groups;');
+lines.push('  }, { easy: [], medium: [], hard: [] });');
+lines.push('}');
+lines.push('');
 lines.push('function weightedShuffleWithSeed(items, seed, theme, options = {}) {');
 lines.push('  const random = createSeededRandom(seed);');
 lines.push('');
@@ -242,8 +310,111 @@ lines.push('    .map((item) => ({');
 lines.push('      item,');
 lines.push('      rank: Math.log(Math.max(random(), 0.0000001)) / getItemSelectionWeight(item, theme, options),');
 lines.push('    }))');
-lines.push('    .sort((left, right) => right.rank - left.rank)');
+lines.push('    .sort((left, right) => {');
+lines.push('      const rankDifference = right.rank - left.rank;');
+lines.push('      if (rankDifference !== 0) {');
+lines.push('        return rankDifference;');
+lines.push('      }');
+lines.push('');
+lines.push('      return left.item.id.localeCompare(right.item.id);');
+lines.push('    })');
 lines.push('    .map((entry) => entry.item);');
+lines.push('}');
+lines.push('');
+lines.push('function getBucketSeedOffset(bucket) {');
+lines.push('  return bucket === \'easy\' ? 17 : bucket === \'medium\' ? 31 : 47;');
+lines.push('}');
+lines.push('');
+lines.push('function appendBucketItems(target, candidates, desiredCount, theme, seed, options = {}) {');
+lines.push('  if (desiredCount <= 0) {');
+lines.push('    return target;');
+lines.push('  }');
+lines.push('');
+lines.push('  const shuffledThemeItems = weightedShuffleWithSeed(');
+lines.push('    candidates.filter((item) => isItemExplicitlyInTheme(item, theme)),');
+lines.push('    seed,');
+lines.push('    theme,');
+lines.push('    options');
+lines.push('  );');
+lines.push('  const shuffledGeneralItems = weightedShuffleWithSeed(');
+lines.push('    candidates.filter((item) => (');
+lines.push('      isItemExplicitlyInTheme(item, GENERAL_THEME_ID) && !isItemExplicitlyInTheme(item, theme)');
+lines.push('    )),');
+lines.push('    seed + 101,');
+lines.push('    theme,');
+lines.push('    options');
+lines.push('  );');
+lines.push('  const shuffledFallbackItems = weightedShuffleWithSeed(candidates, seed + 202, theme, options);');
+lines.push('  const targetLength = target.length + desiredCount;');
+lines.push('  const themeTargetLength = target.length + Math.ceil(desiredCount * THEME_SPECIFIC_RATIO);');
+lines.push('');
+lines.push('  appendBalancedUniqueItems(target, shuffledThemeItems, themeTargetLength, theme);');
+lines.push('  appendBalancedUniqueItems(target, shuffledGeneralItems, targetLength, theme);');
+lines.push('  appendBalancedUniqueItems(target, shuffledThemeItems, targetLength, theme);');
+lines.push('  appendBalancedUniqueItems(target, shuffledFallbackItems, targetLength, theme);');
+lines.push('');
+lines.push('  return target;');
+lines.push('}');
+lines.push('');
+lines.push('function selectBalancedItemsByDifficulty(availableItems, theme, count, seed, options = {}) {');
+lines.push('  const targets = getDifficultyTargets(count);');
+lines.push('  const groups = splitByDifficulty(availableItems, theme);');
+lines.push('  const selectedItems = [];');
+lines.push('');
+lines.push('  for (const bucket of [\'easy\', \'medium\', \'hard\']) {');
+lines.push('    appendBucketItems(');
+lines.push('      selectedItems,');
+lines.push('      groups[bucket],');
+lines.push('      targets[bucket],');
+lines.push('      theme,');
+lines.push('      seed + getBucketSeedOffset(bucket),');
+lines.push('      options');
+lines.push('    );');
+lines.push('  }');
+lines.push('');
+lines.push('  if (selectedItems.length < count) {');
+lines.push('    appendBalancedUniqueItems(');
+lines.push('      selectedItems,');
+lines.push('      weightedShuffleWithSeed(availableItems, seed + 303, theme, options),');
+lines.push('      count,');
+lines.push('      theme');
+lines.push('    );');
+lines.push('  }');
+lines.push('');
+lines.push('  if (selectedItems.length < count) {');
+lines.push('    appendUniqueItems(');
+lines.push('      selectedItems,');
+lines.push('      weightedShuffleWithSeed(availableItems, seed + 404, theme, options),');
+lines.push('      count');
+lines.push('    );');
+lines.push('  }');
+lines.push('');
+lines.push('  return selectedItems.slice(0, count);');
+lines.push('}');
+lines.push('');
+lines.push('function arrangeItemsForBoard(selectedItems, theme, seed) {');
+lines.push('  if (selectedItems.length !== 16) {');
+lines.push('    return shuffleWithSeed(selectedItems, seed + 505);');
+lines.push('  }');
+lines.push('');
+lines.push('  const hardItems = selectedItems.filter((item) => getDifficultyBucket(item, theme) === \'hard\');');
+lines.push('  const mediumItems = selectedItems.filter((item) => getDifficultyBucket(item, theme) === \'medium\');');
+lines.push('  const easyItems = selectedItems.filter((item) => getDifficultyBucket(item, theme) === \'easy\');');
+lines.push('  const blockers = shuffleWithSeed([...hardItems, ...mediumItems], seed + 606);');
+lines.push('  const easyQueue = shuffleWithSeed(easyItems, seed + 707);');
+lines.push('  const board = Array(16).fill(null);');
+lines.push('');
+lines.push('  for (let index = 0; index < BOARD_4X4_BLOCKER_POSITIONS.length && blockers.length > 0; index += 1) {');
+lines.push('    board[BOARD_4X4_BLOCKER_POSITIONS[index]] = blockers.shift();');
+lines.push('  }');
+lines.push('');
+lines.push('  for (let index = 0; index < board.length; index += 1) {');
+lines.push('    if (!board[index]) {');
+lines.push('      board[index] = easyQueue.shift() ?? blockers.shift() ?? null;');
+lines.push('    }');
+lines.push('  }');
+lines.push('');
+lines.push('  return board.filter(Boolean);');
 lines.push('}');
 lines.push('');
 lines.push('function appendUniqueItems(target, candidates, limit) {');
@@ -324,36 +495,13 @@ lines.push('  if (availableItems.length === 0) {');
 lines.push('    return [];');
 lines.push('  }');
 lines.push('');
-lines.push('  if (resolvedTheme === GENERAL_THEME_ID) {');
-lines.push('    return weightedShuffleWithSeed(availableItems, seed, resolvedTheme, options)')
-lines.push('      .slice(0, count)');
-lines.push('      .map((item) => ({ id: item.id, icon: getIconForTheme(item, resolvedTheme) }));');
-lines.push('  }');
+lines.push('  const selectedItems = selectBalancedItemsByDifficulty(availableItems, resolvedTheme, count, seed, options);');
+lines.push('  const arrangedItems = arrangeItemsForBoard(selectedItems, resolvedTheme, seed);');
 lines.push('');
-lines.push('  const shuffledThemeItems = weightedShuffleWithSeed(');
-lines.push('    availableItems.filter((item) => isItemExplicitlyInTheme(item, resolvedTheme)),');
-lines.push('    seed,');
-lines.push('    resolvedTheme,');
-lines.push('    options');
-lines.push('  );');
-lines.push('  const shuffledGeneralItems = weightedShuffleWithSeed(');
-lines.push('    availableItems.filter((item) => (');
-lines.push('      isItemExplicitlyInTheme(item, GENERAL_THEME_ID) && !isItemExplicitlyInTheme(item, resolvedTheme)');
-lines.push('    )),');
-lines.push('    seed + 101,');
-lines.push('    resolvedTheme,');
-lines.push('    options');
-lines.push('  );');
-lines.push('  const shuffledFallbackItems = weightedShuffleWithSeed(availableItems, seed + 202, resolvedTheme, options);');
-lines.push('  const themeTargetCount = Math.min(count, Math.ceil(count * THEME_SPECIFIC_RATIO));');
-lines.push('  const selectedItems = [];');
-lines.push('');
-lines.push('  appendBalancedUniqueItems(selectedItems, shuffledThemeItems, themeTargetCount, resolvedTheme);');
-lines.push('  appendBalancedUniqueItems(selectedItems, shuffledGeneralItems, count, resolvedTheme);');
-lines.push('  appendBalancedUniqueItems(selectedItems, shuffledThemeItems, count, resolvedTheme);');
-lines.push('  appendUniqueItems(selectedItems, shuffledFallbackItems, count);');
-lines.push('');
-lines.push('  return selectedItems.slice(0, count).map((item) => ({ id: item.id, icon: getIconForTheme(item, resolvedTheme) }));');
+lines.push('  return arrangedItems.slice(0, count).map((item) => ({');
+lines.push('    id: item.id,');
+lines.push('    icon: getIconForTheme(item, resolvedTheme, options),');
+lines.push('  }));');
 lines.push('}');
 lines.push('');
 lines.push('export function getRandomIcons(theme, count = 16, seed = 0, options = {}) {');

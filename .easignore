@@ -17,5 +17,9 @@ android/build
 android/app/build
 
 tmp
+dist
+web-build
+tools
+docs
 *.log
 .DS_Store

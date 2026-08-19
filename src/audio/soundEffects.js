@@ -26,6 +26,8 @@ const SOUND_EFFECTS = {
 const players = {};
 const pooledPlayers = {};
 const pooledPlayerIndexes = {};
+const SOUND_EFFECT_RECOVERY_DELAY_MS = 24;
+const playerPlayTokens = new WeakMap();
 
 function shouldPlay(settings) {
   return (
@@ -106,6 +108,51 @@ function getPooledPlayer(soundName, poolSize) {
   return playerPool[playerIndex];
 }
 
+async function preparePlayerForStart(player, settings, options = {}) {
+  applyPlaybackOptions(player, settings, options);
+
+  try {
+    player.pause();
+  } catch (_error) {
+    // The player may already be stopped; seeking below is the important reset.
+  }
+
+  await player.seekTo(0);
+  applyPlaybackOptions(player, settings, options);
+}
+
+function invalidatePlayerRecovery(player) {
+  playerPlayTokens.set(player, (playerPlayTokens.get(player) ?? 0) + 1);
+}
+
+function schedulePlayerRecovery(player, playToken, settings, options = {}) {
+  setTimeout(async () => {
+    try {
+      if (playerPlayTokens.get(player) !== playToken) {
+        return;
+      }
+
+      const hasAlreadyProgressed = Number(player.currentTime ?? 0) > 0.005;
+      const didJustFinish = player.currentStatus?.didJustFinish === true;
+
+      if (player.playing || hasAlreadyProgressed || didJustFinish) {
+        return;
+      }
+
+      await configureAudioPlaybackMode({ force: true });
+
+      if (playerPlayTokens.get(player) !== playToken) {
+        return;
+      }
+
+      applyPlaybackOptions(player, settings, options);
+      player.play();
+    } catch (_error) {
+      // Recovery is best-effort; a future tap will reconfigure the session again.
+    }
+  }, SOUND_EFFECT_RECOVERY_DELAY_MS);
+}
+
 export function preloadSoundEffect(soundName) {
   try {
     getPlayer(soundName);
@@ -122,6 +169,28 @@ export function preloadPooledSoundEffect(soundName, poolSize = 6) {
   }
 }
 
+export async function restoreSoundEffectsAfterInterruption() {
+  try {
+    await configureAudioPlaybackMode({ force: true });
+    const allPlayers = [
+      ...Object.values(players),
+      ...Object.values(pooledPlayers).flat(),
+    ];
+
+    await Promise.all(allPlayers.map(async (player) => {
+      try {
+        invalidatePlayerRecovery(player);
+        player.pause();
+        await player.seekTo(0);
+      } catch (_error) {
+        // Some player instances may have been invalidated by the interruption.
+      }
+    }));
+  } catch (_error) {
+    // The next tap retries the audio session; never block the app on recovery.
+  }
+}
+
 export async function playSoundEffect(soundName, settings, options = {}) {
   if (!shouldPlay(settings)) {
     return;
@@ -135,11 +204,12 @@ export async function playSoundEffect(soundName, settings, options = {}) {
       return;
     }
 
-    applyPlaybackOptions(player, settings, options);
     player.loop = options.loop === true;
-    await player.seekTo(0);
-    applyPlaybackOptions(player, settings, options);
+    await preparePlayerForStart(player, settings, options);
+    const playToken = (playerPlayTokens.get(player) ?? 0) + 1;
+    playerPlayTokens.set(player, playToken);
     player.play();
+    schedulePlayerRecovery(player, playToken, settings, options);
   } catch (_error) {
     // Keep UI actions responsive even if audio is unavailable on a device.
   }
@@ -158,10 +228,11 @@ export async function playPooledSoundEffect(soundName, settings, poolSize = 6, o
       return;
     }
 
-    applyPlaybackOptions(player, settings, options);
-    await player.seekTo(0);
-    applyPlaybackOptions(player, settings, options);
+    await preparePlayerForStart(player, settings, options);
+    const playToken = (playerPlayTokens.get(player) ?? 0) + 1;
+    playerPlayTokens.set(player, playToken);
     player.play();
+    schedulePlayerRecovery(player, playToken, settings, options);
   } catch (_error) {
     // Keep scrolling smooth even if audio is unavailable on a device.
   }
@@ -177,6 +248,7 @@ export async function stopSoundEffect(soundName, { reset = true } = {}) {
 
     player.pause();
     player.loop = false;
+    invalidatePlayerRecovery(player);
 
     if (reset) {
       await player.seekTo(0);
