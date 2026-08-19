@@ -18,6 +18,10 @@ allprojects {
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
   }
+
+  configurations.configureEach {
+    resolutionStrategy.force("com.google.android.gms:play-services-ads:24.8.0")
+  }
 }
 
 apply plugin: "expo-root-project"
