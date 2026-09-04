@@ -361,11 +361,10 @@ export async function restoreBackgroundMusicAfterInterruption(settings) {
       return;
     }
 
+    cancelTrackFades(trackName);
     player.loop = true;
 
-    if (!fadePromises[trackName] && !fadeInPromises[trackName]) {
-      player.volume = TRACKS[trackName].volume;
-    }
+    player.volume = TRACKS[trackName].volume;
 
     if (!player.playing) {
       player.play();

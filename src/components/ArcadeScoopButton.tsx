@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import * as Haptics from '../settings/haptics';
 import Svg, { Defs, Ellipse, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
+import { getResponsiveMetrics } from '../utils/responsive';
 
 type ArcadeScoopButtonVariant = 'sky' | 'gold' | 'coral';
 type ArcadeScoopButtonSize = 'normal' | 'large';
@@ -24,10 +25,6 @@ interface ArcadeScoopButtonProps {
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
 
 const VARIANT_TOKENS = {
   sky: {
@@ -142,12 +139,12 @@ export default function ArcadeScoopButton({
   const pressAnim = useRef(new Animated.Value(0)).current;
   const tokens = VARIANT_TOKENS[variant];
   const sizeTokens = SIZE_TOKENS[size];
-  const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.9, 1.18);
-  const minWidth = Math.round(sizeTokens.minWidth * scale);
-  const height = Math.round(sizeTokens.height * scale);
-  const depth = Math.round(sizeTokens.depth * scale);
-  const fontSize = Math.round(sizeTokens.fontSize * scale);
-  const textTopOffset = Math.round(sizeTokens.textTopOffset * scale);
+  const metrics = getResponsiveMetrics(screenWidth, screenHeight);
+  const minWidth = metrics.s(sizeTokens.minWidth, Math.round(sizeTokens.minWidth * 0.9), Math.round(sizeTokens.minWidth * 1.18));
+  const height = metrics.s(sizeTokens.height, Math.round(sizeTokens.height * 0.9), Math.round(sizeTokens.height * 1.18));
+  const depth = metrics.s(sizeTokens.depth, Math.round(sizeTokens.depth * 0.9), Math.round(sizeTokens.depth * 1.18));
+  const fontSize = metrics.font(sizeTokens.fontSize, Math.round(sizeTokens.fontSize * 0.9), Math.round(sizeTokens.fontSize * 1.12));
+  const textTopOffset = metrics.s(sizeTokens.textTopOffset);
   const width = Math.max(layoutWidth, minWidth);
 
   const outerPath = useMemo(() => buildScoopPath(width, height, 0), [height, width]);

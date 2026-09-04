@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { DEFAULT_LANGUAGE, normalizeLanguage } from '../i18n/languages';
 import { setHapticsEnabled } from './haptics';
 
 const STORAGE_KEY = 'autobingo:app-settings:v1';
@@ -11,6 +12,7 @@ export const DEFAULT_APP_SETTINGS = {
   musicVolume: 0.75,
   soundEffectsVolume: 0.85,
   hapticsEnabled: true,
+  language: DEFAULT_LANGUAGE,
 };
 
 const AppSettingsContext = createContext({
@@ -32,6 +34,7 @@ function normalizeSettings(value) {
   nextSettings.musicEnabled = nextSettings.musicEnabled !== false;
   nextSettings.soundEffectsEnabled = nextSettings.soundEffectsEnabled !== false;
   nextSettings.hapticsEnabled = nextSettings.hapticsEnabled !== false;
+  nextSettings.language = normalizeLanguage(nextSettings.language);
 
   return nextSettings;
 }

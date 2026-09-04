@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { DESIGN_BASELINE_HEIGHT, DESIGN_BASELINE_WIDTH } from '../src/utils/responsive';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const SCREEN_W = DESIGN_BASELINE_WIDTH;
+const SCREEN_H = DESIGN_BASELINE_HEIGHT;
 
 const BIG_HOLE = {
   x: -SCREEN_W,
@@ -35,16 +37,16 @@ export function getCircleFromRect(rect, size = 24) {
   };
 }
 
-export function getCoverCircleFromRect(rect) {
+export function getCoverCircleFromRect(rect, viewportWidth = SCREEN_W, viewportHeight = SCREEN_H) {
   const base = rect ?? CENTER_CIRCLE;
   const centerX = base.x + base.width / 2;
   const centerY = base.y + base.height / 2;
 
   const distances = [
     Math.hypot(centerX, centerY),
-    Math.hypot(SCREEN_W - centerX, centerY),
-    Math.hypot(centerX, SCREEN_H - centerY),
-    Math.hypot(SCREEN_W - centerX, SCREEN_H - centerY),
+    Math.hypot(viewportWidth - centerX, centerY),
+    Math.hypot(centerX, viewportHeight - centerY),
+    Math.hypot(viewportWidth - centerX, viewportHeight - centerY),
   ];
 
   const radius = Math.max(...distances);
@@ -84,8 +86,8 @@ function roundedRectPath(x, y, width, height, radius) {
   ].join(' ');
 }
 
-function buildMaskPath(holeRect) {
-  const outer = `M 0 0 H ${SCREEN_W} V ${SCREEN_H} H 0 Z`;
+function buildMaskPath(holeRect, viewportWidth = SCREEN_W, viewportHeight = SCREEN_H) {
+  const outer = `M 0 0 H ${viewportWidth} V ${viewportHeight} H 0 Z`;
   const inner = roundedRectPath(
     holeRect.x,
     holeRect.y,
@@ -137,13 +139,14 @@ export async function measureNodeRect(targetRef, fallback = CENTER_CIRCLE) {
 }
 
 export default function ScreenTransitionLayer({ progress, color, fromRect, toRect }) {
-  if (!fromRect || !toRect) {
-    return <View pointerEvents="none" style={[styles.overlay, { backgroundColor: color }]} />;
-  }
-
-  const [maskPath, setMaskPath] = useState(() => buildMaskPath(normalizeRect(fromRect)));
+  const { width, height } = useWindowDimensions();
+  const [maskPath, setMaskPath] = useState(() => buildMaskPath(normalizeRect(fromRect), width, height));
 
   useEffect(() => {
+    if (!fromRect || !toRect) {
+      return undefined;
+    }
+
     const start = normalizeRect(fromRect);
     const end = normalizeRect(toRect);
 
@@ -156,19 +159,23 @@ export default function ScreenTransitionLayer({ progress, color, fromRect, toRec
         radius: lerp(start.radius, end.radius, value),
       };
 
-      setMaskPath(buildMaskPath(nextRect));
+      setMaskPath(buildMaskPath(nextRect, width, height));
     });
 
-    setMaskPath(buildMaskPath(start));
+    setMaskPath(buildMaskPath(start, width, height));
 
     return () => {
       progress.removeListener(id);
     };
-  }, [fromRect, progress, toRect]);
+  }, [fromRect, height, progress, toRect, width]);
+
+  if (!fromRect || !toRect) {
+    return <View pointerEvents="none" style={[styles.overlay, { backgroundColor: color }]} />;
+  }
 
   return (
     <View pointerEvents="none" style={styles.overlay}>
-      <Svg width={SCREEN_W} height={SCREEN_H}>
+      <Svg width={width} height={height}>
         <Path d={maskPath} fill={color} fillRule="evenodd" />
       </Svg>
     </View>

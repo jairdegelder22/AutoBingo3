@@ -1,9 +1,8 @@
-import { BackHandler, Animated, Easing, FlatList, Image, ImageBackground, InteractionManager, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Alert, BackHandler, Animated, Easing, FlatList, Image, ImageBackground, InteractionManager, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Asset } from 'expo-asset';
 import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from '../src/settings/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
@@ -15,17 +14,25 @@ import ThemeCarousel from '../src/components/ThemeCarousel';
 import WarmupImages from '../src/components/WarmupImages';
 import { PLAYER_FUTURE_SKIN_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getThemeCardImage, getThemeDetailBackgroundImage, THEME_LOCK_OVERLAY_OVERVIEW_IMAGE } from '../assets/images/theme-cards/themeCardImages';
-import { createGameConfig, DEFAULT_ZICHTBAARHEID, EQUIPPED_SKIN_STORAGE_KEY, SKIN_OPTIONS } from './gameFlowConfig';
+import { createGameConfig, createPlayer, DEFAULT_ZICHTBAARHEID, EQUIPPED_SKIN_STORAGE_KEY, SKIN_OPTIONS } from './gameFlowConfig';
 import { THEMES } from './themeCatalog';
 import { getThemeIcons } from './themeIcons';
 import { decodeLobbyCode, normalizeLobbyCode } from '../src/utils/lobbyCode';
 import { checkOnlineConnection, getLobbySnapshot } from '../src/services/liveLobbyService';
-import { submitBugReportToSupabase } from '../src/services/bugReportService';
 import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { usePremium } from '../src/premium/PremiumContext';
-import { getResponsiveMetrics } from '../src/utils/responsive';
+import { getDriverWarningMetrics, getResponsiveMetrics } from '../src/utils/responsive';
 import { preloadSoundEffect, playSoundEffect } from '../src/audio/soundEffects';
+import { recoverAudioPlaybackMode } from '../src/audio/audioSession';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
+import { useTranslation } from '../src/i18n/useTranslation';
+import {
+  getDefaultPlayerNameForLanguage,
+  getSkinChallengeDescription,
+  getSkinLabel,
+  getThemeLabel,
+  translate,
+} from '../src/i18n/languages';
 import {
   SKIN_CHALLENGES,
   getChallengeProgressValue,
@@ -34,7 +41,18 @@ import {
   loadSkinChallengeProgress,
 } from '../src/challenges/skinChallenges';
 import {
-  BUG_REPORT_MODAL_ASSETS,
+  PAID_SKIN_OPTIONS,
+  PAID_SKIN_PRODUCT_IDS,
+  FREE_EPIC_CHALLENGE_SKIN_OPTIONS,
+  PREMIUM_CHALLENGE_SKIN_OPTIONS,
+  PREMIUM_SKIN_OPTIONS,
+  STANDARD_CHALLENGE_SKIN_OPTIONS,
+  isPaidSkin,
+  isPremiumChallengeSkin,
+  isPremiumSkin,
+  isSkinAvailableForPlayer,
+} from '../src/skins/skinCatalog';
+import {
   HOME_ASSETS,
   HOME_CRITICAL_ASSETS,
   PREMIUM_MODAL_ASSETS,
@@ -70,6 +88,24 @@ const PLAY_BUTTON_CAR_IMAGES = {
   hartjes: require('../assets/images/play-button-cars/play-car-hartjes.png'),
   taxi: require('../assets/images/play-button-cars/play-car-taxi.png'),
   vlammen: require('../assets/images/play-button-cars/play-car-vlammen.png'),
+  premium_racer: require('../assets/images/play-button-cars/play-car-premium-racer.png'),
+  eend: require('../assets/images/play-button-cars/play-car-eend.png'),
+  sport_coupe: require('../assets/images/play-button-cars/play-car-sport-coupe.png'),
+  neon_nacht: require('../assets/images/play-button-cars/play-car-neon-nacht.png'),
+  maanrijder: require('../assets/images/play-button-cars/play-car-maanrijder.png'),
+  hot_rod: require('../assets/images/play-button-cars/play-car-hot-rod.png'),
+  monstertruck: require('../assets/images/play-button-cars/play-car-monstertruck.png'),
+  carbon_supercar: require('../assets/images/play-button-cars/play-car-carbon-supercar.png'),
+  ijsco_wagen: require('../assets/images/play-button-cars/play-car-ijsco-wagen.png'),
+  piraten_wagen: require('../assets/images/play-button-cars/play-car-piraten-wagen.png'),
+  safari_jeep: require('../assets/images/play-button-cars/play-car-safari-jeep.png'),
+  koninklijke_racer: require('../assets/images/play-button-cars/play-car-koninklijke-racer.png'),
+  klassieke_brandweer: require('../assets/images/play-button-cars/play-car-klassieke-brandweer.png'),
+  supercar_racer: require('../assets/images/play-button-cars/play-car-supercar-racer.png'),
+  locomotief: require('../assets/images/play-button-cars/play-car-locomotief.png'),
+  strand_buggy: require('../assets/images/play-button-cars/play-car-strand-buggy.png'),
+  sneeuwschuiver: require('../assets/images/play-button-cars/play-car-sneeuwschuiver.png'),
+  ridder: require('../assets/images/play-button-cars/play-car-ridder.png'),
 };
 const ONLINE_YELLOW_CAR = require('../assets/images/online-car-yellow.png');
 const ONLINE_BLUE_CAR = require('../assets/images/online-car-blue.png');
@@ -78,9 +114,6 @@ const HOST_LOCK_CHAINS_IMAGE = require('../assets/images/host-lock-chains.png');
 const HOST_LOCK_PADLOCK_IMAGE = require('../assets/images/host-lock-padlock.png');
 const JOIN_LICENSE_PLATE_IMAGE = require('../assets/images/license-plates/dutch-join-plate-cropped.png');
 const MAIN_MENU_PREMIUM_CROWN_IMAGE = require('../assets/images/premium/main-menu-premium-crown.png');
-const BUG_REPORT_BUTTON_IMAGE = require('../assets/images/ui/bug-report-button.png');
-const BUG_REPORT_MENU_IMAGE = require('../assets/images/ui/bug-report-menu.png');
-const BUG_REPORT_CLOSE_IMAGE = require('../assets/images/ui/bug-report-close.png');
 const PREMIUM_MENU_IMAGE = require('../assets/images/premium/premium-menu.png');
 const PREMIUM_NO_ADS_IMAGE = require('../assets/images/premium/benefits/no-ads-user.png');
 const PREMIUM_EXTRA_THEMES_IMAGE = require('../assets/images/premium/benefits/extra-themes-user.png');
@@ -95,6 +128,7 @@ const DRIVER_WARNING_ICON_IMAGE = require('../assets/images/ui/driver-warning-ic
 const SKIN_ROAD_BACKGROUND = require('../assets/images/backgrounds/skin-road-background.png');
 const THEME_ROAD_BACKGROUND = require('../assets/images/backgrounds/theme-road-scroll-background-v4.png');
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
+const PREMIUM_SKIN_LOCK_IMAGE = require('../assets/images/host-lock-padlock.png');
 const CHALLENGE_SKIN_LOCK_OPEN_IMAGE = require('../assets/images/players/challenge-skin-lock-swing-open.png');
 const CHALLENGE_UNLOCK_STAR_IMAGE = require('../assets/images/players/challenge-unlock-star-blue.png');
 const NAV_ICON_IMAGES = {
@@ -128,32 +162,925 @@ const HOME_ACTION_COLLAPSED_HEIGHT = 122;
 const HOME_ACTION_EXPANDED_HEIGHT = 236;
 const ONLINE_CAR_HORN_JUMP_DELAYS = [0, 295, 465];
 const PRESS_THEN_HORN_DELAY_MS = 300;
-const PLAY_HORN_FEEDBACK_DELAYS = [0, 300];
 const GLOSSY_BUTTON_CLICK_SOUND = 'glossyButtonClick';
 const NAV_TAB_SWITCH_SOUND = 'navTabSwitchClick';
 const NAV_TAB_SWITCH_VOLUME_MULTIPLIER = 0.65;
 const SETTINGS_GEAR_SOUND = 'settingsGearClick';
 const ONLINE_CARS_HORN_SOUND = 'onlineHornMode';
 const PLAY_HORN_SOUND = 'playHornHonk';
-const BUG_REPORT_STORAGE_KEY = 'autoBingo.pendingBugReports';
-const BUG_REPORT_APP_VERSION = '1.0.0';
-const AnimatedExpoImage = Animated.createAnimatedComponent(ExpoImage);
-const BUG_REPORT_SEVERITIES = [
-  { value: 'low', label: 'Klein' },
-  { value: 'medium', label: 'Vervelend' },
-  { value: 'high', label: 'Blokkeert' },
+const PLAY_CAR_DEFAULT_FEEDBACK = {
+  kind: 'classicHornJump',
+  soundName: PLAY_HORN_SOUND,
+  duration: 506,
+  keyframes: [0, 0.115, 0.217, 0.407, 0.593, 0.708, 0.81, 1],
+  translateX: [0, 0, 0, 0, 0, 0, 0, 0],
+  translateY: [0, -13, 2, 0, 0, -10, 2, 0],
+  rotate: ['0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg'],
+  scale: [1, 1, 1, 1, 1, 1, 1, 1],
+  hapticDelays: [0, 300],
+};
+
+const roundFeedbackValue = (value, decimals = 3) => {
+  const multiplier = 10 ** decimals;
+  return Math.round(value * multiplier) / multiplier;
+};
+
+const clampFeedbackTime = (time, duration) => Math.min(duration, Math.max(0, Math.round(time)));
+const clampFeedbackValue = (value, min, max) => Math.max(min, Math.min(max, value));
+const easeOutFeedback = (value) => 1 - (1 - clampFeedbackValue(value, 0, 1)) ** 3;
+const easeInOutFeedback = (value) => {
+  const clampedValue = clampFeedbackValue(value, 0, 1);
+  return clampedValue < 0.5
+    ? 2 * clampedValue * clampedValue
+    : 1 - ((-2 * clampedValue + 2) ** 2) / 2;
+};
+const getFeedbackEnvelope = (phase, decay) => {
+  const attack = 0.16;
+  const attackValue = phase < attack ? easeOutFeedback(phase / attack) : 1;
+  const decayValue = (1 - phase) ** (0.35 + decay * 1.8);
+  return attackValue * decayValue;
+};
+
+const getJumpOffsetAtTime = (event, time) => {
+  const local = time - event.at;
+
+  if (local < 0 || local > event.duration) {
+    return 0;
+  }
+
+  const phase = clampFeedbackValue(local / Math.max(1, event.duration), 0, 1);
+  const upEnd = event.upMs / event.duration;
+  const downEnd = (event.upMs + event.downMs) / event.duration;
+
+  if (phase <= upEnd) {
+    return -event.height * easeOutFeedback(phase / Math.max(0.001, upEnd));
+  }
+
+  if (phase <= downEnd) {
+    const progress = (phase - upEnd) / Math.max(0.001, downEnd - upEnd);
+    return -event.height + (event.height + event.overshoot) * easeInOutFeedback(progress);
+  }
+
+  const progress = (phase - downEnd) / Math.max(0.001, 1 - downEnd);
+  return event.overshoot * (1 - easeOutFeedback(progress));
+};
+
+const getPulseScaleAtTime = (event, time) => {
+  const local = time - event.at;
+
+  if (local < 0 || local > event.duration) {
+    return 1;
+  }
+
+  const phase = clampFeedbackValue(local / Math.max(1, event.duration), 0, 1);
+  const envelope = getFeedbackEnvelope(phase, event.decay ?? 0.65);
+  return 1 + ((event.scale ?? 1) - 1) * envelope;
+};
+
+const getShakeRotationAtTime = (event, time) => {
+  const local = time - event.at;
+
+  if (local < 0 || local > event.duration) {
+    return 0;
+  }
+
+  const phase = clampFeedbackValue(local / Math.max(1, event.duration), 0, 1);
+  const envelope = getFeedbackEnvelope(phase, event.decay ?? 0.55);
+  return Math.sin(phase * Math.PI * 2 * Math.max(0.5, event.hits || 1)) * event.degrees * envelope;
+};
+
+const addFeedbackTimelinePoints = (points, duration, event) => {
+  points.add(clampFeedbackTime(event.at, duration));
+  points.add(clampFeedbackTime(event.at + event.duration, duration));
+
+  if (event.type === 'jump') {
+    [
+      event.at + event.upMs,
+      event.at + event.upMs + event.downMs,
+    ].forEach((time) => points.add(clampFeedbackTime(time, duration)));
+    return;
+  }
+
+  const segments = Math.max(4, Math.ceil((event.hits || 2) * 4));
+  for (let index = 1; index < segments; index += 1) {
+    points.add(clampFeedbackTime(event.at + event.duration * (index / segments), duration));
+  }
+};
+
+const createTunedPlayCarFeedback = ({ soundName, durationMs, events }) => {
+  const duration = durationMs;
+  const points = new Set([0, duration]);
+
+  events.forEach((event) => addFeedbackTimelinePoints(points, duration, event));
+
+  const times = Array.from(points)
+    .filter((time) => time >= 0 && time <= duration)
+    .sort((a, b) => a - b);
+  const keyframes = times.map((time) => roundFeedbackValue(time / duration));
+
+  return {
+    kind: 'linearTimeline',
+    soundName,
+    duration,
+    keyframes,
+    translateX: keyframes.map(() => 0),
+    translateY: times.map((time) => Math.round(events.reduce((sum, event) => (
+      event.type === 'jump' ? sum + getJumpOffsetAtTime(event, time) : sum
+    ), 0))),
+    rotate: times.map((time) => `${roundFeedbackValue(events.reduce((sum, event) => (
+      event.type === 'shake' ? sum + getShakeRotationAtTime(event, time) : sum
+    ), 0), 1)}deg`),
+    scale: times.map((time) => roundFeedbackValue(events.reduce((scale, event) => (
+      event.type === 'pulse' ? scale + (getPulseScaleAtTime(event, time) - 1) : scale
+    ), 1))),
+    timelineSteps: times.slice(1).map((time, index) => ({
+      at: times[index],
+      toValue: keyframes[index + 1],
+      duration: Math.max(1, time - times[index]),
+    })),
+    hapticDelays: Array.from(new Set(events
+      .filter((event) => event.type === 'jump')
+      .map((event) => clampFeedbackTime(event.at, duration))))
+      .sort((a, b) => a - b),
+  };
+};
+
+const PLAY_CAR_FEEDBACK_PRESETS = {
+  softHorn: {
+    soundName: 'skinHorn2',
+    duration: 720,
+    keyframes: [0, 0.18, 0.3, 0.49, 0.63, 0.82, 1],
+    translateX: [0, -2, 2, -3, 2, -1, 0],
+    translateY: [0, -4, 1, -11, 2, -5, 0],
+    rotate: ['0deg', '-2deg', '2deg', '-3deg', '2deg', '-1deg', '0deg'],
+    scale: [1, 1.012, 1, 1.035, 0.992, 1.01, 1],
+    hapticDelays: [140, 350, 455],
+  },
+  brightHorn: {
+    soundName: 'skinHorn3',
+    duration: 650,
+    keyframes: [0, 0.08, 0.28, 0.43, 0.6, 0.78, 1],
+    translateX: [0, 3, -1, -4, 3, -1, 0],
+    translateY: [0, -8, 1, -14, 2, -5, 0],
+    rotate: ['0deg', '3deg', '-1deg', '-5deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.03, 0.995, 1.045, 0.99, 1.01, 1],
+    hapticDelays: [0, 280],
+  },
+  siren: {
+    soundName: 'skinPolice',
+    duration: 760,
+    keyframes: [0, 0.05, 0.2, 0.46, 0.58, 0.65, 0.82, 1],
+    translateX: [0, -4, 3, -5, 4, -3, 1, 0],
+    translateY: [0, -12, 1, -15, 2, -9, 0, 0],
+    rotate: ['0deg', '-5deg', '2deg', '5deg', '-4deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.04, 0.995, 1.045, 0.992, 1.025, 1, 1],
+    hapticDelays: [35, 350, 490],
+  },
+  ambulanceBeatTilt: {
+    kind: 'snapTimeline',
+    soundName: 'skinAmbulance',
+    duration: 1675,
+    keyframes: [0, 0.024, 0.059, 0.223, 0.247, 0.411, 0.435, 0.621, 0.645, 1],
+    translateX: [0, 1, 0, -1, 0, 1, 0, -1, 0, 0],
+    translateY: [0, -1, 0, -1, 0, -1, 0, -1, 0, 0],
+    rotate: ['0deg', '9deg', '1deg', '-9deg', '-1deg', '9deg', '1deg', '-9deg', '-1deg', '0deg'],
+    scale: [1, 1.045, 1.006, 1.045, 1.006, 1.045, 1.006, 1.045, 1.006, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.024, duration: 40 },
+      { at: 40, toValue: 0.059, duration: 58 },
+      { at: 333, toValue: 0.223, duration: 40 },
+      { at: 373, toValue: 0.247, duration: 58 },
+      { at: 649, toValue: 0.411, duration: 40 },
+      { at: 689, toValue: 0.435, duration: 58 },
+      { at: 1000, toValue: 0.621, duration: 40 },
+      { at: 1040, toValue: 0.645, duration: 58 },
+      { at: 1495, toValue: 1, duration: 180 },
+    ],
+    hapticDelays: [0, 373, 689, 1040],
+  },
+  fastTaxiJump: {
+    kind: 'snapTimeline',
+    soundName: 'skinTaxi',
+    duration: 380,
+    keyframes: [0, 0.12, 0.23, 0.36, 0.48, 0.59, 0.72, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -14, 2, 0, -11, 2, 0, 0],
+    rotate: ['0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg'],
+    scale: [1, 1, 1, 1, 1, 1, 1, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.12, duration: 38 },
+      { at: 38, toValue: 0.23, duration: 38 },
+      { at: 76, toValue: 0.36, duration: 44 },
+      { at: 170, toValue: 0.48, duration: 38 },
+      { at: 208, toValue: 0.59, duration: 38 },
+      { at: 246, toValue: 0.72, duration: 44 },
+      { at: 300, toValue: 1, duration: 70 },
+    ],
+    hapticDelays: [0, 170],
+  },
+  instantRainbowJump: {
+    kind: 'snapTimeline',
+    soundName: 'skinRainbow',
+    duration: 520,
+    keyframes: [0, 0.12, 0.24, 0.36, 0.5, 0.62, 0.76, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -14, 2, 0, -11, 2, 0, 0],
+    rotate: ['0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg'],
+    scale: [1, 1, 1, 1, 1, 1, 1, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.12, duration: 18 },
+      { at: 18, toValue: 0.24, duration: 54 },
+      { at: 72, toValue: 0.36, duration: 78 },
+      { at: 250, toValue: 0.5, duration: 42 },
+      { at: 292, toValue: 0.62, duration: 54 },
+      { at: 346, toValue: 0.76, duration: 78 },
+      { at: 424, toValue: 1, duration: 88 },
+    ],
+    hapticDelays: [0, 250],
+  },
+  loveHopTilt: {
+    kind: 'snapTimeline',
+    soundName: 'skinLove',
+    duration: 980,
+    keyframes: [0, 0.08, 0.16, 0.24, 0.32, 0.4, 0.48, 0.58, 0.68, 0.78, 0.88, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -14, 2, 0, -11, 2, 0, -2, -1, -2, -1, 0],
+    rotate: ['0deg', '0deg', '0deg', '0deg', '-2deg', '2deg', '-1deg', '-3deg', '3deg', '-1.6deg', '1deg', '0deg'],
+    scale: [1, 1, 1, 1, 1.012, 1.024, 1.01, 1.026, 1.016, 1.012, 1.005, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.08, duration: 38 },
+      { at: 38, toValue: 0.16, duration: 38 },
+      { at: 76, toValue: 0.24, duration: 44 },
+      { at: 150, toValue: 0.32, duration: 38 },
+      { at: 188, toValue: 0.4, duration: 38 },
+      { at: 226, toValue: 0.48, duration: 44 },
+      { at: 292, toValue: 0.58, duration: 78 },
+      { at: 410, toValue: 0.68, duration: 86 },
+      { at: 548, toValue: 0.78, duration: 104 },
+      { at: 704, toValue: 0.88, duration: 128 },
+      { at: 860, toValue: 1, duration: 120 },
+    ],
+    hapticDelays: [0, 170, 430],
+  },
+  heavyRumble: {
+    soundName: 'skinMonstertruck',
+    duration: 1260,
+    keyframes: [0, 0.11, 0.21, 0.44, 0.53, 0.78, 0.87, 1],
+    translateX: [0, -1, 1, -1, 1, -1, 0, 0],
+    translateY: [0, -3, 1, -3, 1, -2, 0, 0],
+    rotate: ['0deg', '-7deg', '6deg', '-6deg', '5deg', '-4deg', '2deg', '0deg'],
+    scale: [1, 1.07, 0.98, 1.06, 0.985, 1.04, 1.005, 1],
+    hapticDelays: [140, 560, 980],
+  },
+  longRumble: {
+    soundName: 'skinSupercar',
+    duration: 1700,
+    keyframes: [0, 0.06, 0.14, 0.23, 0.34, 0.48, 0.64, 0.82, 1],
+    translateX: [0, -1, 1, -1, 1, 0, 0, 0, 0],
+    translateY: [0, -2, 1, -2, 1, -1, 0, 0, 0],
+    rotate: ['0deg', '-6deg', '5deg', '-4deg', '3deg', '-2deg', '1deg', '-0.5deg', '0deg'],
+    scale: [1, 1.06, 0.985, 1.045, 0.995, 1.025, 1.012, 1.004, 1],
+    hapticDelays: [105, 245, 385, 760],
+  },
+  playfulWobble: {
+    soundName: 'skinIceCream',
+    duration: 1500,
+    keyframes: [0, 0.05, 0.19, 0.28, 0.35, 0.56, 0.76, 0.96, 1],
+    translateX: [0, -2, 3, -4, 3, -2, 2, -1, 0],
+    translateY: [0, -6, -2, -12, 2, -7, -3, -4, 0],
+    rotate: ['0deg', '-4deg', '3deg', '-5deg', '4deg', '-3deg', '2deg', '-1deg', '0deg'],
+    scale: [1, 1.02, 1.01, 1.04, 0.995, 1.022, 1.005, 1.01, 1],
+    hapticDelays: [70, 280, 420, 840],
+  },
+  animalShake: {
+    soundName: 'skinCow',
+    duration: 2200,
+    keyframes: [0, 0.16, 0.29, 0.41, 0.53, 0.67, 0.74, 0.9, 1],
+    translateX: [0, -1, 2, -5, 5, -4, 4, -1, 0],
+    translateY: [0, -1, 0, -5, -2, -6, 0, -2, 0],
+    rotate: ['0deg', '-1deg', '2deg', '-6deg', '6deg', '-4deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.004, 1.008, 1.025, 1.014, 1.028, 1.006, 1.004, 1],
+    hapticDelays: [910, 1155, 1470, 1610],
+  },
+  cowMooTiltBuild: {
+    soundName: 'skinCow',
+    duration: 2300,
+    keyframes: [0, 0.18, 0.3, 0.4, 0.5, 0.63, 0.7, 0.82, 0.93, 1],
+    translateX: [0, -1, 1, -1, 1, -1, 1, 0, 0, 0],
+    translateY: [0, -1, 0, -1, 0, -3, 1, -2, 0, 0],
+    rotate: ['0deg', '-2deg', '2deg', '-3deg', '3deg', '-7deg', '7deg', '-4deg', '2deg', '0deg'],
+    scale: [1, 1.006, 1.004, 1.012, 1.01, 1.045, 0.99, 1.025, 1.006, 1],
+    hapticDelays: [910, 1155, 1470, 1610],
+  },
+  trainChug: {
+    soundName: 'skinTrain',
+    duration: 1220,
+    keyframes: [0, 0.09, 0.24, 0.46, 0.55, 0.66, 0.77, 0.88, 1],
+    translateX: [0, -3, 2, -5, 5, -4, 4, -2, 0],
+    translateY: [0, -7, 1, -9, 2, -8, 1, -5, 0],
+    rotate: ['0deg', '-2deg', '1deg', '-3deg', '3deg', '-2deg', '2deg', '-1deg', '0deg'],
+    scale: [1, 1.032, 0.997, 1.042, 0.99, 1.035, 0.995, 1.015, 1],
+    hapticDelays: [105, 560, 805, 945],
+  },
+  revDecay: {
+    soundName: 'skinSupercar',
+    duration: 1850,
+    keyframes: [0, 0.04, 0.09, 0.14, 0.21, 0.32, 0.48, 0.68, 0.86, 1],
+    translateX: [0, -1, 1, -1, 1, -1, 0, 0, 0, 0],
+    translateY: [0, -2, 1, -2, 1, -1, 0, 0, 0, 0],
+    rotate: ['0deg', '-7deg', '6deg', '-5deg', '4deg', '-3deg', '2deg', '-1deg', '0.5deg', '0deg'],
+    scale: [1, 1.07, 0.985, 1.055, 0.992, 1.035, 1.018, 1.008, 1.002, 1],
+    hapticDelays: [90, 210, 350, 620],
+  },
+  flamesDoubleRev: {
+    soundName: 'skinFlames',
+    duration: 1500,
+    keyframes: [0, 0.08, 0.16, 0.27, 0.38, 0.48, 0.6, 0.74, 0.88, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -1, 0, -1, -2, 1, -1, 0, 0, 0],
+    rotate: ['0deg', '-4deg', '3deg', '-2deg', '-8deg', '7deg', '-4deg', '2deg', '-0.8deg', '0deg'],
+    scale: [1, 1.035, 0.997, 1.012, 1.085, 0.985, 1.045, 1.022, 1.008, 1],
+    hapticDelays: [115, 570, 760],
+  },
+  lateRevKick: {
+    soundName: 'skinHotRod',
+    duration: 1550,
+    keyframes: [0, 0.27, 0.34, 0.5, 0.63, 0.72, 0.86, 1],
+    translateX: [0, 0, 1, -1, -1, 1, 0, 0],
+    translateY: [0, -1, 0, -2, -4, 1, -1, 0],
+    rotate: ['0deg', '-1deg', '2deg', '-3deg', '-8deg', '6deg', '-2deg', '0deg'],
+    scale: [1, 1.012, 1.002, 1.025, 1.075, 0.985, 1.012, 1],
+    hapticDelays: [525, 770, 980],
+  },
+  delayedHop: {
+    soundName: 'skinSneeuwschuiver',
+    duration: 1050,
+    keyframes: [0, 0.08, 0.27, 0.48, 0.63, 0.73, 0.88, 1],
+    translateX: [0, -1, 1, -3, -5, 4, -1, 0],
+    translateY: [0, -2, -1, -4, -13, 2, -4, 0],
+    rotate: ['0deg', '-1deg', '1deg', '-2deg', '-4deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.006, 1, 1.012, 1.04, 0.992, 1.01, 1],
+    hapticDelays: [70, 280, 665],
+  },
+  knightTiltTripleHop: {
+    soundName: 'skinRidder',
+    duration: 1320,
+    keyframes: [0, 0.08, 0.16, 0.25, 0.34, 0.45, 0.54, 0.66, 0.75, 0.88, 1],
+    translateX: [0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -1, 0, 0, -7, 1, -6, 1, -5, 1, 0],
+    rotate: ['0deg', '-5deg', '4deg', '0deg', '-1deg', '1deg', '-1deg', '1deg', '-1deg', '0.5deg', '0deg'],
+    scale: [1, 1.018, 1.004, 1, 1.025, 0.997, 1.02, 0.998, 1.016, 1, 1],
+    hapticDelays: [105, 450, 710, 990],
+  },
+};
+const TUNED_STANDARD_JUMPS = [
+  {
+    id: 'j1',
+    type: 'jump',
+    at: 0,
+    duration: 206,
+    height: 13,
+    upMs: 58,
+    downMs: 52,
+    settleMs: 96,
+    overshoot: 2,
+  },
+  {
+    id: 'j2',
+    type: 'jump',
+    at: 300,
+    duration: 206,
+    height: 10,
+    upMs: 58,
+    downMs: 52,
+    settleMs: 96,
+    overshoot: 2,
+  },
 ];
-const DRIVER_WARNING_ICON_WIDTH_RATIO = 0.532;
-const DRIVER_WARNING_ICON_MAX_SIZE = 224;
+const TUNED_FAST_DOUBLE_JUMPS = [
+  {
+    id: 'j1',
+    type: 'jump',
+    at: 0,
+    duration: 150,
+    height: 14,
+    upMs: 18,
+    downMs: 54,
+    settleMs: 78,
+    overshoot: 2,
+  },
+  {
+    id: 'j2',
+    type: 'jump',
+    at: 250,
+    duration: 170,
+    height: 11,
+    upMs: 42,
+    downMs: 54,
+    settleMs: 74,
+    overshoot: 2,
+  },
+];
+const TUNED_SOFT_TILT_AFTER_JUMPS = [
+  {
+    id: 's1',
+    type: 'shake',
+    at: 570,
+    duration: 690,
+    degrees: 3,
+    hits: 3,
+    decay: 0.8,
+  },
+  {
+    id: 'p1',
+    type: 'pulse',
+    at: 570,
+    duration: 690,
+    scale: 1.026,
+    decay: 0.78,
+  },
+];
+const TUNED_PREMIUM_REV_EVENTS = [
+  {
+    id: 's1',
+    type: 'shake',
+    at: 0,
+    duration: 700,
+    degrees: 7,
+    hits: 5,
+    decay: 0.48,
+  },
+  {
+    id: 'p1',
+    type: 'pulse',
+    at: 0,
+    duration: 860,
+    scale: 1.07,
+    decay: 0.55,
+  },
+  {
+    id: 'p2',
+    type: 'pulse',
+    at: 860,
+    duration: 780,
+    scale: 1.018,
+    decay: 0.9,
+  },
+];
+const TUNED_SUPERCAR_REV_EVENTS = [
+  {
+    id: 's1',
+    type: 'shake',
+    at: 0,
+    duration: 360,
+    degrees: 4,
+    hits: 2,
+    decay: 0.35,
+  },
+  {
+    id: 'p1',
+    type: 'pulse',
+    at: 0,
+    duration: 360,
+    scale: 1.035,
+    decay: 0.35,
+  },
+  {
+    id: 's2',
+    type: 'shake',
+    at: 460,
+    duration: 760,
+    degrees: 8,
+    hits: 3,
+    decay: 0.72,
+  },
+  {
+    id: 'p2',
+    type: 'pulse',
+    at: 460,
+    duration: 880,
+    scale: 1.085,
+    decay: 0.78,
+  },
+];
+const PLAY_CAR_TUNED_FEEDBACK_PRESETS = {
+  regenboog: createTunedPlayCarFeedback({
+    soundName: 'skinRainbow',
+    durationMs: 1740,
+    events: [
+      ...TUNED_FAST_DOUBLE_JUMPS,
+      {
+        id: 'shake_mqsbqo',
+        type: 'shake',
+        at: 580,
+        duration: 700,
+        degrees: 2.5,
+        hits: 2,
+        decay: 0.63,
+      },
+    ],
+  }),
+  eend: createTunedPlayCarFeedback({
+    soundName: 'skinHorn2',
+    durationMs: 1120,
+    events: TUNED_STANDARD_JUMPS,
+  }),
+  koninklijkeRacer: createTunedPlayCarFeedback({
+    soundName: 'skinOldSupercar',
+    durationMs: 1850,
+    events: TUNED_PREMIUM_REV_EVENTS,
+  }),
+  kerst: createTunedPlayCarFeedback({
+    soundName: 'skinKerst',
+    durationMs: 1540,
+    events: [
+      ...TUNED_STANDARD_JUMPS,
+      {
+        id: 'pulse_vyzma8',
+        type: 'pulse',
+        at: 600,
+        duration: 320,
+        scale: 1.04,
+        decay: 0.65,
+      },
+      {
+        id: 'shake_67a7nl',
+        type: 'shake',
+        at: 510,
+        duration: 500,
+        degrees: 5,
+        hits: 2,
+        decay: 0.55,
+      },
+    ],
+  }),
+  neonNacht: createTunedPlayCarFeedback({
+    soundName: 'skinNeonCar',
+    durationMs: 1850,
+    events: TUNED_PREMIUM_REV_EVENTS,
+  }),
+  premiumRacer: createTunedPlayCarFeedback({
+    soundName: 'skinSupercar',
+    durationMs: 2390,
+    events: [
+      {
+        id: 's1',
+        type: 'shake',
+        at: 0,
+        duration: 890,
+        degrees: 7,
+        hits: 6,
+        decay: 0.48,
+      },
+      {
+        id: 'p1',
+        type: 'pulse',
+        at: 0,
+        duration: 950,
+        scale: 1.07,
+        decay: 0.55,
+      },
+      {
+        id: 'pulse_hhz2bp',
+        type: 'pulse',
+        at: 730,
+        duration: 500,
+        scale: 1.04,
+        decay: 0.65,
+      },
+    ],
+  }),
+  maanrijder: createTunedPlayCarFeedback({
+    soundName: 'skinMaanrijder',
+    durationMs: 1890,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 240,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      ...TUNED_SOFT_TILT_AFTER_JUMPS,
+    ],
+  }),
+  monstertruck: createTunedPlayCarFeedback({
+    soundName: 'skinMonstertruck',
+    durationMs: 2080,
+    events: [
+      TUNED_STANDARD_JUMPS[0],
+      {
+        id: 'jump_13qmza',
+        type: 'jump',
+        at: 360,
+        duration: 190,
+        height: 13,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 90,
+        overshoot: 2,
+      },
+      {
+        id: 'jump_wa7hdr',
+        type: 'jump',
+        at: 800,
+        duration: 190,
+        height: 15,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 90,
+        overshoot: 2,
+      },
+      {
+        id: 'shake_4xgrct',
+        type: 'shake',
+        at: 10,
+        duration: 240,
+        degrees: 5,
+        hits: 2,
+        decay: 0.55,
+      },
+      {
+        id: 'shake_g0jiu8',
+        type: 'shake',
+        at: 370,
+        duration: 210,
+        degrees: 5,
+        hits: 2,
+        decay: 0.55,
+      },
+      {
+        id: 'shake_j9tax9',
+        type: 'shake',
+        at: 910,
+        duration: 400,
+        degrees: 7,
+        hits: 4,
+        decay: 0.99,
+      },
+    ],
+  }),
+  ijscoWagen: createTunedPlayCarFeedback({
+    soundName: 'skinIceCream',
+    durationMs: 2030,
+    events: [
+      {
+        ...TUNED_STANDARD_JUMPS[0],
+        at: 1500,
+      },
+      {
+        id: 'shake_oev7op',
+        type: 'shake',
+        at: 0,
+        duration: 1700,
+        degrees: 6,
+        hits: 7,
+        decay: 0.38,
+      },
+    ],
+  }),
+  piraat: createTunedPlayCarFeedback({
+    soundName: 'skinPirate',
+    durationMs: 1790,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 200,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[0],
+        at: 590,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[1],
+        at: 590,
+      },
+    ],
+  }),
+  safariJeep: createTunedPlayCarFeedback({
+    soundName: 'skinSafari',
+    durationMs: 2520,
+    events: [
+      {
+        ...TUNED_STANDARD_JUMPS[1],
+        at: 1190,
+        height: 15,
+      },
+      {
+        id: 'shake_cwfcu4',
+        type: 'shake',
+        at: 0,
+        duration: 500,
+        degrees: 5,
+        hits: 7,
+        decay: 1,
+      },
+      {
+        id: 'pulse_7b1k50',
+        type: 'pulse',
+        at: 0,
+        duration: 500,
+        scale: 1.04,
+        decay: 0.65,
+      },
+    ],
+  }),
+  strandBuggy: createTunedPlayCarFeedback({
+    soundName: 'skinBeach',
+    durationMs: 2040,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 150,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[0],
+        at: 450,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[1],
+        at: 450,
+      },
+    ],
+  }),
+  sneeuwschuiver: createTunedPlayCarFeedback({
+    soundName: 'skinSneeuwschuiver',
+    durationMs: 1580,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 150,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[0],
+        at: 530,
+        degrees: 6,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[1],
+        at: 530,
+        scale: 1.04,
+      },
+    ],
+  }),
+  ridder: createTunedPlayCarFeedback({
+    soundName: 'skinRidder',
+    durationMs: 2570,
+    events: [
+      {
+        id: 's1',
+        type: 'shake',
+        at: 0,
+        duration: 330,
+        degrees: 5,
+        hits: 1,
+        decay: 0.4,
+      },
+      {
+        id: 'j1',
+        type: 'jump',
+        at: 430,
+        duration: 160,
+        height: 12,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 60,
+        overshoot: 1,
+      },
+      {
+        id: 'j2',
+        type: 'jump',
+        at: 690,
+        duration: 160,
+        height: 6,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 60,
+        overshoot: 1,
+      },
+      {
+        id: 'j3',
+        type: 'jump',
+        at: 960,
+        duration: 160,
+        height: 5,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 60,
+        overshoot: 1,
+      },
+      {
+        id: 'pulse_vitdto',
+        type: 'pulse',
+        at: 0,
+        duration: 330,
+        scale: 1.04,
+        decay: 0.65,
+      },
+    ],
+  }),
+  supercarRacer: createTunedPlayCarFeedback({
+    soundName: 'skinSupercar2',
+    durationMs: 1850,
+    events: TUNED_SUPERCAR_REV_EVENTS,
+  }),
+  carbonSupercar: createTunedPlayCarFeedback({
+    soundName: 'skinSupercar',
+    durationMs: 2630,
+    events: [
+      {
+        id: 's1',
+        type: 'shake',
+        at: 0,
+        duration: 700,
+        degrees: 10,
+        hits: 5,
+        decay: 0.92,
+      },
+      {
+        id: 'p1',
+        type: 'pulse',
+        at: 0,
+        duration: 860,
+        scale: 1.07,
+        decay: 0.55,
+      },
+      {
+        id: 'p2',
+        type: 'pulse',
+        at: 1030,
+        duration: 780,
+        scale: 1.018,
+        decay: 0.9,
+      },
+      {
+        id: 'shake_9eykyc',
+        type: 'shake',
+        at: 1090,
+        duration: 900,
+        degrees: 5,
+        hits: 2.5,
+        decay: 0.55,
+      },
+    ],
+  }),
+};
+const PLAY_CAR_SKIN_FEEDBACK = {
+  regenboog: PLAY_CAR_TUNED_FEEDBACK_PRESETS.regenboog,
+  koe: PLAY_CAR_FEEDBACK_PRESETS.cowMooTiltBuild,
+  kerst: PLAY_CAR_TUNED_FEEDBACK_PRESETS.kerst,
+  politie: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinPolice' },
+  ambulance: PLAY_CAR_FEEDBACK_PRESETS.ambulanceBeatTilt,
+  brandweer: PLAY_CAR_FEEDBACK_PRESETS.ambulanceBeatTilt,
+  brons: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinMedal' },
+  zilver: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinMedal' },
+  goud: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinMedal' },
+  kat: { ...PLAY_CAR_FEEDBACK_PRESETS.animalShake, soundName: 'skinCat' },
+  hond: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinDog' },
+  hartjes: {
+    ...PLAY_CAR_FEEDBACK_PRESETS.loveHopTilt,
+  },
+  taxi: PLAY_CAR_FEEDBACK_PRESETS.fastTaxiJump,
+  vlammen: PLAY_CAR_FEEDBACK_PRESETS.flamesDoubleRev,
+  premium_racer: PLAY_CAR_TUNED_FEEDBACK_PRESETS.premiumRacer,
+  eend: PLAY_CAR_TUNED_FEEDBACK_PRESETS.eend,
+  sport_coupe: PLAY_CAR_TUNED_FEEDBACK_PRESETS.supercarRacer,
+  neon_nacht: PLAY_CAR_TUNED_FEEDBACK_PRESETS.neonNacht,
+  maanrijder: PLAY_CAR_TUNED_FEEDBACK_PRESETS.maanrijder,
+  hot_rod: PLAY_CAR_FEEDBACK_PRESETS.lateRevKick,
+  monstertruck: PLAY_CAR_TUNED_FEEDBACK_PRESETS.monstertruck,
+  carbon_supercar: PLAY_CAR_TUNED_FEEDBACK_PRESETS.carbonSupercar,
+  ijsco_wagen: PLAY_CAR_TUNED_FEEDBACK_PRESETS.ijscoWagen,
+  piraten_wagen: PLAY_CAR_TUNED_FEEDBACK_PRESETS.piraat,
+  safari_jeep: PLAY_CAR_TUNED_FEEDBACK_PRESETS.safariJeep,
+  koninklijke_racer: PLAY_CAR_TUNED_FEEDBACK_PRESETS.koninklijkeRacer,
+  klassieke_brandweer: PLAY_CAR_FEEDBACK_PRESETS.ambulanceBeatTilt,
+  supercar_racer: PLAY_CAR_TUNED_FEEDBACK_PRESETS.supercarRacer,
+  locomotief: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinTrain' },
+  strand_buggy: PLAY_CAR_TUNED_FEEDBACK_PRESETS.strandBuggy,
+  sneeuwschuiver: PLAY_CAR_TUNED_FEEDBACK_PRESETS.sneeuwschuiver,
+  ridder: PLAY_CAR_TUNED_FEEDBACK_PRESETS.ridder,
+};
+const PLAY_CAR_SOUND_NAMES = Array.from(new Set([
+  PLAY_CAR_DEFAULT_FEEDBACK.soundName,
+  ...Object.values(PLAY_CAR_SKIN_FEEDBACK).map((feedback) => feedback.soundName),
+]));
+const AnimatedExpoImage = Animated.createAnimatedComponent(ExpoImage);
 const DRIVER_WARNING_ICON_MARGIN_TOP = 10;
 const DRIVER_WARNING_ICON_MARGIN_BOTTOM = 5;
-const EMPTY_BUG_REPORT_FORM = {
-  location: '',
-  summary: '',
-  steps: '',
-  severity: 'medium',
-  screenshot: null,
-};
 const SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO = 1.38;
 const SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO = 1.32;
 const SKIN_SHOP_TILE_IMAGE_HEIGHT = 140;
@@ -178,13 +1105,36 @@ const SKIN_LABELS = {
   wit: 'Wit',
 };
 
+const PREMIUM_SKIN_SHOP_ITEMS = PREMIUM_SKIN_OPTIONS.map((skin) => ({
+  id: skin,
+  label: skin,
+  color: PLAYER_HEX[skin] ?? '#FFFFFF',
+  image: PLAYER_IMAGES[skin],
+  premium: true,
+  unlockType: 'premium',
+}));
+
+const PAID_SKIN_SHOP_ITEMS = PAID_SKIN_OPTIONS.map((skin) => ({
+  id: skin,
+  label: skin,
+  color: PLAYER_HEX[skin] ?? '#FFFFFF',
+  image: PLAYER_IMAGES[skin],
+  premium: false,
+  unlockType: 'paid',
+  productId: PAID_SKIN_PRODUCT_IDS[skin],
+}));
+
 const NAV_ITEMS = [
   { key: HOME_TAB_SKINSHOP, label: 'Skinshop', icon: 'palette', accent: '#FF8C42' },
   { key: HOME_TAB_HOME, label: 'Home', icon: 'house', accent: '#C8F122', center: true },
   { key: HOME_TAB_THEMECARDS, label: 'Kaarten', icon: 'checkerboard', accent: '#F2C94C' },
 ];
 
-const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.filter((skin) => !isChallengeSkin(skin)).map((skin) => ({
+const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.filter((skin) => (
+  !isChallengeSkin(skin)
+  && !isPremiumSkin(skin)
+  && !isPaidSkin(skin)
+)).map((skin) => ({
   id: skin,
   label: SKIN_LABELS[skin] ?? skin,
   color: PLAYER_HEX[skin] ?? '#FFFFFF',
@@ -193,34 +1143,55 @@ const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.filter((skin) => !isChallengeSkin(
   unlockType: 'free',
 }));
 
-function buildSkinShopItems(challengeProgress) {
-  const challengeItems = Object.values(SKIN_CHALLENGES).map((challenge) => {
+function buildSkinShopItems(challengeProgress, language, isPremium = false, ownedPaidSkins = []) {
+  const buildChallengeItems = (challengeOrder) => challengeOrder
+    .map((skin) => SKIN_CHALLENGES[skin])
+    .filter(Boolean)
+    .map((challenge) => {
     const progressValue = getChallengeProgressValue(challengeProgress, challenge.skin);
+    const premiumChallenge = isPremiumChallengeSkin(challenge.skin);
+    const challengeCompleted = isSkinUnlocked(challengeProgress, challenge.skin);
 
     return {
       id: challenge.skin,
-      label: challenge.title,
+      label: getSkinLabel(language, challenge.skin, challenge.title),
       color: PLAYER_HEX[challenge.skin] ?? '#FFFFFF',
       image: PLAYER_IMAGES[challenge.skin],
-      premium: false,
+      premium: premiumChallenge,
+      premiumLocked: premiumChallenge && !isPremium,
       unlockType: 'challenge',
-      unlocked: isSkinUnlocked(challengeProgress, challenge.skin),
-      challenge: challenge.description,
+      unlocked: challengeCompleted && isSkinAvailableForPlayer(challenge.skin, { isPremium, ownedPaidSkins }),
+      challenge: premiumChallenge && !isPremium
+        ? translate(language, 'home.premiumChallengeLocked')
+        : getSkinChallengeDescription(language, challenge.skin, challenge.description),
       challengeProgress: progressValue,
     };
   });
 
+  const standardChallengeItems = buildChallengeItems(STANDARD_CHALLENGE_SKIN_OPTIONS);
+  const freeEpicChallengeItems = buildChallengeItems(FREE_EPIC_CHALLENGE_SKIN_OPTIONS);
+  const premiumChallengeItems = buildChallengeItems(PREMIUM_CHALLENGE_SKIN_OPTIONS);
+
   return [
-    ...STANDARD_SKIN_SHOP_ITEMS,
-    ...challengeItems,
-    {
-      id: 'future-skin',
-      label: 'Binnenkort',
-      color: '#A8ADB4',
-      image: PLAYER_FUTURE_SKIN_IMAGE,
-      premium: false,
-      unlockType: 'future',
-    },
+    ...STANDARD_SKIN_SHOP_ITEMS.map((skin) => ({
+      ...skin,
+      label: getSkinLabel(language, skin.id, skin.label),
+    })),
+    ...standardChallengeItems,
+    ...freeEpicChallengeItems,
+    ...PREMIUM_SKIN_SHOP_ITEMS.map((skin) => ({
+      ...skin,
+      label: getSkinLabel(language, skin.id, skin.label),
+      unlocked: isSkinAvailableForPlayer(skin.id, { isPremium, ownedPaidSkins }),
+      challenge: translate(language, 'home.skinLockedPremium'),
+    })),
+    ...premiumChallengeItems,
+    ...PAID_SKIN_SHOP_ITEMS.map((skin) => ({
+      ...skin,
+      label: getSkinLabel(language, skin.id, skin.label),
+      unlocked: isSkinAvailableForPlayer(skin.id, { isPremium, ownedPaidSkins }),
+      challenge: translate(language, 'home.skinLockedPaid'),
+    })),
   ];
 }
 
@@ -229,7 +1200,11 @@ function isSkinShopItemUnlocked(item) {
     return false;
   }
 
-  return item.unlockType !== 'challenge' || Boolean(item.unlocked);
+  return (
+    item.unlockType !== 'challenge'
+    && item.unlockType !== 'premium'
+    && item.unlockType !== 'paid'
+  ) || Boolean(item.unlocked);
 }
 
 function getSkinShopAnimationPhase(item, animationSeed, cycleMs) {
@@ -280,6 +1255,30 @@ function getThemeRevealColor(theme) {
 
 function getLicensePlateSlots(rawCode = '') {
   const chars = normalizeLobbyCode(rawCode).split('');
+  return [
+    { key: 'char-0', type: 'char', value: chars[0] ?? '' },
+    { key: 'char-1', type: 'char', value: chars[1] ?? '' },
+    { key: 'dash-0', type: 'dash', value: chars.length >= 2 ? '-' : '' },
+    { key: 'char-2', type: 'char', value: chars[2] ?? '' },
+    { key: 'char-3', type: 'char', value: chars[3] ?? '' },
+    { key: 'char-4', type: 'char', value: chars[4] ?? '' },
+    { key: 'dash-1', type: 'dash', value: chars.length >= 5 ? '-' : '' },
+    { key: 'char-5', type: 'char', value: chars[5] ?? '' },
+    { key: 'char-6', type: 'char', value: chars[6] ?? '' },
+    { key: 'char-7', type: 'char', value: chars[7] ?? '' },
+  ];
+}
+
+function normalizeTutorialJoinCode(value = '') {
+  return value
+    .toUpperCase()
+    .replace(/[\r\n\s·.-]+/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+}
+
+function getTutorialLicensePlateSlots(rawCode = '') {
+  const chars = normalizeTutorialJoinCode(rawCode).split('');
   return [
     { key: 'char-0', type: 'char', value: chars[0] ?? '' },
     { key: 'char-1', type: 'char', value: chars[1] ?? '' },
@@ -594,7 +1593,7 @@ function ThemeRoadCard({ item, isLocked = false, onImageLoadEnd }) {
   );
 }
 
-function ThemeRoadBackground({ isPremium = false, onReady, onScrollOffsetChange, onThemePress }) {
+function ThemeRoadBackground({ isPremium = false, items = THEME_SHOWCASE_ITEMS, onReady, onScrollOffsetChange, onThemePress }) {
   const { height, width } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(width, height);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -615,9 +1614,10 @@ function ThemeRoadBackground({ isPremium = false, onReady, onScrollOffsetChange,
   const cardTop = topClearance + (availableCardHeight - cardHeight) / 2;
   const centeredCardLeft = (width - cardWidth) / 2;
   const segmentWidth = width - centeredCardLeft - nextCardPeek;
-  const stageWidth = (THEME_ROAD_PAGE_COUNT - 1) * segmentWidth + width;
-  const roadPages = Array.from({ length: THEME_ROAD_PAGE_COUNT }, (_, pageIndex) => ({
-    items: THEME_SHOWCASE_ITEMS.slice(
+  const pageCount = Math.ceil(items.length / THEME_ROAD_ITEMS_PER_SEGMENT);
+  const stageWidth = (pageCount - 1) * segmentWidth + width;
+  const roadPages = Array.from({ length: pageCount }, (_, pageIndex) => ({
+    items: items.slice(
       pageIndex * THEME_ROAD_ITEMS_PER_SEGMENT,
       pageIndex * THEME_ROAD_ITEMS_PER_SEGMENT + THEME_ROAD_ITEMS_PER_SEGMENT
     ),
@@ -635,14 +1635,14 @@ function ThemeRoadBackground({ isPremium = false, onReady, onScrollOffsetChange,
   const updateVisibleRoadPage = useCallback((offsetX) => {
     const nextPage = Math.max(
       0,
-      Math.min(THEME_ROAD_PAGE_COUNT - 1, Math.round(offsetX / segmentWidth))
+      Math.min(pageCount - 1, Math.round(offsetX / segmentWidth))
     );
 
     if (nextPage !== visibleRoadPageRef.current) {
       visibleRoadPageRef.current = nextPage;
       setVisibleRoadPage(nextPage);
     }
-  }, [segmentWidth]);
+  }, [pageCount, segmentWidth]);
 
   return (
     <Animated.ScrollView
@@ -910,9 +1910,20 @@ function ThemeItemInspectOverlay({ cell, progress, onClose }) {
   );
 }
 
-function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
+function SkinShopPanel({
+  items,
+  inspectedSkinId,
+  equippedSkin,
+  tutorialActive = false,
+  tutorialStep = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
+  onInspect,
+}) {
   const { height, width } = useWindowDimensions();
+  const scrollRef = useRef(null);
   const scrollOffsetYRef = useRef(0);
+  const skinshopAutoScrolledRef = useRef(false);
   const safeWidth = Number.isFinite(width) && width > 0 ? width : FALLBACK_WINDOW_WIDTH;
   const safeHeight = Number.isFinite(height) && height > 0 ? height : FALLBACK_WINDOW_HEIGHT;
   const { isTablet } = getResponsiveMetrics(safeWidth, safeHeight);
@@ -935,15 +1946,96 @@ function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
     Math.min(8, Number.isFinite(contentHeight / imageHeight) ? Math.ceil(contentHeight / imageHeight) : SKIN_ROAD_REPEAT_COUNT)
   );
   const roadImages = Array.from({ length: roadImageCount }, (_, index) => index);
+  const challengeSkinIndex = items.findIndex((item) => item.unlockType === 'challenge' && !isSkinShopItemUnlocked(item));
+  const challengeRowIndex = challengeSkinIndex >= 0 ? Math.floor(challengeSkinIndex / 2) : 0;
+  const challengeScrollY = Math.max(0, topOffset + challengeRowIndex * rowHeight - safeHeight * 0.2);
+
+  const reportChallengeSkinTarget = useCallback((scrollY = scrollOffsetYRef.current) => {
+    if (!tutorialActive || tutorialStep?.target !== 'home.challengeSkin' || !onTutorialTargetLayout || challengeSkinIndex < 0) {
+      return;
+    }
+
+    const rowIndex = Math.floor(challengeSkinIndex / 2);
+    const columnIndex = challengeSkinIndex % 2;
+    const tileLeft = columnIndex === 0 ? safeWidth * (isTablet ? 0.055 : 0.035) : safeWidth * (isTablet ? 0.525 : 0.495);
+    const tileTop = topOffset + rowIndex * rowHeight - scrollY;
+    const tileWidth = safeWidth * (isTablet ? 0.42 : 0.47);
+
+    onTutorialTargetLayout('home.challengeSkin', {
+      x: tileLeft,
+      y: tileTop,
+      width: tileWidth,
+      height: tileHeight,
+    });
+  }, [
+    challengeSkinIndex,
+    isTablet,
+    onTutorialTargetLayout,
+    rowHeight,
+    safeWidth,
+    tileHeight,
+    topOffset,
+    tutorialActive,
+    tutorialStep?.target,
+  ]);
+
+  useEffect(() => {
+    if (tutorialStep?.id !== 'menu-skinshop-scroll') {
+      skinshopAutoScrolledRef.current = false;
+    }
+  }, [tutorialStep?.id]);
+
+  useEffect(() => {
+    if (tutorialStep?.target === 'home.challengeSkin') {
+      reportChallengeSkinTarget();
+    }
+  }, [reportChallengeSkinTarget, tutorialStep?.target]);
+
+  const completeTutorialSkinshopScroll = useCallback(() => {
+    if (
+      tutorialStep?.id !== 'menu-skinshop-scroll'
+      || skinshopAutoScrolledRef.current
+    ) {
+      return;
+    }
+
+    skinshopAutoScrolledRef.current = true;
+    scrollRef.current?.scrollTo({ y: challengeScrollY, animated: true });
+    setTimeout(() => {
+      scrollOffsetYRef.current = challengeScrollY;
+      reportChallengeSkinTarget(challengeScrollY);
+      onTutorialAction?.('home.skinshopScrolled');
+    }, 440);
+  }, [
+    challengeScrollY,
+    onTutorialAction,
+    reportChallengeSkinTarget,
+    tutorialStep?.id,
+  ]);
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.skinRoadScroll}
       showsVerticalScrollIndicator={false}
       bounces={false}
+      scrollEnabled={!tutorialActive || tutorialStep?.id === 'menu-skinshop-scroll'}
       scrollEventThrottle={16}
+      onScrollBeginDrag={completeTutorialSkinshopScroll}
+      onScrollEndDrag={() => {
+        if (tutorialStep?.id === 'menu-skinshop-scroll') {
+          scrollRef.current?.scrollTo({ y: challengeScrollY, animated: true });
+        }
+      }}
+      onMomentumScrollEnd={() => {
+        if (tutorialStep?.id === 'menu-skinshop-scroll') {
+          scrollRef.current?.scrollTo({ y: challengeScrollY, animated: true });
+        }
+      }}
       onScroll={(event) => {
-        scrollOffsetYRef.current = event.nativeEvent.contentOffset.y;
+        const nextOffsetY = event.nativeEvent.contentOffset.y;
+        scrollOffsetYRef.current = nextOffsetY;
+        reportChallengeSkinTarget(nextOffsetY);
       }}
     >
       <View style={[styles.skinShopStage, { height: contentHeight }]}>
@@ -970,15 +2062,22 @@ function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
           const tileLeft = columnIndex === 0 ? safeWidth * (isTablet ? 0.055 : 0.035) : safeWidth * (isTablet ? 0.525 : 0.495);
           const tileTop = topOffset + rowIndex * rowHeight;
           const tileWidth = safeWidth * (isTablet ? 0.42 : 0.47);
+          const shouldAnimateIdleMotion = true;
 
           return (
             <SkinShopTile
               key={item.id}
               item={item}
+              columnIndex={columnIndex}
               animationSeed={index}
               hidden={item.id === inspectedSkinId}
               equipped={item.id === equippedSkin}
+              shouldAnimateIdleMotion={shouldAnimateIdleMotion}
               onInspect={onInspect}
+              onTutorialAction={onTutorialAction}
+              tutorialActionName={index === challengeSkinIndex && tutorialStep?.target === 'home.challengeSkin'
+                ? 'home.challengeSkinOpened'
+                : null}
               sourceRect={{
                 x: tileLeft,
                 y: tileTop,
@@ -1000,12 +2099,31 @@ function SkinShopPanel({ items, inspectedSkinId, equippedSkin, onInspect }) {
   );
 }
 
-function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, sourceRect, style }) {
+const SkinShopTile = React.memo(function SkinShopTile({
+  item,
+  columnIndex = 0,
+  animationSeed = 0,
+  hidden,
+  equipped,
+  shouldAnimateIdleMotion = true,
+  onInspect,
+  onTutorialAction,
+  tutorialActionName,
+  sourceRect,
+  style,
+}) {
   const tileRef = useRef(null);
   const bob = useRef(new Animated.Value(0)).current;
   const isUnlocked = isSkinShopItemUnlocked(item);
-  const isChallengeLocked = item.unlockType === 'challenge' && !isUnlocked;
-  const shouldAnimateIdleMotion = isUnlocked;
+  const isLocked = !isUnlocked;
+  const showChallengeProgress = isLocked && item.unlockType === 'challenge' && item.challengeProgress?.target > 0;
+  const showPremiumProgress = isLocked && item.unlockType === 'premium';
+  const verticalProgressRatio = showChallengeProgress
+    ? Math.max(0, Math.min(1, item.challengeProgress.current / item.challengeProgress.target))
+    : showPremiumProgress
+      ? 0
+      : 0;
+  const shouldRunIdleMotion = shouldAnimateIdleMotion && isUnlocked;
   const tileHeight = style?.height ?? 146;
   const animationPhase = getSkinShopAnimationPhase(item, animationSeed, SKIN_SHOP_CAR_BOB_DURATION);
   const tileImageHeight = Math.max(SKIN_SHOP_TILE_IMAGE_HEIGHT, Math.min(202, tileHeight * 0.94));
@@ -1013,7 +2131,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
   useEffect(() => {
     bob.stopAnimation();
 
-    if (!shouldAnimateIdleMotion) {
+    if (!shouldRunIdleMotion) {
       bob.setValue(0);
       return undefined;
     }
@@ -1042,7 +2160,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
       bob.stopAnimation();
       bob.setValue(0);
     };
-  }, [bob, shouldAnimateIdleMotion]);
+  }, [bob, shouldRunIdleMotion]);
 
   function handlePress() {
     if (sourceRect) {
@@ -1059,6 +2177,9 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
           height: tileImageHeight,
         },
       });
+      if (tutorialActionName) {
+        onTutorialAction?.(tutorialActionName);
+      }
       return;
     }
 
@@ -1076,6 +2197,9 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
           height: tileImageHeight,
         },
       });
+      if (tutorialActionName) {
+        onTutorialAction?.(tutorialActionName);
+      }
     });
   }
 
@@ -1094,7 +2218,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
       <Animated.View
         style={[
           styles.skinShopTileShadowMotion,
-          shouldAnimateIdleMotion && {
+          shouldRunIdleMotion && {
             transform: [
               {
                 scaleX: bob.interpolate({
@@ -1118,7 +2242,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
         style={[
           styles.skinShopTileCarMotion,
           { height: tileImageHeight },
-          shouldAnimateIdleMotion && {
+          shouldRunIdleMotion && {
             transform: [
               {
                 translateY: bob.interpolate({
@@ -1136,7 +2260,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
           style={[
             styles.skinShopTileImage,
             { height: tileImageHeight },
-            isChallengeLocked && styles.challengeSkinMutedImage,
+            isLocked && styles.challengeSkinMutedImage,
           ]}
         />
       </Animated.View>
@@ -1150,18 +2274,63 @@ function SkinShopTile({ item, animationSeed = 0, hidden, equipped, onInspect, so
             />
           </View>
         ) : null}
-      {isChallengeLocked ? (
+      {isLocked ? (
         <ChallengeSkinLockOverlay
+          source={item.unlockType === 'challenge' && !item.premiumLocked ? CHALLENGE_SKIN_LOCK_IMAGE : PREMIUM_SKIN_LOCK_IMAGE}
           size="tile"
           animationPhase={animationPhase}
+          pointerEvents="none"
           style={styles.skinShopChallengeLock}
+        />
+      ) : null}
+      {showChallengeProgress || showPremiumProgress ? (
+        <SkinShopVerticalProgressIndicator
+          side={columnIndex === 0 ? 'right' : 'left'}
+          ratio={verticalProgressRatio}
+          tileHeight={tileHeight}
         />
       ) : null}
     </Pressable>
   );
-}
+});
 
-function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPhase = 0, pointerEvents = 'auto' }) {
+const SkinShopVerticalProgressIndicator = React.memo(function SkinShopVerticalProgressIndicator({ side = 'right', ratio = 0, tileHeight = 146 }) {
+  const fillRatio = Math.max(0, Math.min(1, ratio));
+  const progressHeight = Math.round(Math.max(44, Math.min(64, tileHeight * 0.38)));
+  const progressTop = Math.round(Math.max(40, Math.min(58, tileHeight * 0.34)));
+  const progressInset = Math.round(Math.max(8, Math.min(15, tileHeight * 0.1)));
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.skinShopVerticalProgress,
+        side === 'left' ? styles.skinShopVerticalProgressLeft : styles.skinShopVerticalProgressRight,
+        {
+          top: progressTop,
+          height: progressHeight,
+          [side === 'left' ? 'left' : 'right']: progressInset,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.skinShopVerticalProgressFill,
+          { height: `${fillRatio * 100}%` },
+        ]}
+      />
+    </View>
+  );
+});
+
+function ChallengeSkinLockOverlay({
+  size = 'tile',
+  source = CHALLENGE_SKIN_LOCK_IMAGE,
+  progress,
+  style,
+  animationPhase = 0,
+  pointerEvents = 'auto',
+}) {
   const jump = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -1221,7 +2390,7 @@ function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPha
         }}
       >
         <Image
-          source={CHALLENGE_SKIN_LOCK_IMAGE}
+          source={source}
           resizeMode="contain"
           style={styles.challengeSkinLockImage}
         />
@@ -1245,8 +2414,20 @@ function SkinCarShadow({ style } = {}) {
   );
 }
 
-function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEquip }) {
+function SkinInspectOverlay({
+  inspection,
+  progress,
+  equippedSkin,
+  isPremium,
+  purchasingSkinId,
+  getPaidSkinPrice,
+  onClose,
+  onEquip,
+  onPremiumPress,
+  onPurchase,
+}) {
   const { height, width } = useWindowDimensions();
+  const { t } = useTranslation();
 
   if (!inspection) {
     return null;
@@ -1254,10 +2435,16 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
 
   const { skin, rect } = inspection;
   const isFutureSkin = skin.unlockType === 'future';
+  const isLocked = !isSkinShopItemUnlocked(skin);
   const isChallengeLocked = skin.unlockType === 'challenge' && !skin.unlocked;
+  const isPremiumChallengeLocked = isChallengeLocked && skin.premium && !isPremium;
+  const isPremiumLocked = skin.unlockType === 'premium' && isLocked;
+  const isPaidLocked = skin.unlockType === 'paid' && isLocked;
   const canEquipSkin = isSkinShopItemUnlocked(skin) && !isFutureSkin;
+  const paidSkinPrice = getPaidSkinPrice?.(skin.id) ?? '€0,99';
+  const purchasingThisSkin = purchasingSkinId === skin.id;
   const isEquipped = skin.id === equippedSkin;
-  const challengeText = skin.challenge ?? 'Voltooi de bijbehorende challenge om deze skin gratis te ontgrendelen.';
+  const challengeText = skin.challenge ?? t('home.skinLockedChallenge');
   const challengeProgress = skin.challengeProgress ?? { current: 0, target: 1 };
   const challengeRatio = challengeProgress.target > 0
     ? Math.max(0, Math.min(1, challengeProgress.current / challengeProgress.target))
@@ -1265,8 +2452,12 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
   const { isTablet } = getResponsiveMetrics(width, height);
   const targetWidth = isTablet ? Math.min(width * 0.86, 680) : Math.min(width * 1.08, 470);
   const targetHeight = targetWidth * 0.76;
-  const targetContainerHeight = isChallengeLocked
-    ? targetHeight + 142
+  const challengeTextBlockWidth = Math.max(0, targetWidth - 44);
+  const nameTextBlockWidth = Math.max(0, targetWidth - 68);
+  const challengeTextBlockHeight = (isPaidLocked || isPremiumLocked || isPremiumChallengeLocked) ? 158 : 122;
+  const nameTextBlockHeight = 142;
+  const targetContainerHeight = isLocked && !isFutureSkin
+    ? targetHeight + challengeTextBlockHeight + 20
     : canEquipSkin
       ? targetHeight + 172
       : targetHeight;
@@ -1294,7 +2485,7 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
   });
   const imageHeight = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [SKIN_SHOP_TILE_IMAGE_HEIGHT, (isChallengeLocked || canEquipSkin) ? targetHeight * 0.92 : targetHeight],
+    outputRange: [SKIN_SHOP_TILE_IMAGE_HEIGHT, (isLocked || canEquipSkin) ? targetHeight * 0.92 : targetHeight],
   });
   const shadowScale = progress.interpolate({
     inputRange: [0, 1],
@@ -1308,11 +2499,6 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
     inputRange: [0, 0.58, 1],
     outputRange: [0, 0, 1],
   });
-  const challengeTextBlockWidth = Math.max(0, targetWidth - 44);
-  const nameTextBlockWidth = Math.max(0, targetWidth - 68);
-  const challengeTextBlockHeight = 122;
-  const nameTextBlockHeight = 142;
-
   return (
     <View pointerEvents="box-none" style={styles.skinInspectLayer}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
@@ -1323,7 +2509,7 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
         pointerEvents="box-none"
         style={[
           styles.skinInspectMovingCar,
-          isChallengeLocked && styles.skinInspectChallengeMovingCar,
+          isLocked && styles.skinInspectChallengeMovingCar,
           canEquipSkin && styles.skinInspectNamedMovingCar,
           {
             left,
@@ -1353,15 +2539,16 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
           style={[
             styles.skinInspectMovingImage,
             isFutureSkin && styles.skinInspectFutureImage,
-            isChallengeLocked && styles.challengeSkinMutedImage,
+            isLocked && styles.challengeSkinMutedImage,
             {
               height: imageHeight,
             },
           ]}
         />
-        {isChallengeLocked ? (
+        {isLocked && !isFutureSkin ? (
           <>
             <ChallengeSkinLockOverlay
+              source={isPremiumChallengeLocked ? PREMIUM_SKIN_LOCK_IMAGE : isChallengeLocked ? CHALLENGE_SKIN_LOCK_IMAGE : PREMIUM_SKIN_LOCK_IMAGE}
               size="large"
               progress={progress}
               pointerEvents="none"
@@ -1382,7 +2569,7 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
           </Animated.Text>
         ) : null}
       </Animated.View>
-      {isChallengeLocked ? (
+      {isLocked && !isFutureSkin ? (
         <Animated.View
           style={[
             styles.skinInspectChallengeTextBlock,
@@ -1413,19 +2600,50 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
           >
             {challengeText}
           </Text>
-          <View style={styles.skinInspectChallengeProgressRow}>
-            <View style={styles.skinInspectChallengeProgressTrack}>
-              <View
-                style={[
-                  styles.skinInspectChallengeProgressFill,
-                  { width: `${challengeRatio * 100}%` },
-                ]}
+          {isChallengeLocked && !isPremiumChallengeLocked ? (
+            <View style={styles.skinInspectChallengeProgressRow}>
+              <View style={styles.skinInspectChallengeProgressTrack}>
+                <View
+                  style={[
+                    styles.skinInspectChallengeProgressFill,
+                    { width: `${challengeRatio * 100}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.skinInspectChallengeProgressText}>
+                {challengeProgress.current} / {challengeProgress.target}
+              </Text>
+            </View>
+          ) : null}
+          {isPaidLocked ? (
+            <View style={styles.skinInspectBuyButtonWrap}>
+              <GlossyButton
+                label={purchasingThisSkin ? t('common.loading') : t('common.buyFor', { price: paidSkinPrice })}
+                variant="green"
+                size="normal"
+                disabled={purchasingThisSkin}
+                heightOverride={isTablet ? 58 : 50}
+                horizontalPadding={isTablet ? 30 : 24}
+                labelFontScale={isTablet ? 0.94 : 0.86}
+                soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+                onPress={() => onPurchase?.(skin.id)}
               />
             </View>
-            <Text style={styles.skinInspectChallengeProgressText}>
-              {challengeProgress.current} / {challengeProgress.target}
-            </Text>
-          </View>
+          ) : null}
+          {isPremiumLocked || isPremiumChallengeLocked ? (
+            <View style={styles.skinInspectBuyButtonWrap}>
+              <GlossyButton
+                label={t('premiumModal.takePremium')}
+                variant="green"
+                size="normal"
+                heightOverride={isTablet ? 58 : 50}
+                horizontalPadding={isTablet ? 30 : 24}
+                labelFontScale={isTablet ? 0.94 : 0.86}
+                soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+                onPress={onPremiumPress}
+              />
+            </View>
+          ) : null}
         </Animated.View>
       ) : null}
       {canEquipSkin ? (
@@ -1464,7 +2682,7 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
           </Text>
           <View style={styles.skinInspectEquipButtonWrap}>
             <GlossyButton
-              label={isEquipped ? 'Geselecteerd' : 'Selecteer'}
+              label={isEquipped ? t('common.selected') : t('common.select')}
               variant="green"
               size="normal"
               disabled={isEquipped}
@@ -1482,6 +2700,7 @@ function SkinInspectOverlay({ inspection, progress, equippedSkin, onClose, onEqu
 }
 
 function ThemeDetailScreen({ theme, onBack, onReady }) {
+  const { t } = useTranslation();
   const items = useMemo(() => getThemeIcons(theme.id), [theme.id]);
   const titleColor = '#FFFFFF';
   const backgroundImage = getThemeDetailBackgroundImage(theme.id);
@@ -1648,7 +2867,7 @@ function ThemeDetailScreen({ theme, onBack, onReady }) {
             {theme.label}
           </Text>
           <View style={styles.themeItemsEmptyState}>
-            <Text style={styles.themeItemsEmptyText}>Items komen later</Text>
+            <Text style={styles.themeItemsEmptyText}>{t('home.itemsComingLater')}</Text>
           </View>
         </ScrollView>
       )}
@@ -1704,6 +2923,7 @@ function ThemeDetailScreen({ theme, onBack, onReady }) {
 function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex, onSelectItem }) {
   const { width, height } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(width, height);
+  const { t } = useTranslation();
   const selectedTheme = THEME_SHOWCASE_ITEMS[selectedThemeIndex] ?? THEME_SHOWCASE_ITEMS[0];
   const previewItems = selectedTheme.previewItems ?? [];
   const boundedItemIndex = previewItems.length ? Math.min(selectedItemIndex, previewItems.length - 1) : 0;
@@ -1712,9 +2932,9 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
   return (
     <View style={styles.tabPanel}>
       <View style={styles.panelHeader}>
-        <Text style={styles.panelEyebrow}>Verzamel</Text>
-        <Text style={styles.panelTitle}>Thema kaarten</Text>
-        <Text style={styles.panelSubtitle}>Swipe door de kaartensets en bekijk voorbeelditems van elke set.</Text>
+        <Text style={styles.panelEyebrow}>{t('home.collect')}</Text>
+        <Text style={styles.panelTitle}>{t('home.themeCards')}</Text>
+        <Text style={styles.panelSubtitle}>{t('home.themeCardsSubtitle')}</Text>
       </View>
 
       <ThemeCarousel
@@ -1780,7 +3000,7 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
               >
                 {item.premium ? (
                   <View style={styles.lockBadge}>
-                    <Text style={styles.lockBadgeText}>Premium</Text>
+                    <Text style={styles.lockBadgeText}>{t('common.premium')}</Text>
                   </View>
                 ) : null}
                 <Text style={styles.themeShowcaseTitle}>
@@ -1799,13 +3019,13 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
             <Text style={styles.detailPanelTitle}>{selectedTheme.label}</Text>
             <Text style={styles.detailPanelText}>
               {selectedTheme.itemCount
-                ? `${selectedTheme.itemCount} mogelijke items om doorheen te bladeren`
-                : 'Preview-items voor deze set komen later'}
+                ? t('home.possibleItems', { count: selectedTheme.itemCount })
+                : t('home.previewItemsComingLater')}
             </Text>
           </View>
           <View style={[styles.themeStatusBadge, selectedTheme.premium && styles.themeStatusBadgePremium]}>
             <Text style={[styles.themeStatusBadgeText, selectedTheme.premium && styles.themeStatusBadgeTextPremium]}>
-              {selectedTheme.premium ? 'Premium' : 'Free'}
+              {selectedTheme.premium ? t('common.premium') : t('common.free')}
             </Text>
           </View>
         </View>
@@ -1879,22 +3099,29 @@ export default function HomeScreen({
   tutorialStep = null,
   onTutorialTargetLayout = null,
   onTutorialAction = null,
+  onTutorialRouteReveal = null,
 }) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(windowWidth, windowHeight);
-  const { isPremium } = usePremium();
+  const {
+    isPremium,
+    ownedPaidSkins,
+    paidSkinPackagesBySkin,
+    getPaidSkinPrice,
+    purchasePaidSkin,
+  } = usePremium();
   const { settings } = useAppSettings();
+  const { language, t } = useTranslation();
   const pulse = useRef(new Animated.Value(1)).current;
   const premiumCrownPulse = useRef(new Animated.Value(1)).current;
   const premiumButtonPress = useRef(new Animated.Value(0)).current;
-  const bugReportPress = useRef(new Animated.Value(0)).current;
   const joinOptionPress = useRef(new Animated.Value(0)).current;
   const hostOptionPress = useRef(new Animated.Value(0)).current;
   const driverWarningFade = useRef(new Animated.Value(0)).current;
   const driverWarningButtonFade = useRef(new Animated.Value(0)).current;
   const driverWarningDismissedRef = useRef(false);
   const hostPadlockJiggle = useRef(new Animated.Value(0)).current;
-  const playCarJump = useRef(new Animated.Value(0)).current;
+  const playCarFeedbackProgress = useRef(new Animated.Value(0)).current;
   const onlineYellowJump = useRef(new Animated.Value(0)).current;
   const onlineBlueJump = useRef(new Animated.Value(0)).current;
   const onlineGreenJump = useRef(new Animated.Value(0)).current;
@@ -1905,15 +3132,20 @@ export default function HomeScreen({
   const revealRef = useRef(null);
   const themeCoverRevealRef = useRef(null);
   const playButtonWrapRef = useRef(null);
-  const playButtonTargetRef = useRef(null);
   const onlineButtonWrapRef = useRef(null);
   const hostOptionRef = useRef(null);
   const joinOptionRef = useRef(null);
+  const joinPlateTargetRef = useRef(null);
+  const premiumButtonRef = useRef(null);
+  const navButtonRefs = useRef({});
   const joinCodeInputRef = useRef(null);
   const pendingOnlineJumpTimeoutRef = useRef(null);
   const pendingRouteRef = useRef(null);
   const pendingRouteParamsRef = useRef(null);
+  const pendingRevealCompleteRef = useRef(null);
   const pendingThemeBackRef = useRef(false);
+  const playCarHapticTimeoutsRef = useRef([]);
+  const playCarRevealTimeoutRef = useRef(null);
   const themeDetailReadyResolverRef = useRef(null);
   const themeDetailReadyRef = useRef(false);
   const themeRoadReadyResolverRef = useRef(null);
@@ -1939,11 +3171,6 @@ export default function HomeScreen({
   const [premiumModalSource, setPremiumModalSource] = useState(null);
   const [driverWarningVisible, setDriverWarningVisible] = useState(showDriverWarning);
   const [driverWarningButtonReady, setDriverWarningButtonReady] = useState(false);
-  const [bugReportModalVisible, setBugReportModalVisible] = useState(false);
-  const [bugReportForm, setBugReportForm] = useState(EMPTY_BUG_REPORT_FORM);
-  const [bugReportError, setBugReportError] = useState('');
-  const [bugReportSuccess, setBugReportSuccess] = useState('');
-  const [bugReportSubmitting, setBugReportSubmitting] = useState(false);
   const [lobbyExitMessage, setLobbyExitMessage] = useState(route?.params?.lobbyExitMessage ?? '');
   const [activeTab, setActiveTab] = useState(HOME_TAB_HOME);
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
@@ -1951,6 +3178,7 @@ export default function HomeScreen({
   const [selectedThemeDetail, setSelectedThemeDetail] = useState(null);
   const [skinInspection, setSkinInspection] = useState(null);
   const [equippedSkin, setEquippedSkin] = useState('rood');
+  const [purchasingSkinId, setPurchasingSkinId] = useState(null);
   const [skinChallengeProgress, setSkinChallengeProgress] = useState(null);
   const skinChallengeProgressLoadingRef = useRef(false);
   const [pendingThemeDetail, setPendingThemeDetail] = useState(null);
@@ -1967,12 +3195,8 @@ export default function HomeScreen({
     origin: { x: windowWidth / 2, y: 360 },
   });
   const tabWidth = windowWidth / NAV_ITEMS.length;
-  const driverWarningIconSize = isTablet
-    ? Math.min(372, Math.max(326, windowWidth * 0.395))
-    : Math.min(
-        DRIVER_WARNING_ICON_MAX_SIZE,
-        windowWidth * DRIVER_WARNING_ICON_WIDTH_RATIO
-      );
+  const driverWarningMetrics = getDriverWarningMetrics(windowWidth, windowHeight);
+  const driverWarningIconSize = driverWarningMetrics.iconSize;
   const navMetrics = {
     navHeight: isTablet ? 154 : 118,
     navHighlightHeight: isTablet ? 176 : 136,
@@ -2051,7 +3275,6 @@ export default function HomeScreen({
   const homeMenuButtonSize = 54;
   const homeMenuButtonTop = 16;
   const homeMenuButtonLeft = 16;
-  const homeMenuButtonGap = 10;
   const premiumButtonPressStyle = {
     transform: [
       {
@@ -2069,23 +3292,6 @@ export default function HomeScreen({
       { scale: premiumCrownPulse },
     ],
   };
-  const bugReportPressStyle = {
-    transform: [
-      {
-        translateY: bugReportPress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 3],
-        }),
-      },
-      {
-        scale: bugReportPress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 0.94],
-        }),
-      },
-    ],
-  };
-
   const markHomeCriticalImageLoaded = useCallback((key) => {
     loadedCriticalImagesRef.current.add(key);
 
@@ -2105,7 +3311,11 @@ export default function HomeScreen({
     let cancelled = false;
 
     AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY).then((storedSkin) => {
-      if (!cancelled && SKIN_OPTIONS.includes(storedSkin)) {
+      if (
+        !cancelled
+        && SKIN_OPTIONS.includes(storedSkin)
+        && isSkinAvailableForPlayer(storedSkin, { isPremium, ownedPaidSkins })
+      ) {
         setEquippedSkin(storedSkin);
       }
     }).catch(() => {
@@ -2124,7 +3334,7 @@ export default function HomeScreen({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isPremium, ownedPaidSkins]);
 
   useEffect(() => {
     preloadSoundEffect(GLOSSY_BUTTON_CLICK_SOUND);
@@ -2142,25 +3352,63 @@ export default function HomeScreen({
         clearTimeout(themeRevealFallbackTimeoutRef.current);
         themeRevealFallbackTimeoutRef.current = null;
       }
+      playCarHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      playCarHapticTimeoutsRef.current = [];
+      if (playCarRevealTimeoutRef.current) {
+        clearTimeout(playCarRevealTimeoutRef.current);
+        playCarRevealTimeoutRef.current = null;
+      }
     };
   }, []);
 
   const normalizedJoinCode = useMemo(() => normalizeLobbyCode(joinCode), [joinCode]);
+  const localizedThemeShowcaseItems = useMemo(() => THEME_SHOWCASE_ITEMS.map((theme) => ({
+    ...theme,
+    label: getThemeLabel(language, theme.id, theme.label),
+  })), [language]);
+  const localizedNavItems = useMemo(() => NAV_ITEMS.map((item) => ({
+    ...item,
+    label: item.key === HOME_TAB_SKINSHOP
+      ? t('home.skinshop')
+      : item.key === HOME_TAB_THEMECARDS
+        ? t('home.cards')
+        : t('home.home'),
+  })), [t]);
+  const isTutorialJoinCodeStep = tutorialStep?.target === 'home.joinPlate';
+  const displayJoinCode = isTutorialJoinCodeStep
+    ? normalizeTutorialJoinCode(joinCode)
+    : normalizedJoinCode;
   const skinShopItems = useMemo(
-    () => buildSkinShopItems(skinChallengeProgress),
-    [skinChallengeProgress]
+    () => buildSkinShopItems(skinChallengeProgress, language, isPremium, ownedPaidSkins),
+    [isPremium, language, ownedPaidSkins, skinChallengeProgress]
   );
   const playButtonImage = PLAY_BUTTON_CAR_IMAGES[equippedSkin] ?? PLAY_BUTTON_IMAGE;
+  const playCarFeedback = PLAY_CAR_SKIN_FEEDBACK[equippedSkin] ?? PLAY_CAR_DEFAULT_FEEDBACK;
+  const playCarTranslateX = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.translateX,
+  });
+  const playCarTranslateY = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.translateY,
+  });
+  const playCarRotate = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.rotate,
+  });
+  const playCarScale = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.scale,
+  });
+
+  useEffect(() => {
+    preloadSoundEffect(playCarFeedback.soundName);
+  }, [playCarFeedback.soundName]);
   const showMainMenuPremiumButton = (
     [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !isPremium
     && !selectedThemeDetail
   );
-  const showMainMenuBugReportButton = (
-    [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
-    && !selectedThemeDetail
-  );
-
   const reportTutorialTarget = useCallback((key, targetRef) => {
     if (!tutorialActive || !onTutorialTargetLayout || !targetRef?.current?.measureInWindow) {
       return;
@@ -2188,7 +3436,9 @@ export default function HomeScreen({
       requestAnimationFrame(measure);
     });
   }, [onTutorialTargetLayout, tutorialActive]);
-  const joinPlateSlots = getLicensePlateSlots(normalizedJoinCode);
+  const joinPlateSlots = isTutorialJoinCodeStep
+    ? getTutorialLicensePlateSlots(joinCode)
+    : getLicensePlateSlots(normalizedJoinCode);
   const joinPlateWidth = Math.min(windowWidth - (isTablet ? 48 : 18), isTablet ? 760 : 430);
   const joinPlateHeight = joinPlateWidth / (1870 / 520);
   const joinPlateTop = (windowHeight - joinPlateHeight) / 2;
@@ -2201,7 +3451,7 @@ export default function HomeScreen({
   const joinPlateFontSize = Math.round(clamp(joinPlateSlotWidth * 0.78, isTablet ? 34 : 25, isTablet ? 48 : 31));
   const joinPlateCursorLeft = Math.min(
     joinPlateTextWidth - 3,
-    getLicensePlateCursorUnits(normalizedJoinCode.length) * joinPlateSlotWidth
+    getLicensePlateCursorUnits(displayJoinCode.length) * joinPlateSlotWidth
   );
   const joinPlateOpacity = joinPlateProgress.interpolate({
     inputRange: [0, 1],
@@ -2313,6 +3563,7 @@ export default function HomeScreen({
 
   useEffect(() => {
     const unsubscribe = navigation.addListener?.('focus', () => {
+      void recoverAudioPlaybackMode();
       onlineExpand.stopAnimation();
       onlineExpand.setValue(0);
       setIsOnlineMenuVisible(false);
@@ -2323,6 +3574,44 @@ export default function HomeScreen({
 
     return unsubscribe;
   }, [navigation, onlineExpand, joinPlateProgress]);
+
+  useEffect(() => {
+    if (!route?.params?.tutorialResetKey) {
+      return;
+    }
+
+    if (pendingOnlineJumpTimeoutRef.current) {
+      clearTimeout(pendingOnlineJumpTimeoutRef.current);
+      pendingOnlineJumpTimeoutRef.current = null;
+    }
+
+    joinCodeInputRef.current?.blur();
+    onlineExpand.stopAnimation();
+    onlineExpand.setValue(0);
+    setIsOnlineMenuVisible(false);
+    joinPlateProgress.stopAnimation();
+    joinPlateProgress.setValue(0);
+    setIsJoinPlateVisible(false);
+    setJoinCode('');
+    setJoinError('');
+    setIsJoinBusy(false);
+    setActiveTab(HOME_TAB_HOME);
+    activeTabTranslateX.stopAnimation();
+    activeTabTranslateX.setValue(tabWidth);
+    tabPageTranslateX.stopAnimation();
+    tabPageTranslateX.setValue(-windowWidth);
+    setSelectedThemeDetail(null);
+    setSkinInspection(null);
+    isNavigatingRef.current = false;
+  }, [
+    activeTabTranslateX,
+    joinPlateProgress,
+    onlineExpand,
+    route?.params?.tutorialResetKey,
+    tabPageTranslateX,
+    tabWidth,
+    windowWidth,
+  ]);
 
   useEffect(() => {
     const activeIndex = NAV_ITEMS.findIndex((item) => item.key === activeTab);
@@ -2347,9 +3636,32 @@ export default function HomeScreen({
 
   useEffect(() => {
     if (tutorialStep?.target === 'home.play') {
-      reportTutorialTarget('home.play', playButtonTargetRef);
+      reportTutorialTarget('home.play', playButtonWrapRef);
+    } else if (tutorialStep?.target === 'home.online') {
+      reportTutorialTarget('home.online', onlineButtonWrapRef);
+    } else if (tutorialStep?.target === 'home.onlineJoin') {
+      reportTutorialTarget('home.onlineJoin', joinOptionRef);
+    } else if (tutorialStep?.target === 'home.onlineHost') {
+      reportTutorialTarget('home.onlineHost', hostOptionRef);
+    } else if (tutorialStep?.target === 'home.joinPlate') {
+      reportTutorialTarget('home.joinPlate', joinPlateTargetRef);
+    } else if (tutorialStep?.target === 'home.skinshopTab') {
+      reportTutorialTarget('home.skinshopTab', { current: navButtonRefs.current[HOME_TAB_SKINSHOP] });
+    } else if (tutorialStep?.target === 'home.themeCardsTab') {
+      reportTutorialTarget('home.themeCardsTab', { current: navButtonRefs.current[HOME_TAB_THEMECARDS] });
+    } else if (tutorialStep?.target === 'home.homeTab') {
+      reportTutorialTarget('home.homeTab', { current: navButtonRefs.current[HOME_TAB_HOME] });
+    } else if (tutorialStep?.target === 'home.premium') {
+      reportTutorialTarget('home.premium', premiumButtonRef);
     }
-  }, [reportTutorialTarget, tutorialStep?.target, windowHeight, windowWidth]);
+  }, [
+    isJoinPlateVisible,
+    isOnlineMenuVisible,
+    reportTutorialTarget,
+    tutorialStep?.target,
+    windowHeight,
+    windowWidth,
+  ]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -2496,24 +3808,6 @@ export default function HomeScreen({
     }).start();
   };
 
-  const pressBugReportButtonIn = () => {
-    Animated.spring(bugReportPress, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 52,
-      bounciness: 0,
-    }).start();
-  };
-
-  const pressBugReportButtonOut = () => {
-    Animated.spring(bugReportPress, {
-      toValue: 0,
-      useNativeDriver: true,
-      speed: 34,
-      bounciness: 5,
-    }).start();
-  };
-
   const pressOnlineMiniButtonIn = (pressValue, event) => {
     latestPressPointRef.current = {
       x: event.nativeEvent.pageX,
@@ -2578,35 +3872,93 @@ export default function HomeScreen({
       }),
     ]);
 
-  const buildPlayHornHopAnimation = (height = -12) =>
-    Animated.sequence([
-      Animated.timing(playCarJump, {
-        toValue: height,
-        duration: 58,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(playCarJump, {
-        toValue: 2,
-        duration: 52,
-        easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(playCarJump, {
-        toValue: 0,
-        duration: 96,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]);
+  const buildPlayCarFeedbackAnimation = (feedback = PLAY_CAR_DEFAULT_FEEDBACK) => {
+    playCarFeedbackProgress.stopAnimation();
+    playCarFeedbackProgress.setValue(0);
 
-  const buildPlayHornJumpAnimation = () =>
-    Animated.sequence([
-      Animated.delay(PLAY_HORN_FEEDBACK_DELAYS[0]),
-      buildPlayHornHopAnimation(-13),
-      Animated.delay(PLAY_HORN_FEEDBACK_DELAYS[1] - PLAY_HORN_FEEDBACK_DELAYS[0] - 206),
-      buildPlayHornHopAnimation(-10),
-    ]);
+    if (feedback.kind === 'classicHornJump') {
+      return Animated.sequence([
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.115,
+          duration: 58,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.217,
+          duration: 52,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.407,
+          duration: 96,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.593,
+          duration: 94,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.708,
+          duration: 58,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.81,
+          duration: 52,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 1,
+          duration: 96,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]);
+    }
+
+    if (feedback.kind === 'snapTimeline' && Array.isArray(feedback.timelineSteps)) {
+      let elapsed = 0;
+      const animations = feedback.timelineSteps.flatMap((step) => {
+        const wait = Math.max(0, step.at - elapsed);
+        elapsed = step.at + step.duration;
+
+        return [
+          ...(wait > 0 ? [Animated.delay(wait)] : []),
+          Animated.timing(playCarFeedbackProgress, {
+            toValue: step.toValue,
+            duration: step.duration,
+            easing: step.easing ?? Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ];
+      });
+
+      return Animated.sequence(animations);
+    }
+
+    if (feedback.kind === 'linearTimeline') {
+      return Animated.timing(playCarFeedbackProgress, {
+        toValue: 1,
+        duration: feedback.duration,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      });
+    }
+
+    return Animated.timing(playCarFeedbackProgress, {
+      toValue: 1,
+      duration: feedback.duration,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+  };
 
   const runOnlineCarJumpSequence = ({ withHaptics = false, onComplete } = {}) => {
     void playSoundEffect(ONLINE_CARS_HORN_SOUND, settings);
@@ -2707,142 +4059,6 @@ export default function HomeScreen({
     });
   };
 
-  const openBugReportModal = async () => {
-    setBugReportError('');
-    setBugReportSuccess('');
-    try {
-      await preloadImageAssets(BUG_REPORT_MODAL_ASSETS);
-    } catch (_error) {
-      // Bug melden mag alsnog openen als prefetch faalt.
-    }
-    setBugReportModalVisible(true);
-  };
-
-  const closeBugReportModal = () => {
-    setBugReportModalVisible(false);
-    setBugReportError('');
-  };
-
-  const updateBugReportForm = (field, value) => {
-    setBugReportForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-    setBugReportError('');
-    setBugReportSuccess('');
-  };
-
-  const pickBugReportScreenshot = async () => {
-    setBugReportError('');
-    setBugReportSuccess('');
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setBugReportError('Geef toegang tot je foto’s om een screenshot toe te voegen.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: false,
-      quality: 0.75,
-      exif: false,
-    });
-
-    if (result.canceled || !result.assets?.[0]) {
-      return;
-    }
-
-    updateBugReportForm('screenshot', result.assets[0]);
-  };
-
-  const submitBugReport = async () => {
-    if (bugReportSubmitting) {
-      return;
-    }
-
-    const location = bugReportForm.location.trim();
-    const summary = bugReportForm.summary.trim();
-    const steps = bugReportForm.steps.trim();
-
-    if (location.length < 3) {
-      setBugReportError('Vul in waar je de bug zag.');
-      return;
-    }
-
-    if (summary.length < 6) {
-      setBugReportError('Vertel kort wat er mis ging.');
-      return;
-    }
-
-    if (steps.length < 6) {
-      setBugReportError('Vul in hoe we de bug kunnen nadoen.');
-      return;
-    }
-
-    setBugReportSubmitting(true);
-    setBugReportError('');
-
-    const reportContext = {
-      activeTab,
-      isPremium,
-      selectedThemeId: selectedThemeDetail?.id ?? null,
-      appVersion: BUG_REPORT_APP_VERSION,
-      windowWidth,
-      windowHeight,
-    };
-
-    try {
-      await submitBugReportToSupabase({
-        location,
-        summary,
-        steps,
-        severity: bugReportForm.severity,
-        context: reportContext,
-        screenshot: bugReportForm.screenshot,
-      });
-
-      setBugReportForm(EMPTY_BUG_REPORT_FORM);
-      setBugReportSuccess('Dank je! Je melding is verstuurd.');
-    } catch (_error) {
-      try {
-        const storedReports = await AsyncStorage.getItem(BUG_REPORT_STORAGE_KEY);
-        const parsedReports = storedReports ? JSON.parse(storedReports) : [];
-        const reports = Array.isArray(parsedReports) ? parsedReports : [];
-        const nextReport = {
-          id: `bug-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          status: 'pending_sync',
-          location,
-          summary,
-          steps,
-          severity: bugReportForm.severity,
-          screenshot: bugReportForm.screenshot
-            ? {
-                uri: bugReportForm.screenshot.uri,
-                fileName: bugReportForm.screenshot.fileName ?? null,
-                mimeType: bugReportForm.screenshot.mimeType ?? null,
-                fileSize: bugReportForm.screenshot.fileSize ?? null,
-              }
-            : null,
-          context: reportContext,
-        };
-
-        await AsyncStorage.setItem(
-          BUG_REPORT_STORAGE_KEY,
-          JSON.stringify([nextReport, ...reports].slice(0, 25))
-        );
-
-        setBugReportForm(EMPTY_BUG_REPORT_FORM);
-        setBugReportSuccess('Geen verbinding. Je melding is lokaal bewaard.');
-      } catch {
-        setBugReportError('Opslaan lukt nu niet. Probeer het zo opnieuw.');
-      }
-    } finally {
-      setBugReportSubmitting(false);
-    }
-  };
-
   const openSkinInspect = (inspection) => {
     void Haptics.selectionAsync();
     void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
@@ -2862,12 +4078,61 @@ export default function HomeScreen({
       return;
     }
 
+    if (isChallengeSkin(skinId) && !isSkinUnlocked(skinChallengeProgress, skinId)) {
+      return;
+    }
+
+    if (!isSkinAvailableForPlayer(skinId, { isPremium, ownedPaidSkins })) {
+      return;
+    }
+
     setEquippedSkin(skinId);
 
     try {
       await AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, skinId);
     } catch (_error) {
       // Niet kritiek: de keuze is direct zichtbaar en rood blijft de fallback.
+    }
+
+    closeSkinInspect();
+  };
+
+  const handlePurchaseSkin = async (skinId) => {
+    if (!isPaidSkin(skinId) || purchasingSkinId) {
+      return;
+    }
+
+    const packageAvailable = Boolean(paidSkinPackagesBySkin?.[skinId]);
+
+    if (!packageAvailable) {
+      Alert.alert(t('home.skinshop'), t('home.skinPurchaseUnavailable'));
+      return;
+    }
+
+    setPurchasingSkinId(skinId);
+
+    try {
+      const result = await purchasePaidSkin(skinId);
+      const nextOwnedPaidSkins = Object.keys(result?.customerInfo?.entitlements?.active ?? {})
+        .filter((entitlementId) => entitlementId.startsWith('skin_'))
+        .map((entitlementId) => entitlementId.replace(/^skin_/, ''));
+
+      if (nextOwnedPaidSkins.includes(skinId) || ownedPaidSkins.includes(skinId)) {
+        setEquippedSkin(skinId);
+        void AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, skinId).catch(() => {});
+        closeSkinInspect();
+        return;
+      }
+
+      Alert.alert(t('home.skinshop'), t('home.skinPurchasePending'));
+    } catch (error) {
+      if (error?.userCancelled) {
+        Alert.alert(t('home.skinshop'), t('home.skinPurchaseCancelled'));
+      } else {
+        Alert.alert(t('home.skinshop'), t('home.skinPurchaseFailed'));
+      }
+    } finally {
+      setPurchasingSkinId(null);
     }
   };
 
@@ -2916,12 +4181,17 @@ export default function HomeScreen({
       return;
     }
 
+    if (tutorialActive && tutorialStep?.target !== 'home.onlineJoin') {
+      return;
+    }
+
     void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
 
     setIsJoinPlateVisible(true);
     setJoinCode('');
     setJoinError('');
     setIsJoinBusy(false);
+    onTutorialAction?.('home.joinPlateOpened');
 
     if (isOnlineMenuVisible) {
       closeOnlineMenu();
@@ -2956,15 +4226,83 @@ export default function HomeScreen({
   };
 
   const submitJoinCode = async (codeToSubmit = normalizedJoinCode) => {
-    const code = normalizeLobbyCode(codeToSubmit);
+    const code = isTutorialJoinCodeStep
+      ? normalizeTutorialJoinCode(codeToSubmit)
+      : normalizeLobbyCode(codeToSubmit);
 
     if (code.length !== 8 || isJoinBusy) {
       return;
     }
 
+    if (isTutorialJoinCodeStep && code === 'UITLEG12') {
+      setIsJoinBusy(false);
+      joinCodeInputRef.current?.blur();
+      isNavigatingRef.current = true;
+
+      const tutorialLobbyConfig = createGameConfig({
+        thema: 'snelweg',
+        modus: 'klassiek',
+        syncType: 'live',
+        lobbyCode: 'UITLEG12',
+        seed: 12345,
+        salt: 67890,
+        wincondition: '1rij',
+        diagonaal: true,
+        kaartOpzet: 'zelfde',
+        nederlands: true,
+        spelers: [
+          {
+            ...createPlayer({ skin: equippedSkin }),
+            naam: 'Jij',
+            skin: equippedSkin,
+          },
+        ],
+        liveLobbyPlayers: [
+          { ...createPlayer({ naam: 'Host', skin: 'rood' }), role: 'host' },
+          { ...createPlayer({ naam: 'Jij', skin: equippedSkin }), role: 'player' },
+        ],
+      });
+
+      if (onTutorialRouteReveal) {
+        onTutorialRouteReveal({
+          color: '#F5C400',
+          routeName: 'Lobby',
+          routeParams: {
+            config: tutorialLobbyConfig,
+            tutorialMode: true,
+          },
+          actionName: 'home.tutorialJoinSubmitted',
+          origin: {
+            nativeEvent: {
+              pageX: windowWidth / 2,
+              pageY: windowHeight / 2,
+            },
+          },
+        });
+      } else {
+        void triggerReveal({
+          targetRef: joinPlateTargetRef,
+          color: '#F5C400',
+          routeName: 'Lobby',
+          routeParams: {
+            config: tutorialLobbyConfig,
+            tutorialMode: true,
+          },
+          origin: {
+            x: windowWidth / 2,
+            y: windowHeight / 2,
+          },
+          onComplete: () => {
+            onTutorialAction?.('home.tutorialJoinSubmitted');
+          },
+        });
+      }
+      return;
+    }
+
     const decoded = decodeLobbyCode(code);
     if (!decoded) {
-      setJoinError('Deze code klopt niet.');
+      setJoinError(t('home.invalidCode'));
       return;
     }
 
@@ -2977,8 +4315,8 @@ export default function HomeScreen({
         const online = await checkOnlineConnection();
         if (!online) {
           setConnectionError({
-            title: 'Geen internetverbinding',
-            message: 'Om deze lobby te joinen, heb je een stabiele internetverbinding nodig.',
+            title: t('home.noInternetTitle'),
+            message: t('home.noInternetJoinMessage'),
           });
           setIsJoinBusy(false);
           return;
@@ -2987,14 +4325,14 @@ export default function HomeScreen({
       const liveLobby = syncType === 'live' ? await getLobbySnapshot(code) : null;
 
       if (syncType === 'live' && !liveLobby) {
-        setJoinError('Lobby niet gevonden.');
+        setJoinError(t('home.lobbyNotFound'));
         setIsJoinBusy(false);
         return;
       }
 
       const joinPlayer = {
         ...createPlayer({ skin: equippedSkin }),
-        naam: 'Speler 1',
+        naam: getDefaultPlayerNameForLanguage(language, 0),
         skin: equippedSkin,
       };
 
@@ -3038,16 +4376,17 @@ export default function HomeScreen({
         },
       });
     } catch (_error) {
-      setJoinError('Joinen lukt even niet.');
+      setJoinError(t('home.joinFailed'));
       setIsJoinBusy(false);
     }
   };
 
-  const triggerReveal = async ({ targetRef, color, routeName, routeParams = {}, origin }) => {
+  const triggerReveal = async ({ targetRef, color, routeName, routeParams = {}, origin, onComplete }) => {
     const center = origin ?? latestPressPointRef.current ?? await measureViewCenter(targetRef);
 
     pendingRouteRef.current = routeName;
     pendingRouteParamsRef.current = routeParams;
+    pendingRevealCompleteRef.current = typeof onComplete === 'function' ? onComplete : null;
     setRevealColor(color);
     setRevealOrigin(center);
 
@@ -3066,21 +4405,42 @@ export default function HomeScreen({
     }
 
     isNavigatingRef.current = true;
-    void playSoundEffect(PLAY_HORN_SOUND, settings);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    PLAY_HORN_FEEDBACK_DELAYS.slice(1).forEach((delay) => {
-      setTimeout(() => {
-        triggerLightJumpHaptic();
+    const feedback = playCarFeedback;
+    playCarFeedbackProgress.stopAnimation();
+    playCarHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    playCarHapticTimeoutsRef.current = [];
+    if (playCarRevealTimeoutRef.current) {
+      clearTimeout(playCarRevealTimeoutRef.current);
+      playCarRevealTimeoutRef.current = null;
+    }
+
+    void playSoundEffect(feedback.soundName, settings, {
+      ...feedback.soundOptions,
+      exclusiveSoundNames: PLAY_CAR_SOUND_NAMES,
+      forceAudioMode: true,
+    });
+    feedback.hapticDelays.forEach((delay, index) => {
+      const timeoutId = setTimeout(() => {
+        if (index === 0) {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } else {
+          triggerLightJumpHaptic();
+        }
       }, delay);
+      playCarHapticTimeoutsRef.current.push(timeoutId);
     });
 
-    buildPlayHornJumpAnimation().start(({ finished }) => {
+    buildPlayCarFeedbackAnimation(feedback).start(({ finished }) => {
       if (!finished) {
+        playCarHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+        playCarHapticTimeoutsRef.current = [];
         isNavigatingRef.current = false;
         return;
       }
 
-      setTimeout(() => {
+      playCarHapticTimeoutsRef.current = [];
+      playCarRevealTimeoutRef.current = setTimeout(() => {
+        playCarRevealTimeoutRef.current = null;
         void triggerReveal({
           targetRef: playButtonWrapRef,
           color: '#F5C400',
@@ -3089,7 +4449,7 @@ export default function HomeScreen({
             initialConfig: createGameConfig({
               spelers: [
                 {
-                  naam: 'Speler 1',
+                  naam: getDefaultPlayerNameForLanguage(language, 0),
                   skin: equippedSkin,
                 },
               ],
@@ -3106,10 +4466,18 @@ export default function HomeScreen({
       return;
     }
 
+    if (tutorialActive && tutorialStep?.target !== 'home.online') {
+      return;
+    }
+
     if (isOnlineMenuVisible) {
       if (pendingOnlineJumpTimeoutRef.current) {
         clearTimeout(pendingOnlineJumpTimeoutRef.current);
         pendingOnlineJumpTimeoutRef.current = null;
+      }
+      if (tutorialActive) {
+        onTutorialAction?.('home.onlineOpened');
+        return;
       }
       void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
       closeOnlineMenu();
@@ -3121,6 +4489,7 @@ export default function HomeScreen({
       runOnlineCarJumpSequence({ withHaptics: true });
     }, PRESS_THEN_HORN_DELAY_MS);
     openOnlineMenu();
+    onTutorialAction?.('home.onlineOpened');
   };
 
   const handleOnlineOptionPress = (routeName, targetRef, origin) => {
@@ -3140,7 +4509,40 @@ export default function HomeScreen({
   };
 
   const handleHostOptionPress = () => {
+    if (tutorialActive && tutorialStep?.target !== 'home.onlineHost') {
+      return;
+    }
+
     void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
+
+    if (tutorialStep?.target === 'home.onlineHost') {
+      if (onTutorialRouteReveal) {
+        onTutorialRouteReveal({
+          color: '#E03030',
+          routeName: 'HostSetup',
+          routeParams: {
+            tutorialMode: true,
+          },
+          actionName: 'home.hostPressed',
+          origin: latestPressPointRef.current
+            ? {
+                nativeEvent: {
+                  pageX: latestPressPointRef.current.x,
+                  pageY: latestPressPointRef.current.y,
+                },
+              }
+            : {
+                nativeEvent: {
+                  pageX: windowWidth / 2,
+                  pageY: windowHeight / 2,
+                },
+              },
+        });
+      } else {
+        onTutorialAction?.('home.hostPressed');
+      }
+      return;
+    }
 
     if (!isPremium) {
       void openPremiumModal('host');
@@ -3155,7 +4557,35 @@ export default function HomeScreen({
   };
 
   const handleTabPress = (tabKey) => {
+    const tutorialTabTargets = {
+      [HOME_TAB_SKINSHOP]: {
+        target: 'home.skinshopTab',
+        action: 'home.skinshopOpened',
+      },
+      [HOME_TAB_HOME]: {
+        target: 'home.homeTab',
+        action: 'home.homeOpened',
+      },
+      [HOME_TAB_THEMECARDS]: {
+        target: 'home.themeCardsTab',
+        action: 'home.themeCardsOpened',
+      },
+    };
+    const tutorialTabTarget = tutorialTabTargets[tabKey];
+
+    if (
+      tutorialActive
+      && tutorialStep?.target
+      && Object.values(tutorialTabTargets).some(({ target }) => target === tutorialStep.target)
+      && tutorialStep.target !== tutorialTabTarget?.target
+    ) {
+      return;
+    }
+
     if (activeTab === tabKey) {
+      if (tutorialActive && tutorialStep?.target === tutorialTabTarget?.target) {
+        onTutorialAction?.(tutorialTabTarget.action);
+      }
       return;
     }
 
@@ -3171,11 +4601,17 @@ export default function HomeScreen({
     if (skinInspection) {
       closeSkinInspect(() => {
         setActiveTab(tabKey);
+        if (tutorialActive && tutorialStep?.target === tutorialTabTarget?.target) {
+          onTutorialAction?.(tutorialTabTarget.action);
+        }
       });
       return;
     }
 
     setActiveTab(tabKey);
+    if (tutorialActive && tutorialStep?.target === tutorialTabTarget?.target) {
+      onTutorialAction?.(tutorialTabTarget.action);
+    }
   };
 
   const handleThemeSelect = (index) => {
@@ -3542,6 +4978,10 @@ export default function HomeScreen({
                 items={skinShopItems}
                 inspectedSkinId={skinInspection?.skin?.id}
                 equippedSkin={equippedSkin}
+                tutorialActive={tutorialActive}
+                tutorialStep={tutorialStep}
+                onTutorialTargetLayout={onTutorialTargetLayout}
+                onTutorialAction={onTutorialAction}
                 onInspect={openSkinInspect}
               />
             ) : null}
@@ -3607,12 +5047,14 @@ export default function HomeScreen({
                     ]}
                   >
                     <View style={[styles.joinPlateIntro, { width: joinPlateWidth }]}>
-                      <Text style={styles.joinPlateIntroTitle}>Voer de lobbycode in</Text>
+                      <Text style={styles.joinPlateIntroTitle}>{t('home.joinTitle')}</Text>
                       <Text style={styles.joinPlateIntroText}>
-                        Deze code staat bovenin het scherm van de lobby.
+                        {t('home.joinText')}
                       </Text>
                     </View>
                     <Pressable
+                      ref={joinPlateTargetRef}
+                      collapsable={false}
                       onPress={() => joinCodeInputRef.current?.focus()}
                       style={[
                         styles.joinPlateTapTarget,
@@ -3671,7 +5113,7 @@ export default function HomeScreen({
                             {
                               opacity: joinCursorBlink,
                               left: joinPlateCursorLeft,
-                              display: normalizedJoinCode.length >= 8 ? 'none' : 'flex',
+                              display: displayJoinCode.length >= 8 ? 'none' : 'flex',
                             },
                           ]}
                         />
@@ -3684,7 +5126,10 @@ export default function HomeScreen({
                       ref={joinCodeInputRef}
                       value={joinCode}
                       onChangeText={(value) => {
-                        const nextCode = normalizeLobbyCode(value.replace(/[\r\n]+/g, ''));
+                        const rawCode = value.replace(/[\r\n]+/g, '');
+                        const nextCode = isTutorialJoinCodeStep
+                          ? normalizeTutorialJoinCode(rawCode)
+                          : normalizeLobbyCode(rawCode);
                         setJoinCode(nextCode);
                         setJoinError('');
 
@@ -3769,14 +5214,19 @@ export default function HomeScreen({
                           style={[
                             styles.playActionImage,
                             {
-                              transform: [{ translateY: playCarJump }],
+                              transform: [
+                                { translateX: playCarTranslateX },
+                                { translateY: playCarTranslateY },
+                                { rotate: playCarRotate },
+                                { scale: playCarScale },
+                              ],
                             },
                           ]}
                         />
                       </View>
-                      <View ref={playButtonTargetRef} collapsable={false}>
+                      <View>
                         <GlossyButton
-                          label="Speel"
+                          label={t('home.play')}
                           variant="yellow"
                           size="large"
                           labelOffsetY={0}
@@ -4089,6 +5539,7 @@ export default function HomeScreen({
               ) : (
                 <ThemeRoadBackground
                   key={`theme-road-${themeRoadRenderKey}`}
+                  items={localizedThemeShowcaseItems}
                   isPremium={isPremium}
                   onReady={handleThemeRoadReady}
                   onScrollOffsetChange={(offset) => {
@@ -4104,6 +5555,8 @@ export default function HomeScreen({
 
       {showMainMenuPremiumButton ? (
         <Pressable
+          ref={premiumButtonRef}
+          collapsable={false}
           accessibilityRole="button"
           accessibilityLabel="Open Premium"
           style={[
@@ -4149,62 +5602,19 @@ export default function HomeScreen({
         </Pressable>
       ) : null}
 
-      {showMainMenuBugReportButton ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Meld een bug"
-          style={[
-            styles.mainMenuBugReportButton,
-            {
-              top: showMainMenuPremiumButton
-                ? homeMenuButtonTop + homeMenuButtonSize + homeMenuButtonGap
-                : homeMenuButtonTop,
-              left: homeMenuButtonLeft,
-              width: homeMenuButtonSize,
-              height: homeMenuButtonSize,
-            },
-            isTablet && {
-              top: showMainMenuPremiumButton ? 24 + 64 * tabletScale : 24,
-              left: 24,
-              width: 54 * tabletScale,
-              height: 54 * tabletScale,
-            },
-          ]}
-          onPressIn={pressBugReportButtonIn}
-          onPressOut={pressBugReportButtonOut}
-          onPress={() => {
-            triggerLightJumpHaptic();
-            void playSoundEffect(SETTINGS_GEAR_SOUND, settings);
-            void openBugReportModal();
-          }}
-        >
-          <AnimatedExpoImage
-            source={BUG_REPORT_BUTTON_IMAGE}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            transition={0}
-            style={[
-              styles.mainMenuBugReportButtonImage,
-              {
-                width: homeMenuButtonSize,
-                height: homeMenuButtonSize,
-              },
-              isTablet && {
-                width: 54 * tabletScale,
-                height: 54 * tabletScale,
-              },
-              bugReportPressStyle,
-            ]}
-          />
-        </Pressable>
-      ) : null}
-
         <SkinInspectOverlay
           inspection={skinInspection}
           progress={skinInspectProgress}
           equippedSkin={equippedSkin}
+          isPremium={isPremium}
+          purchasingSkinId={purchasingSkinId}
+          getPaidSkinPrice={getPaidSkinPrice}
           onClose={closeSkinInspect}
           onEquip={handleEquipSkin}
+          onPremiumPress={() => closeSkinInspect(() => {
+            void openPremiumModal('skin');
+          })}
+          onPurchase={handlePurchaseSkin}
         />
 
       {!selectedThemeDetail ? (
@@ -4238,14 +5648,22 @@ export default function HomeScreen({
                 ]}
               />
             </Animated.View>
-            {NAV_ITEMS.map((item) => (
-              <HomeTabButton
+            {localizedNavItems.map((item) => (
+              <View
                 key={item.key}
-                item={item}
-                active={activeTab === item.key}
-                onPress={() => handleTabPress(item.key)}
-                metrics={navMetrics}
-              />
+                ref={(node) => {
+                  navButtonRefs.current[item.key] = node;
+                }}
+                collapsable={false}
+                style={styles.bottomNavButtonRefWrap}
+              >
+                <HomeTabButton
+                  item={item}
+                  active={activeTab === item.key}
+                  onPress={() => handleTabPress(item.key)}
+                  metrics={navMetrics}
+                />
+              </View>
             ))}
           </View>
         </View>
@@ -4258,9 +5676,11 @@ export default function HomeScreen({
           originY={revealOrigin.y}
           onComplete={() => {
             const routeName = pendingRouteRef.current;
+            const revealComplete = pendingRevealCompleteRef.current;
 
             if (!routeName) {
               pendingRouteParamsRef.current = null;
+              pendingRevealCompleteRef.current = null;
               isNavigatingRef.current = false;
               return;
             }
@@ -4281,6 +5701,8 @@ export default function HomeScreen({
             });
             pendingRouteRef.current = null;
             pendingRouteParamsRef.current = null;
+            pendingRevealCompleteRef.current = null;
+            revealComplete?.();
           }}
         />
         {themeRevealState.solidHold ? (
@@ -4311,15 +5733,32 @@ export default function HomeScreen({
             <ImageBackground
               source={DRIVER_WARNING_MENU_IMAGE}
               resizeMode="contain"
-              style={[styles.driverWarningMenu, isTablet && styles.driverWarningMenuTablet]}
+              style={[
+                styles.driverWarningMenu,
+                isTablet && styles.driverWarningMenuTablet,
+                {
+                  width: driverWarningMetrics.menuWidth,
+                  transform: [{ translateY: driverWarningMetrics.menuTranslateY }],
+                },
+              ]}
               imageStyle={styles.driverWarningMenuImage}
             >
-              <Text style={[styles.driverWarningTitle, isTablet && styles.driverWarningTitleTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
-                Rij veilig!
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.48}
+                style={[styles.driverWarningTitle, isTablet && styles.driverWarningTitleTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+              >
+                {t('home.driverTitle')}
               </Text>
               <View style={[styles.driverWarningBody, isTablet && styles.driverWarningBodyTablet]}>
-                <Text style={[styles.driverWarningText, isTablet && styles.driverWarningTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
-                  Gebruik AutoBingo niet als bestuurder
+                <Text
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.66}
+                  style={[styles.driverWarningText, isTablet && styles.driverWarningTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+                >
+                  {t('home.driverWarning')}
                 </Text>
                 <Image
                   source={DRIVER_WARNING_ICON_IMAGE}
@@ -4333,8 +5772,13 @@ export default function HomeScreen({
                     },
                   ]}
                 />
-                <Text style={[styles.driverWarningFooterText, isTablet && styles.driverWarningFooterTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
-                  De app is bedoeld voor passagiers
+                <Text
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.66}
+                  style={[styles.driverWarningFooterText, isTablet && styles.driverWarningFooterTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+                >
+                  {t('home.driverFooter')}
                 </Text>
               </View>
               <Animated.View
@@ -4355,10 +5799,10 @@ export default function HomeScreen({
                 ]}
               >
                 <GlossyButton
-                  label="Ik ben geen bestuurder"
+                  label={t('home.driverConfirm')}
                   variant="green"
-                  heightOverride={isTablet ? 66 : 54}
-                  horizontalPadding={isTablet ? 34 : 22}
+                  heightOverride={driverWarningMetrics.buttonHeight}
+                  horizontalPadding={driverWarningMetrics.buttonPaddingHorizontal}
                   labelFontScale={isTablet ? 0.88 : 0.78}
                   disabled={!driverWarningButtonReady}
                   onPress={completeDriverWarning}
@@ -4382,8 +5826,8 @@ export default function HomeScreen({
               );
             }
           }}
-          title="Auto Bingo Premium"
-          message="Met Premium kun je lobby’s hosten en alle premium thema’s gebruiken. Joinen blijft gratis."
+          title="AutoBingo Premium"
+          message={t('home.premiumMessage')}
         />
         <Modal
           visible={Boolean(lobbyExitMessage)}
@@ -4393,13 +5837,13 @@ export default function HomeScreen({
         >
           <View style={styles.lobbyNoticeBackdrop}>
             <PopupPanel
-              title="Lobby verlaten"
+              title={t('home.lobbyExit')}
               fontFamily="FredokaOne_400Regular"
               compact
               actions={(
                 <View style={styles.lobbyNoticeButtonWrap}>
                 <GlossyButton
-                  label="Oké"
+                  label={t('common.ok')}
                   variant="green"
                   heightOverride={58}
                   horizontalPadding={34}
@@ -4410,189 +5854,6 @@ export default function HomeScreen({
             >
               {lobbyExitMessage}
             </PopupPanel>
-          </View>
-        </Modal>
-        <Modal
-          visible={bugReportModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={closeBugReportModal}
-        >
-          <View style={styles.lobbyNoticeBackdrop}>
-            <ImageBackground
-              source={BUG_REPORT_MENU_IMAGE}
-              resizeMode="contain"
-              style={styles.bugReportMenu}
-              imageStyle={styles.bugReportMenuImage}
-              fadeDuration={0}
-            >
-              <Text style={[styles.bugReportMenuTitle, { fontFamily: 'FredokaOne_400Regular' }]}>
-                Bug melden
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Sluit bugmelding"
-                hitSlop={10}
-                style={styles.bugReportCloseIconButton}
-                onPress={closeBugReportModal}
-              >
-                <Image
-                  source={BUG_REPORT_CLOSE_IMAGE}
-                  resizeMode="contain"
-                  style={styles.bugReportCloseIcon}
-                  fadeDuration={0}
-                />
-              </Pressable>
-              <View style={styles.bugReportMenuBody}>
-                <ScrollView
-                  style={styles.bugReportBodyScrollView}
-                  indicatorStyle="black"
-                  showsVerticalScrollIndicator
-                  keyboardShouldPersistTaps="always"
-                  keyboardDismissMode="none"
-                  contentContainerStyle={styles.bugReportBodyScroll}
-                >
-                  <Text style={[styles.bugReportIntroText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                    Heb je een bug gevonden? Vul hieronder kort in wat er gebeurde. Zo kunnen we het probleem serieus oplossen.
-                  </Text>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Waar gebeurde het?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Bijvoorbeeld: home, lobby, kaart, premium of instellingen.
-                    </Text>
-                    <TextInput
-                      value={bugReportForm.location}
-                      onChangeText={(value) => updateBugReportForm('location', value)}
-                      placeholder="Scherm of onderdeel"
-                      placeholderTextColor="#719649"
-                      maxLength={80}
-                      returnKeyType="done"
-                      blurOnSubmit
-                      style={[styles.bugReportInput, styles.bugReportSingleLineInput, { fontFamily: 'FredokaOne_400Regular' }]}
-                    />
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Wat ging er mis?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Beschrijf wat je zag, hoorde of wat niet werkte.
-                    </Text>
-                    <TextInput
-                      value={bugReportForm.summary}
-                      onChangeText={(value) => updateBugReportForm('summary', value)}
-                      placeholder="De knop reageerde niet..."
-                      placeholderTextColor="#719649"
-                      multiline
-                      maxLength={220}
-                      scrollEnabled={false}
-                      returnKeyType="done"
-                      blurOnSubmit
-                      style={[styles.bugReportInput, styles.bugReportSummaryInput, { fontFamily: 'FredokaOne_400Regular' }]}
-                      textAlignVertical="top"
-                    />
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Hoe kunnen we het nadoen?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Noem de stappen vanaf het moment dat alles nog goed ging.
-                    </Text>
-                    <TextInput
-                      value={bugReportForm.steps}
-                      onChangeText={(value) => updateBugReportForm('steps', value)}
-                      placeholder="1. Open... 2. Tik op..."
-                      placeholderTextColor="#719649"
-                      multiline
-                      maxLength={320}
-                      scrollEnabled={false}
-                      returnKeyType="done"
-                      blurOnSubmit
-                      style={[styles.bugReportInput, styles.bugReportStepsInput, { fontFamily: 'FredokaOne_400Regular' }]}
-                      textAlignVertical="top"
-                    />
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Hoe ernstig is het?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Kies hoe erg het spelen hierdoor werd verstoord.
-                    </Text>
-                    <View style={styles.bugReportSeverityRow}>
-                      {BUG_REPORT_SEVERITIES.map((severity) => {
-                        const selected = bugReportForm.severity === severity.value;
-                        return (
-                          <Pressable
-                            key={severity.value}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected }}
-                            style={[
-                              styles.bugReportSeverityChoice,
-                              selected && styles.bugReportChoiceSelected,
-                            ]}
-                            onPress={() => updateBugReportForm('severity', severity.value)}
-                          >
-                            <Text
-                              style={[
-                                styles.bugReportChoiceText,
-                                selected && styles.bugReportChoiceTextSelected,
-                                { fontFamily: 'FredokaOne_400Regular' },
-                              ]}
-                            >
-                              {severity.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Afbeelding toevoegen?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Optioneel: kies een screenshot uit je foto’s. Maximaal 5 MB.
-                    </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      style={styles.bugReportAttachmentBox}
-                      onPress={pickBugReportScreenshot}
-                    >
-                      <Text style={[styles.bugReportAttachmentText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                        {bugReportForm.screenshot?.fileName
-                          ?? (bugReportForm.screenshot ? 'Screenshot gekozen' : 'Screenshot kiezen')}
-                      </Text>
-                    </Pressable>
-                    {bugReportForm.screenshot ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        style={styles.bugReportRemoveAttachmentButton}
-                        onPress={() => updateBugReportForm('screenshot', null)}
-                      >
-                        <Text style={[styles.bugReportRemoveAttachmentText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                          Verwijder screenshot
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  {bugReportError ? (
-                    <Text style={[styles.bugReportErrorText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      {bugReportError}
-                    </Text>
-                  ) : null}
-                  {bugReportSuccess ? (
-                    <Text style={[styles.bugReportSuccessText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      {bugReportSuccess}
-                    </Text>
-                  ) : null}
-                  <View style={styles.bugReportSubmitButtonWrap}>
-                    <GlossyButton
-                      label={bugReportSubmitting ? 'Opslaan...' : 'Verstuur melding'}
-                      variant="yellow"
-                      heightOverride={48}
-                      horizontalPadding={22}
-                      labelFontScale={0.82}
-                      disabled={bugReportSubmitting}
-                      onPress={submitBugReport}
-                    />
-                  </View>
-                </ScrollView>
-              </View>
-            </ImageBackground>
           </View>
         </Modal>
         <Modal
@@ -4917,21 +6178,6 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
   },
-  mainMenuBugReportButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 54,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 60,
-    elevation: 60,
-  },
-  mainMenuBugReportButtonImage: {
-    width: 54,
-    height: 54,
-  },
   joinPlateBackdropPressable: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 38,
@@ -5115,6 +6361,35 @@ const styles = StyleSheet.create({
     marginLeft: -38,
     zIndex: 4,
   },
+  skinShopVerticalProgress: {
+    position: 'absolute',
+    top: 52,
+    width: 14,
+    height: 54,
+    borderRadius: 7,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.86)',
+    shadowColor: '#11213B',
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+    zIndex: 5,
+  },
+  skinShopVerticalProgressLeft: {
+    left: 15,
+  },
+  skinShopVerticalProgressRight: {
+    right: 15,
+  },
+  skinShopVerticalProgressFill: {
+    width: '100%',
+    borderRadius: 7,
+    backgroundColor: '#F5C400',
+  },
   skinShopEquippedBadge: {
     position: 'absolute',
     top: 6,
@@ -5282,6 +6557,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  skinInspectBuyButtonWrap: {
+    marginTop: 10,
+    minWidth: 190,
+    alignSelf: 'center',
   },
   skinInspectFutureText: {
     position: 'absolute',
@@ -5823,6 +7103,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     zIndex: 2,
   },
+  bottomNavButtonRefWrap: {
+    flex: 1,
+  },
   bottomNavButtonCenter: {
     marginTop: 0,
   },
@@ -6008,194 +7291,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 5,
     elevation: 5,
-  },
-  bugReportMenu: {
-    width: '98%',
-    maxWidth: 452,
-    aspectRatio: 958 / 1642,
-  },
-  bugReportMenuImage: {
-    width: '100%',
-    height: '100%',
-  },
-  bugReportMenuTitle: {
-    position: 'absolute',
-    top: '6.9%',
-    left: '17%',
-    right: '17%',
-    height: '9%',
-    color: '#FFFFFF',
-    fontSize: 36,
-    lineHeight: 42,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    letterSpacing: 0,
-    textShadowColor: 'rgba(20, 74, 18, 0.82)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 3,
-  },
-  bugReportMenuBody: {
-    position: 'absolute',
-    top: '17%',
-    left: '9%',
-    right: '7%',
-    bottom: '10.4%',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  bugReportBodyScroll: {
-    alignItems: 'center',
-    paddingTop: 12,
-    paddingRight: 16,
-    paddingBottom: 34,
-  },
-  bugReportBodyScrollView: {
-    width: '100%',
-    flex: 1,
-  },
-  bugReportIntroText: {
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#315319',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportSection: {
-    width: '100%',
-    marginTop: 13,
-  },
-  bugReportLabel: {
-    fontSize: 15,
-    lineHeight: 19,
-    color: '#234C11',
-    letterSpacing: 0,
-  },
-  bugReportHelpText: {
-    marginTop: 2,
-    marginBottom: 6,
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#5A7B34',
-    letterSpacing: 0,
-  },
-  bugReportInput: {
-    width: '100%',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderWidth: 2,
-    borderColor: '#A7CF62',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.62)',
-    fontSize: 14,
-    lineHeight: 19,
-    color: '#24460F',
-    letterSpacing: 0,
-  },
-  bugReportSingleLineInput: {
-    minHeight: 42,
-  },
-  bugReportSummaryInput: {
-    minHeight: 82,
-  },
-  bugReportStepsInput: {
-    minHeight: 96,
-  },
-  bugReportSeverityRow: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 5,
-  },
-  bugReportSeverityChoice: {
-    flex: 1,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-    borderWidth: 2,
-    borderColor: '#A7CF62',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.62)',
-  },
-  bugReportChoiceSelected: {
-    borderColor: '#1C7B1D',
-    backgroundColor: '#BDF05E',
-  },
-  bugReportChoiceText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#315319',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportChoiceTextSelected: {
-    color: '#173D09',
-  },
-  bugReportErrorText: {
-    marginTop: 10,
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#9E1515',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportSuccessText: {
-    marginTop: 10,
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#16852D',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportSubmitButtonWrap: {
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  bugReportAttachmentBox: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    borderWidth: 2,
-    borderColor: '#A7CF62',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.36)',
-  },
-  bugReportAttachmentText: {
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#5A7B34',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportRemoveAttachmentButton: {
-    alignSelf: 'center',
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  bugReportRemoveAttachmentText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#9E1515',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportCloseIconButton: {
-    position: 'absolute',
-    top: '7.8%',
-    right: '2.8%',
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 4,
-    elevation: 4,
-  },
-  bugReportCloseIcon: {
-    width: 40,
-    height: 40,
   },
   connectionErrorActions: {
     marginTop: 8,

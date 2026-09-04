@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
 import { Animated, AppState, Easing, Image, ImageBackground, InteractionManager, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import CircularReveal from './components/CircularReveal';
 import GlossyButton from './src/components/GlossyButton';
-import TutorialOverlay, { TUTORIAL_STEPS } from './src/components/TutorialOverlay';
+import TutorialOverlay, { TUTORIAL_FLOWS, TUTORIAL_STEPS } from './src/components/TutorialOverlay';
 import WarmupImages from './src/components/WarmupImages';
 import HomeScreen from './screens/HomeScreen';
 import HostSetupScreen from './screens/HostSetupScreen';
@@ -16,11 +17,12 @@ import BingoCardScreen from './screens/BingoCardScreen';
 import SingleDeviceSetupTestScreen from './src/screens/SingleDeviceSetupTestScreen';
 import { createGameConfig, createPlayer, createRandomSalt, createRandomSeed, getPlayerThemes, withDefaultPlayerNames } from './screens/gameFlowConfig';
 import { PLAYER_IMAGES } from './assets/images/players/playerImages';
-import { clearBoardState, getLobbySnapshot, removePlayers, restartLobbyGame, stopLobbyGame, subscribeToLobby } from './src/services/liveLobbyService';
+import { clearBoardState, deleteLobby, getLobbySnapshot, removePlayers, restartLobbyGame, stopLobbyGame, subscribeToLobby, touchPlayerPresence } from './src/services/liveLobbyService';
 import { AppSettingsProvider, useAppSettings } from './src/settings/AppSettingsContext';
 import { PremiumProvider } from './src/premium/PremiumContext';
+import { AccountProvider } from './src/account/AccountContext';
 import { AdsProvider, useAds } from './src/ads/AdProvider';
-import { getResponsiveMetrics } from './src/utils/responsive';
+import { getDriverWarningMetrics, getResponsiveMetrics } from './src/utils/responsive';
 import useOnlineConnectionStatus from './src/hooks/useOnlineConnectionStatus';
 import LegalConsentGate, { hasAcceptedCurrentLegalTerms } from './src/legal/LegalConsentGate';
 import {
@@ -42,6 +44,7 @@ import {
   getRouteAssets,
 } from './src/assets/preloadManifest';
 import { preloadImageAssets } from './src/assets/preloadImages';
+import { useTranslation } from './src/i18n/useTranslation';
 
 const SCREEN_COMPONENTS = {
   Home: HomeScreen,
@@ -56,19 +59,19 @@ const SCREEN_COMPONENTS = {
 const SETTINGS_GEAR_IMAGE = require('./assets/images/navigation/settings-gear.png');
 const DRIVER_WARNING_MENU_IMAGE = require('./assets/images/ui/driver-warning-menu.png');
 const DRIVER_WARNING_ICON_IMAGE = require('./assets/images/ui/driver-warning-icon.png');
-const DRIVER_WARNING_BOOT_ICON_WIDTH_RATIO = 0.532;
-const DRIVER_WARNING_BOOT_ICON_MAX_SIZE = 224;
+const CODE_ENTRY_MENU_IMAGE = require('./assets/images/settings/code-invoeren-menu.png');
 const DRIVER_WARNING_BOOT_POPUP_DELAY_MS = 1000;
 const DRIVER_WARNING_BOOT_BUTTON_DELAY_MS = 2500;
 const DRIVER_WARNING_BOOT_BUTTON_FADE_MS = 520;
 const GAME_ROUTE_SETTLE_MS = 180;
 const ROUTE_RENDER_SETTLE_MS = 220;
 const ROUTE_MIN_SOLID_MS = 460;
-const BOOT_MIN_SOLID_MS = Platform.OS === 'android' ? 900 : 120;
-const BOOT_RENDER_SETTLE_MS = Platform.OS === 'android' ? ROUTE_RENDER_SETTLE_MS : 40;
+const BOOT_MIN_SOLID_MS = 120;
+const BOOT_RENDER_SETTLE_MS = 40;
 const ROUTE_READY_TIMEOUT_MS = 12000;
 const BOOT_ROUTE_READY_TIMEOUT_MS = 12000;
 const SETTINGS_GEAR_SOUND = 'settingsGearClick';
+const INITIAL_TUTORIAL_SEEN_STORAGE_KEY = '@AutoBingo:initialMenuTutorialSeen:v1';
 const routePreloadPromises = new Map();
 
 async function hideAndroidSystemNavigation() {
@@ -238,10 +241,28 @@ function BackgroundMusicController({ mode, sessionKey }) {
 
 function AudioAwareAdProvider({ children }) {
   const { settings } = useAppSettings();
+  const restoreRetryTimersRef = useRef([]);
+
+  useEffect(() => () => {
+    restoreRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    restoreRetryTimersRef.current = [];
+  }, []);
 
   const restoreAudioAfterInterstitial = useCallback(() => {
-    void restoreSoundEffectsAfterInterruption();
-    void restoreBackgroundMusicAfterInterruption(settings);
+    restoreRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    restoreRetryTimersRef.current = [];
+
+    const recoverAudio = () => {
+      void restoreSoundEffectsAfterInterruption();
+      void restoreBackgroundMusicAfterInterruption(settings);
+    };
+
+    recoverAudio();
+
+    [120, 420, 950, 1800].forEach((delayMs) => {
+      const timer = setTimeout(recoverAudio, delayMs);
+      restoreRetryTimersRef.current.push(timer);
+    });
   }, [settings]);
 
   return (
@@ -253,19 +274,23 @@ function AudioAwareAdProvider({ children }) {
   );
 }
 
-function DriverWarningBootGate({ width, isTablet, onComplete }) {
+function DriverWarningBootGate({ onComplete }) {
+  const { width, height } = useWindowDimensions();
+  const driverWarningMetrics = getDriverWarningMetrics(width, height);
+  const { isTablet } = driverWarningMetrics;
+  const { hydrated: appSettingsHydrated } = useAppSettings();
+  const { t } = useTranslation();
   const warningFade = useRef(new Animated.Value(0)).current;
   const buttonFade = useRef(new Animated.Value(0)).current;
   const dismissedRef = useRef(false);
   const [buttonReady, setButtonReady] = useState(false);
-  const iconSize = isTablet
-    ? Math.min(372, Math.max(326, width * 0.395))
-    : Math.min(
-        DRIVER_WARNING_BOOT_ICON_MAX_SIZE,
-        width * DRIVER_WARNING_BOOT_ICON_WIDTH_RATIO
-      );
+  const iconSize = driverWarningMetrics.iconSize;
 
   useEffect(() => {
+    if (!appSettingsHydrated) {
+      return undefined;
+    }
+
     const popupTimer = setTimeout(() => {
       Animated.timing(warningFade, {
         toValue: 1,
@@ -292,7 +317,7 @@ function DriverWarningBootGate({ width, isTablet, onComplete }) {
       clearTimeout(popupTimer);
       clearTimeout(buttonTimer);
     };
-  }, [buttonFade, warningFade]);
+  }, [appSettingsHydrated, buttonFade, warningFade]);
 
   function handleConfirm() {
     if (dismissedRef.current) {
@@ -327,14 +352,14 @@ function DriverWarningBootGate({ width, isTablet, onComplete }) {
       <Animated.View
         style={[
           styles.driverWarningBootContent,
-          isTablet && styles.driverWarningBootContentTablet,
           {
+            width: driverWarningMetrics.menuWidth,
             opacity: warningFade,
             transform: [
               {
                 translateY: warningFade.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [-48, -58],
+                  outputRange: [driverWarningMetrics.sy(-48), driverWarningMetrics.menuTranslateY],
                 }),
               },
             ],
@@ -347,12 +372,22 @@ function DriverWarningBootGate({ width, isTablet, onComplete }) {
           style={styles.driverWarningBootMenu}
           imageStyle={styles.driverWarningBootMenuImage}
         >
-          <Text style={[styles.driverWarningBootTitle, isTablet && styles.driverWarningBootTitleTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
-            Rij veilig!
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.48}
+            style={[styles.driverWarningBootTitle, isTablet && styles.driverWarningBootTitleTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+          >
+            {t('home.driverTitle')}
           </Text>
           <View style={[styles.driverWarningBootBody, isTablet && styles.driverWarningBootBodyTablet]}>
-            <Text style={[styles.driverWarningBootText, isTablet && styles.driverWarningBootTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
-              Gebruik AutoBingo niet als bestuurder
+            <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.66}
+              style={[styles.driverWarningBootText, isTablet && styles.driverWarningBootTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+            >
+              {t('home.driverWarning')}
             </Text>
             <Image
               source={DRIVER_WARNING_ICON_IMAGE}
@@ -366,8 +401,13 @@ function DriverWarningBootGate({ width, isTablet, onComplete }) {
                 },
               ]}
             />
-            <Text style={[styles.driverWarningBootFooterText, isTablet && styles.driverWarningBootFooterTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}>
-              De app is bedoeld voor passagiers
+            <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.66}
+              style={[styles.driverWarningBootFooterText, isTablet && styles.driverWarningBootFooterTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+            >
+              {t('home.driverFooter')}
             </Text>
           </View>
           <Animated.View
@@ -388,16 +428,75 @@ function DriverWarningBootGate({ width, isTablet, onComplete }) {
             ]}
           >
             <GlossyButton
-              label="Ik ben geen bestuurder"
+              label={t('home.driverConfirm')}
               variant="green"
-              heightOverride={isTablet ? 66 : 54}
-              horizontalPadding={isTablet ? 34 : 22}
-              labelFontScale={isTablet ? 0.88 : 0.78}
+              heightOverride={driverWarningMetrics.buttonHeight}
+              horizontalPadding={driverWarningMetrics.buttonPaddingHorizontal}
+              labelFontScale={driverWarningMetrics.buttonLabelScale}
               onPress={handleConfirm}
             />
           </Animated.View>
         </ImageBackground>
       </Animated.View>
+    </View>
+  );
+}
+
+function InitialTutorialPrompt({ visible, onAccept, onDecline }) {
+  const { width, height } = useWindowDimensions();
+  const { isTablet } = getResponsiveMetrics(width, height);
+
+  if (!visible) {
+    return null;
+  }
+
+  const panelWidth = isTablet
+    ? Math.min(width - 24, height * (962 / 1179) * 0.72, 500)
+    : Math.min(width - 24, height * (962 / 1179) * 0.7, 390);
+
+  return (
+    <View style={styles.initialTutorialPromptLayer}>
+      <View style={[styles.initialTutorialPromptPanel, { width: panelWidth }]}>
+        <Image
+          pointerEvents="none"
+          source={CODE_ENTRY_MENU_IMAGE}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={styles.initialTutorialPromptBackground}
+        />
+        <View style={styles.initialTutorialPromptContent}>
+          <Text style={styles.initialTutorialPromptTitle}>
+            Eerste keer?
+          </Text>
+          <Text style={styles.initialTutorialPromptText}>
+            We zien dat dit de eerste keer is dat je AutoBingo speelt. Wil je uitleg over hoe de app werkt? Je vindt uitleg later ook altijd terug in de instellingen.
+          </Text>
+          <View style={styles.initialTutorialPromptButtons}>
+            <View style={styles.initialTutorialPromptButton}>
+              <GlossyButton
+                label="Ja, graag"
+                variant="green"
+                size="normal"
+                heightOverride={54}
+                horizontalPadding={18}
+                labelFontScale={0.82}
+                onPress={onAccept}
+              />
+            </View>
+            <View style={styles.initialTutorialPromptButton}>
+              <GlossyButton
+                label="Nee"
+                variant="red"
+                size="normal"
+                heightOverride={54}
+                horizontalPadding={18}
+                labelFontScale={0.82}
+                onPress={onDecline}
+              />
+            </View>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -475,10 +574,17 @@ export default function App() {
   const [gameMusicReady, setGameMusicReady] = useState(false);
   const [settingsMenuVisible, setSettingsMenuVisible] = useState(false);
   const [tutorialStepIndex, setTutorialStepIndex] = useState(null);
+  const [tutorialFlowId, setTutorialFlowId] = useState('general');
   const [tutorialTargetRects, setTutorialTargetRects] = useState({});
   const [tutorialUnlockedSteps, setTutorialUnlockedSteps] = useState({});
+  const [tutorialIntroColor, setTutorialIntroColor] = useState('#F5C400');
+  const [tutorialLaunchHold, setTutorialLaunchHold] = useState(null);
+  const [tutorialExitReveal, setTutorialExitReveal] = useState(null);
+  const [initialTutorialPromptVisible, setInitialTutorialPromptVisible] = useState(false);
   const enterRevealRef = useRef(null);
   const bootRevealRef = useRef(null);
+  const tutorialExitRevealRef = useRef(null);
+  const initialTutorialStartedRef = useRef(false);
   const settingsWiggle = useRef(new Animated.Value(0)).current;
   const settingsWiggleTimeoutRef = useRef(null);
   const preloadedTransitionKeysRef = useRef(new Set());
@@ -487,20 +593,23 @@ export default function App() {
   const routeReadyResolverRef = useRef(null);
   const currentRoute = stack[stack.length - 1];
   const CurrentScreen = SCREEN_COMPONENTS[currentRoute.name] ?? HomeScreen;
+  const activeTutorialSteps = TUTORIAL_FLOWS[tutorialFlowId] ?? TUTORIAL_STEPS;
   const currentRouteReadyKey = currentRoute.params?.transition?.transitionKey
     ?? currentRoute.params?.replayAt
     ?? currentRoute.name;
   const tutorialActive = tutorialStepIndex !== null;
-  const tutorialStep = tutorialActive ? TUTORIAL_STEPS[tutorialStepIndex] : null;
+  const tutorialStep = tutorialActive ? activeTutorialSteps[tutorialStepIndex] : null;
   const legalAccepted = legalStatus === 'accepted';
   const legalRequired = legalStatus === 'required';
   const shouldShowDriverWarning = legalAccepted && currentRoute.name === 'Home' && !driverWarningComplete;
   const bootRevealCanStart = legalAccepted && driverWarningComplete;
+  const showSettingsButtonDuringTutorial = tutorialActive && tutorialFlowId === 'menu';
   const showGlobalSettingsButton = legalAccepted
     && driverWarningComplete
     && currentRoute.name !== 'Instellingen'
     && !settingsMenuVisible
-    && !tutorialActive;
+    && !initialTutorialPromptVisible
+    && (!tutorialActive || showSettingsButtonDuringTutorial);
   const backgroundMusicMode = !legalAccepted || !driverWarningComplete
     ? 'none'
     : currentRoute.name === 'Spel'
@@ -667,9 +776,6 @@ export default function App() {
 
       try {
         await Promise.all([
-          Platform.OS === 'android'
-            ? preloadAssetsForRoute(currentRoute.name, currentRoute.params)
-            : Promise.resolve(),
           waitForCurrentRouteReady(BOOT_ROUTE_READY_TIMEOUT_MS),
           waitForMinimumElapsed(startedAt, BOOT_MIN_SOLID_MS),
         ]);
@@ -784,6 +890,56 @@ export default function App() {
       settingsWiggleTimeoutRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    if (
+      initialTutorialStartedRef.current
+      || !legalAccepted
+      || !driverWarningComplete
+      || !bootRevealComplete
+      || currentRoute.name !== 'Home'
+      || settingsMenuVisible
+      || tutorialActive
+      || initialTutorialPromptVisible
+    ) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function maybeStartInitialMenuTutorial() {
+      try {
+        const alreadySeen = await AsyncStorage.getItem(INITIAL_TUTORIAL_SEEN_STORAGE_KEY);
+        if (cancelled || alreadySeen === 'true') {
+          return;
+        }
+
+        initialTutorialStartedRef.current = true;
+        if (!cancelled) {
+          setInitialTutorialPromptVisible(true);
+        }
+      } catch (_error) {
+        if (!cancelled) {
+          initialTutorialStartedRef.current = true;
+          setInitialTutorialPromptVisible(true);
+        }
+      }
+    }
+
+    void maybeStartInitialMenuTutorial();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    bootRevealComplete,
+    currentRoute.name,
+    driverWarningComplete,
+    initialTutorialPromptVisible,
+    legalAccepted,
+    settingsMenuVisible,
+    tutorialActive,
+  ]);
 
   const settingsWiggleStyle = useMemo(() => ({
     transform: [
@@ -928,6 +1084,62 @@ export default function App() {
     },
   }), [applyNavigationAfterSolidCommit, markCurrentRouteReady, stack]);
 
+  async function cleanupActiveLiveLobbyBeforePremiumReset() {
+    const config = currentRoute.params?.config;
+
+    if (config?.syncType !== 'live' || !config?.lobbyCode) {
+      return;
+    }
+
+    const localPlayerIds = (Array.isArray(config.spelers) ? config.spelers : [])
+      .map((player) => player?.playerId)
+      .filter(Boolean);
+    const knownLobbyPlayers = Array.isArray(config.liveLobbyPlayers)
+      ? config.liveLobbyPlayers
+      : [];
+    const localHostKnown = knownLobbyPlayers.some((player) => (
+      player?.role === 'host' && localPlayerIds.includes(player.playerId)
+    ));
+
+    try {
+      if (localHostKnown) {
+        await deleteLobby(config.lobbyCode);
+        return;
+      }
+
+      if (localPlayerIds.length) {
+        await removePlayers(config.lobbyCode, localPlayerIds);
+      }
+    } catch (_error) {
+      // De premium-reset moet altijd doorgaan, ook bij tijdelijke lobby-netwerkfouten.
+    }
+  }
+
+  function resetAppAfterPremiumCodeDisabled() {
+    void cleanupActiveLiveLobbyBeforePremiumReset().finally(() => {
+      navigationRequestRef.current += 1;
+      setSettingsMenuVisible(false);
+      setTutorialStepIndex(null);
+      setTutorialFlowId('general');
+      setTutorialTargetRects({});
+      setTutorialUnlockedSteps({});
+      setTutorialLaunchHold(null);
+      setTutorialExitReveal(null);
+      setEnterTransition(null);
+      preloadedTransitionKeysRef.current.clear();
+      routeReadyRef.current = false;
+      routeReadyResolverRef.current = null;
+      setGameMusicReady(false);
+      setDriverWarningComplete(false);
+      setStack([{
+        name: 'Home',
+        params: {
+          premiumResetKey: Date.now(),
+        },
+      }]);
+    });
+  }
+
   async function openSettingsFromGlobalButton(event) {
     if (currentRoute.name === 'Instellingen' || enterTransition || settingsMenuVisible) {
       return;
@@ -965,9 +1177,73 @@ export default function App() {
     });
   }
 
+  function buildJoinTutorialLobbyConfig() {
+    return createGameConfig({
+      thema: 'snelweg',
+      wincondition: '1rij',
+      diagonaal: true,
+      kaartOpzet: 'zelfde',
+      nederlands: true,
+      modus: 'klassiek',
+      syncType: 'live',
+      lobbyCode: 'UITLEG12',
+      aantalSpelersOpDitApparaat: 1,
+      spelers: [
+        createPlayer({ naam: 'Jij', skin: 'groen' }),
+      ],
+      liveLobbyPlayers: [
+        { ...createPlayer({ naam: 'Host', skin: 'rood' }), role: 'host' },
+        { ...createPlayer({ naam: 'Jij', skin: 'groen' }), role: 'player' },
+      ],
+      seed: createRandomSeed(),
+      salt: createRandomSalt(),
+    });
+  }
+
+  function buildHostTutorialLobbyConfig() {
+    const hostPlayer = createPlayer({ naam: 'Jij', skin: 'rood', playerId: 'tutorial-host' });
+    const goodGuest = createPlayer({ naam: 'Sam', skin: 'blauw', playerId: 'tutorial-guest-good' });
+    const weakGuest = createPlayer({ naam: 'Noor', skin: 'geel', playerId: 'tutorial-guest-weak', isOffline: true });
+
+    return createGameConfig({
+      thema: 'snelweg',
+      wincondition: '1rij',
+      diagonaal: true,
+      kaartOpzet: 'zelfde',
+      nederlands: true,
+      modus: 'collectief',
+      syncType: 'live',
+      lobbyCode: 'HOST1234',
+      aantalSpelersOpDitApparaat: 1,
+      spelers: [hostPlayer],
+      liveLobbyPlayers: [
+        { ...hostPlayer, role: 'host' },
+        { ...goodGuest, role: 'guest' },
+        { ...weakGuest, role: 'guest' },
+      ],
+      seed: 24680,
+      salt: 13579,
+    });
+  }
+
   function openTutorialRoute(routeName) {
     if (routeName === 'Home') {
-      setStack([{ name: 'Home', params: {} }]);
+      setStack([{
+        name: 'Home',
+        params: {
+          tutorialResetKey: `tutorial-home-${Date.now()}`,
+        },
+      }]);
+      return;
+    }
+
+    if (routeName === 'HostSetup') {
+      setStack([{
+        name: 'HostSetup',
+        params: {
+          tutorialMode: true,
+        },
+      }]);
       return;
     }
 
@@ -977,6 +1253,7 @@ export default function App() {
         params: {
           initialConfig: buildTutorialGameConfig(),
           preserveInitialRuleSettings: true,
+          tutorialMode: true,
         },
       }]);
       return;
@@ -986,23 +1263,156 @@ export default function App() {
       setStack([{
         name: 'Spel',
         params: {
-          config: buildTutorialGameConfig(),
+          config: tutorialFlowId === 'host'
+            ? buildHostTutorialLobbyConfig()
+            : buildTutorialGameConfig(),
           replayAt: `tutorial-${Date.now()}`,
+          tutorialMode: true,
+        },
+      }]);
+      return;
+    }
+
+    if (routeName === 'Lobby') {
+      setStack([{
+        name: 'Lobby',
+        params: {
+          config: tutorialFlowId === 'host'
+            ? buildHostTutorialLobbyConfig()
+            : buildJoinTutorialLobbyConfig(),
+          tutorialMode: true,
         },
       }]);
     }
   }
 
-  function startTutorialTest() {
-    setSettingsMenuVisible(false);
+  function startTutorialTest(choice = {}) {
+    const color = choice.color ?? '#F5C400';
+    const flowId = TUTORIAL_FLOWS[choice.id] ? choice.id : 'general';
+    setTutorialLaunchHold({ color, key: `tutorial-launch-${Date.now()}` });
+    if (!choice.deferSettingsClose) {
+      setSettingsMenuVisible(false);
+    }
+    setTutorialFlowId(flowId);
+    setTutorialIntroColor(null);
     openTutorialRoute('Home');
+    setEnterTransition({
+      color,
+      transitionKey: `tutorial-start-${Date.now()}`,
+    });
     setTutorialUnlockedSteps({});
     setTutorialStepIndex(0);
   }
 
-  function closeTutorialTest() {
-    setTutorialStepIndex(null);
-    setTutorialUnlockedSteps({});
+  async function acceptInitialTutorialPrompt() {
+    setInitialTutorialPromptVisible(false);
+    initialTutorialStartedRef.current = true;
+    try {
+      await AsyncStorage.setItem(INITIAL_TUTORIAL_SEEN_STORAGE_KEY, 'true');
+    } catch (_error) {
+      // De keuze opslaan is fijn, maar mag de uitleg niet blokkeren.
+    }
+    startTutorialTest({
+      id: 'menu',
+      color: '#159B3B',
+    });
+  }
+
+  async function declineInitialTutorialPrompt() {
+    setInitialTutorialPromptVisible(false);
+    initialTutorialStartedRef.current = true;
+    try {
+      await AsyncStorage.setItem(INITIAL_TUTORIAL_SEEN_STORAGE_KEY, 'true');
+    } catch (_error) {
+      // Als opslag faalt, laten we de speler alsnog gewoon door.
+    }
+  }
+
+  function getTutorialTransitionOrigin(event) {
+    const nativeEvent = event?.nativeEvent ?? event ?? {};
+    const originX = typeof nativeEvent.pageX === 'number'
+      ? nativeEvent.pageX
+      : typeof nativeEvent.x === 'number'
+        ? nativeEvent.x
+        : width / 2;
+    const originY = typeof nativeEvent.pageY === 'number'
+      ? nativeEvent.pageY
+      : typeof nativeEvent.y === 'number'
+        ? nativeEvent.y
+        : height / 2;
+
+    return { originX, originY };
+  }
+
+  function closeTutorialTest(event) {
+    if (tutorialExitReveal) {
+      return;
+    }
+
+    const { originX, originY } = getTutorialTransitionOrigin(event);
+
+    setTutorialExitReveal({
+      color: '#E03030',
+      originX,
+      originY,
+      routeName: 'Home',
+      routeParams: {
+        tutorialResetKey: `tutorial-close-${Date.now()}`,
+      },
+      nextStepIndex: null,
+      transitionKey: `tutorial-close-home-${Date.now()}`,
+    });
+  }
+
+  function finishTutorialTest(event) {
+    const shouldReturnHome = currentRoute.name === 'Lobby' && currentRoute.params?.tutorialMode;
+    const { originX, originY } = getTutorialTransitionOrigin(event);
+
+    if (!shouldReturnHome) {
+      closeTutorialTest(event);
+      return;
+    }
+
+    setTutorialExitReveal({
+      color: '#159B3B',
+      originX,
+      originY,
+      routeName: 'Home',
+      routeParams: {},
+      nextStepIndex: null,
+      transitionKey: `tutorial-finish-home-${Date.now()}`,
+    });
+  }
+
+  function startTutorialRouteReveal({
+    color = '#F5C400',
+    origin,
+    routeName,
+    routeParams = {},
+    actionName,
+  }) {
+    if (!routeName) {
+      return;
+    }
+
+    const { originX, originY } = getTutorialTransitionOrigin(origin);
+    const nextStepIndex = (
+      actionName
+      && tutorialStep?.advanceOnAction === actionName
+      && tutorialStepIndex !== null
+    )
+      ? tutorialStepIndex + 1
+      : tutorialStepIndex;
+
+    setTutorialExitReveal({
+      color,
+      originX,
+      originY,
+      routeName,
+      routeParams,
+      nextStepIndex,
+      transitionKey: `tutorial-route-${routeName}-${Date.now()}`,
+    });
   }
 
   function handleTutorialTargetLayout(key, rect) {
@@ -1037,16 +1447,30 @@ export default function App() {
   }
 
   function handleTutorialAction(actionName) {
+    if (actionName === 'tutorial.startGeneral') {
+      setTutorialFlowId('general');
+      setTutorialIntroColor(null);
+      openTutorialRoute('Home');
+      setTutorialUnlockedSteps({});
+      setTutorialStepIndex(0);
+      return;
+    }
+
     if (tutorialStep?.finishOnAction && tutorialStep.finishOnAction === actionName) {
+      if (tutorialStep.finishWithoutReveal) {
+        setTutorialStepIndex(null);
+        setTutorialUnlockedSteps({});
+        return;
+      }
       closeTutorialTest();
       return;
     }
 
     const targetStepId = tutorialStep?.advanceToStepOnAction?.[actionName];
     if (targetStepId) {
-      const targetIndex = TUTORIAL_STEPS.findIndex((step) => step.id === targetStepId);
+      const targetIndex = activeTutorialSteps.findIndex((step) => step.id === targetStepId);
       if (targetIndex >= 0) {
-        const targetStep = TUTORIAL_STEPS[targetIndex];
+        const targetStep = activeTutorialSteps[targetIndex];
         if (targetStep?.routeName && targetStep.routeName !== currentRoute.name) {
           openTutorialRoute(targetStep.routeName);
         }
@@ -1079,19 +1503,19 @@ export default function App() {
     advanceTutorialTest();
   }
 
-  function advanceTutorialTest() {
+  function advanceTutorialTest(event) {
     if (tutorialStepIndex === null) {
       return;
     }
 
     const nextIndex = tutorialStepIndex + 1;
 
-    if (nextIndex >= TUTORIAL_STEPS.length) {
-      closeTutorialTest();
+    if (nextIndex >= activeTutorialSteps.length) {
+      finishTutorialTest(event);
       return;
     }
 
-    const nextStep = TUTORIAL_STEPS[nextIndex];
+    const nextStep = activeTutorialSteps[nextIndex];
     if (nextStep?.routeName && nextStep.routeName !== currentRoute.name) {
       openTutorialRoute(nextStep.routeName);
     }
@@ -1120,6 +1544,28 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [currentRoute.name, tutorialStep?.advanceOnRoute]);
 
+  useEffect(() => {
+    if (!tutorialLaunchHold) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      setTutorialLaunchHold(null);
+    }, 240);
+
+    return () => clearTimeout(timer);
+  }, [tutorialLaunchHold]);
+
+  useEffect(() => {
+    if (!tutorialExitReveal) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      tutorialExitRevealRef.current?.reveal();
+    });
+  }, [tutorialExitReveal]);
+
   if (!fontsLoaded || !assetsLoaded || legalStatus === 'checking') {
     return (
       <View style={styles.bootScreen}>
@@ -1130,12 +1576,13 @@ export default function App() {
 
   return (
     <AppSettingsProvider>
-      <BackgroundMusicController
-        mode={backgroundMusicMode}
-        sessionKey={backgroundMusicSessionKey}
-      />
-      {legalAccepted && driverWarningComplete ? (
-        <AudioAwareAdProvider>
+      <AccountProvider>
+        <BackgroundMusicController
+          mode={backgroundMusicMode}
+          sessionKey={backgroundMusicSessionKey}
+        />
+        {legalAccepted && driverWarningComplete ? (
+          <AudioAwareAdProvider>
             <StatusBar style="dark" hidden />
             <CurrentScreen
               navigation={navigation}
@@ -1144,6 +1591,7 @@ export default function App() {
               tutorialStep={tutorialStep}
               onTutorialTargetLayout={handleTutorialTargetLayout}
               onTutorialAction={handleTutorialAction}
+              onTutorialRouteReveal={startTutorialRouteReveal}
             />
             <SettingsScreen
               navigation={navigation}
@@ -1151,79 +1599,127 @@ export default function App() {
               visible={settingsMenuVisible}
               onClose={() => setSettingsMenuVisible(false)}
               onTutorial={startTutorialTest}
+              onPremiumCodeDisabled={resetAppAfterPremiumCodeDisabled}
             />
-        </AudioAwareAdProvider>
-      ) : null}
-      {legalRequired ? (
-        <View style={styles.legalBootLayer}>
-          <StatusBar style="light" hidden />
-          <LegalConsentGate
-            backgroundColor="transparent"
-            onAccepted={() => setLegalStatus('accepted')}
+          </AudioAwareAdProvider>
+        ) : null}
+        {legalRequired ? (
+          <View style={styles.legalBootLayer}>
+            <StatusBar style="light" hidden />
+            <LegalConsentGate
+              backgroundColor="transparent"
+              onAccepted={() => setLegalStatus('accepted')}
+            />
+          </View>
+        ) : null}
+        {legalAccepted ? (
+          <>
+        {showGlobalSettingsButton ? (
+          <GlobalSettingsButton
+            isTablet={isTablet}
+            tabletScale={tabletScale}
+            runSettingsWiggle={runSettingsWiggle}
+            openSettingsFromGlobalButton={openSettingsFromGlobalButton}
+            settingsWiggleStyle={settingsWiggleStyle}
           />
-        </View>
-      ) : null}
-      {legalAccepted ? (
-        <>
-      {showGlobalSettingsButton ? (
-        <GlobalSettingsButton
-          isTablet={isTablet}
-          tabletScale={tabletScale}
-          runSettingsWiggle={runSettingsWiggle}
-          openSettingsFromGlobalButton={openSettingsFromGlobalButton}
-          settingsWiggleStyle={settingsWiggleStyle}
+        ) : null}
+          </>
+        ) : null}
+        {shouldShowDriverWarning ? (
+          <DriverWarningBootGate
+            onComplete={() => setDriverWarningComplete(true)}
+          />
+        ) : null}
+        <InitialTutorialPrompt
+          visible={initialTutorialPromptVisible}
+          onAccept={acceptInitialTutorialPrompt}
+          onDecline={declineInitialTutorialPrompt}
         />
-      ) : null}
-        </>
-      ) : null}
-      {shouldShowDriverWarning ? (
-        <DriverWarningBootGate
-          width={width}
-          isTablet={isTablet}
-          onComplete={() => setDriverWarningComplete(true)}
+        {!bootRevealComplete && bootRevealCanStart ? (
+          <CircularReveal
+            ref={bootRevealRef}
+            color="#E03030"
+            originX={width / 2}
+            originY={height / 2}
+            initiallyVisible
+            initialProgress={0}
+            mode="uncover"
+            onComplete={() => {
+              setBootRevealComplete(true);
+            }}
+          />
+        ) : null}
+        {enterTransition ? (
+          <CircularReveal
+            key={`enter-${enterTransition.transitionKey}`}
+            ref={enterRevealRef}
+            color={enterTransition.color ?? '#E03030'}
+            originX={width / 2}
+            originY={height / 2}
+            initiallyVisible
+            initialProgress={0}
+            mode="uncover"
+            onComplete={() => {
+              setEnterTransition(null);
+            }}
+          />
+        ) : null}
+        {tutorialLaunchHold ? (
+          <View
+            key={tutorialLaunchHold.key}
+            pointerEvents="auto"
+            style={[
+              styles.tutorialLaunchHold,
+              { backgroundColor: tutorialLaunchHold.color },
+            ]}
+          />
+        ) : null}
+        {tutorialExitReveal ? (
+          <CircularReveal
+            key={tutorialExitReveal.transitionKey}
+            ref={tutorialExitRevealRef}
+            color={tutorialExitReveal.color}
+            originX={tutorialExitReveal.originX}
+            originY={tutorialExitReveal.originY}
+            mode="cover"
+            onComplete={() => {
+              const transitionKey = tutorialExitReveal.transitionKey;
+              const nextRouteName = tutorialExitReveal.routeName ?? 'Home';
+              const nextRouteParams = tutorialExitReveal.routeParams ?? {};
+
+              setTutorialStepIndex(tutorialExitReveal.nextStepIndex);
+              setTutorialUnlockedSteps({});
+              setTutorialExitReveal(null);
+              navigation.reset(nextRouteName, {
+                ...nextRouteParams,
+                transition: {
+                  color: tutorialExitReveal.color,
+                  originX: tutorialExitReveal.originX,
+                  originY: tutorialExitReveal.originY,
+                  routeName: nextRouteName,
+                  pauseMs: 40,
+                  minSolidMs: 240,
+                  preloaded: true,
+                  transitionKey,
+                },
+              });
+            }}
+          />
+        ) : null}
+        <TutorialOverlay
+          active={tutorialActive}
+          step={tutorialStep}
+          stepIndex={tutorialStepIndex ?? 0}
+          totalSteps={activeTutorialSteps.length}
+          targetRects={tutorialTargetRects}
+          nextUnlocked={Boolean(tutorialStep?.id && tutorialUnlockedSteps[tutorialStep.id])}
+          introColor={tutorialStepIndex === 0 ? tutorialIntroColor : null}
+          fontFamily="FredokaOne_400Regular"
+          onNext={advanceTutorialTest}
+          onSkip={closeTutorialTest}
+          onAction={handleTutorialAction}
         />
-      ) : null}
-      {!bootRevealComplete && bootRevealCanStart ? (
-        <CircularReveal
-          ref={bootRevealRef}
-          color="#E03030"
-          originX={width / 2}
-          originY={height / 2}
-          initiallyVisible
-          initialProgress={0}
-          mode="uncover"
-          onComplete={() => {
-            setBootRevealComplete(true);
-          }}
-        />
-      ) : null}
-      {enterTransition ? (
-        <CircularReveal
-          key={`enter-${enterTransition.transitionKey}`}
-          ref={enterRevealRef}
-          color={enterTransition.color ?? '#E03030'}
-          originX={width / 2}
-          originY={height / 2}
-          initiallyVisible
-          initialProgress={0}
-          mode="uncover"
-          onComplete={() => {
-            setEnterTransition(null);
-          }}
-        />
-      ) : null}
-      <TutorialOverlay
-        active={tutorialActive && !enterTransition}
-        step={tutorialStep}
-        stepIndex={tutorialStepIndex ?? 0}
-        totalSteps={TUTORIAL_STEPS.length}
-        targetRects={tutorialTargetRects}
-        nextUnlocked={Boolean(tutorialStep?.id && tutorialUnlockedSteps[tutorialStep.id])}
-        fontFamily="FredokaOne_400Regular"
-        onNext={advanceTutorialTest}
-        onSkip={closeTutorialTest}
-        onAction={handleTutorialAction}
-      />
+      </AccountProvider>
     </AppSettingsProvider>
   );
 }
@@ -1268,12 +1764,12 @@ const styles = StyleSheet.create({
   driverWarningBootTitle: {
     position: 'absolute',
     top: '5.5%',
-    left: '20%',
-    right: '20%',
+    left: '19%',
+    right: '19%',
     height: '10%',
     color: '#FFFFFF',
-    fontSize: 31,
-    lineHeight: 37,
+    fontSize: 25,
+    lineHeight: 31,
     textAlign: 'center',
     textAlignVertical: 'center',
     letterSpacing: 0,
@@ -1282,8 +1778,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   driverWarningBootTitleTablet: {
-    fontSize: 38,
-    lineHeight: 44,
+    fontSize: 32,
+    lineHeight: 38,
   },
   driverWarningBootBody: {
     position: 'absolute',
@@ -1356,6 +1852,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  tutorialLaunchHold: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10020,
+    elevation: 10020,
+  },
+  initialTutorialPromptLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9300,
+    elevation: 9300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.48)',
+  },
+  initialTutorialPromptPanel: {
+    aspectRatio: 962 / 1179,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    shadowColor: '#032B72',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.34,
+    shadowRadius: 16,
+    elevation: 18,
+  },
+  initialTutorialPromptBackground: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  initialTutorialPromptContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 48,
+    paddingTop: 96,
+    paddingBottom: 84,
+  },
+  initialTutorialPromptTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17364A',
+    fontSize: 34,
+    lineHeight: 40,
+    textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.85)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 2,
+  },
+  initialTutorialPromptText: {
+    marginTop: 12,
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#315266',
+    fontSize: 17,
+    lineHeight: 23,
+    textAlign: 'center',
+  },
+  initialTutorialPromptButtons: {
+    width: '100%',
+    marginTop: 26,
+    gap: 12,
+  },
+  initialTutorialPromptButton: {
+    width: '100%',
+  },
   globalSettingsIcon: {
     width: 52,
     height: 52,
@@ -1380,11 +1939,15 @@ function GameScreen({
   const { maybeShowInterstitial } = useAds();
   const config = route.params?.config ?? {};
   const replayAt = route.params?.replayAt ?? 'initial-game';
-  const isLiveLobbyGame = config.syncType === 'live' && Boolean(config.lobbyCode);
+  const tutorialMode = Boolean(route.params?.tutorialMode);
+  const isLiveLobbyGame = !tutorialMode && config.syncType === 'live' && Boolean(config.lobbyCode);
+  const displayAsLiveLobbyGame = tutorialMode || isLiveLobbyGame;
   const connectionStatus = useOnlineConnectionStatus(isLiveLobbyGame);
   const liveConnectionOffline = isLiveLobbyGame && connectionStatus.isOffline;
   const [liveLobby, setLiveLobby] = useState(null);
   const leavingLiveGameRef = useRef(false);
+  const hasObservedLiveLobbyRef = useRef(Boolean(config.liveLobbyPlayers?.length));
+  const liveLobbyMissingTimeoutRef = useRef(null);
   const stopGameCheckTimeoutRef = useRef(null);
   const stopGameRevealRef = useRef(null);
   const [stopGameReveal, setStopGameReveal] = useState(null);
@@ -1455,6 +2018,61 @@ function GameScreen({
 
     return subscribeToLobby(config.lobbyCode, setLiveLobby);
   }, [config.lobbyCode, config.syncType]);
+
+  useEffect(() => {
+    if (!isLiveLobbyGame || isLocalLiveHost || liveConnectionOffline) {
+      if (liveLobbyMissingTimeoutRef.current) {
+        clearTimeout(liveLobbyMissingTimeoutRef.current);
+        liveLobbyMissingTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (liveLobby) {
+      hasObservedLiveLobbyRef.current = true;
+      if (liveLobbyMissingTimeoutRef.current) {
+        clearTimeout(liveLobbyMissingTimeoutRef.current);
+        liveLobbyMissingTimeoutRef.current = null;
+      }
+
+      if (liveLobby.ended || !liveLobby.players?.length || !liveLobby.players.some((player) => player.role === 'host')) {
+        leavingLiveGameRef.current = true;
+        navigation.reset('Home', {
+          lobbyExitMessage: 'De lobby die je gejoind hebt, is gestopt door de host.',
+        });
+      }
+      return;
+    }
+
+    if (leavingLiveGameRef.current || !hasObservedLiveLobbyRef.current || liveLobbyMissingTimeoutRef.current) {
+      return;
+    }
+
+    liveLobbyMissingTimeoutRef.current = setTimeout(() => {
+      liveLobbyMissingTimeoutRef.current = null;
+      if (leavingLiveGameRef.current) {
+        return;
+      }
+
+      leavingLiveGameRef.current = true;
+      navigation.reset('Home', {
+        lobbyExitMessage: 'De lobby die je gejoind hebt, is gestopt door de host.',
+      });
+    }, 1800);
+  }, [isLiveLobbyGame, isLocalLiveHost, liveConnectionOffline, liveLobby, navigation]);
+
+  useEffect(() => {
+    if (!isLiveLobbyGame || liveConnectionOffline || !localPlayerIds.length) {
+      return undefined;
+    }
+
+    void touchPlayerPresence(config.lobbyCode, localPlayerIds);
+    const interval = setInterval(() => {
+      void touchPlayerPresence(config.lobbyCode, localPlayerIds);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [config.lobbyCode, isLiveLobbyGame, liveConnectionOffline, localPlayerIds]);
 
   useEffect(() => {
     if (config.syncType !== 'live' || !liveLobby?.started || liveConnectionOffline) {
@@ -1538,6 +2156,10 @@ function GameScreen({
   }, [config.lobbyCode, config.startedAt, config.syncType, liveConnectionOffline, liveLobby, stopGameReveal]);
 
   useEffect(() => () => {
+    if (liveLobbyMissingTimeoutRef.current) {
+      clearTimeout(liveLobbyMissingTimeoutRef.current);
+      liveLobbyMissingTimeoutRef.current = null;
+    }
     if (stopGameCheckTimeoutRef.current) {
       clearTimeout(stopGameCheckTimeoutRef.current);
       stopGameCheckTimeoutRef.current = null;
@@ -1598,8 +2220,9 @@ function GameScreen({
       syncType={config.syncType}
       spelers={spelers}
       canReplay={canReplayLive}
-      settingsLabel={isLiveLobbyGame ? 'Lobby' : 'Instellingen'}
+      settingsLabel={displayAsLiveLobbyGame ? 'Lobby' : 'Instellingen'}
       isLiveLobbyHost={isLocalLiveHost}
+      tutorialMode={tutorialMode}
       tutorialActive={tutorialActive}
       tutorialStep={tutorialStep}
       onTutorialTargetLayout={onTutorialTargetLayout}
@@ -1610,11 +2233,11 @@ function GameScreen({
           : undefined
       }
       onGameBack={(origin = {}) => {
-        const targetRoute = isLiveLobbyGame
+        const targetRoute = displayAsLiveLobbyGame
           ? (isLocalLiveHost ? 'Lobby' : 'Home')
           : 'SingleDeviceSetupTest';
         const transitionKey = `${
-          isLiveLobbyGame
+          displayAsLiveLobbyGame
             ? (isLocalLiveHost ? 'game-lobby' : 'game-home')
             : 'game-setup'
         }-${Date.now()}`;
@@ -1650,14 +2273,31 @@ function GameScreen({
           return;
         }
 
+        if (tutorialMode) {
+          navigation.reset('Lobby', {
+            config: {
+              ...config,
+              startedAt: null,
+            },
+            tutorialMode: true,
+            transition,
+          });
+          return;
+        }
+
         navigation.reset('SingleDeviceSetupTest', {
           initialConfig: config,
           preserveInitialRuleSettings: true,
           transition,
         });
       }}
-      onMenu={async (origin = {}) => {
+      onBeforeWinnerMenu={async () => {
         await maybeShowInterstitial('winner-home');
+      }}
+      onMenu={async (origin = {}) => {
+        if (!tutorialMode && isLiveLobbyGame && isLocalLiveHost && config.lobbyCode) {
+          await deleteLobby(config.lobbyCode);
+        }
 
         navigation.reset('Home', {
           transition: {
@@ -1671,11 +2311,12 @@ function GameScreen({
         });
       }}
       onSettings={async (origin = {}) => {
-        await maybeShowInterstitial(isLiveLobbyGame ? 'winner-lobby' : 'winner-settings');
+        await maybeShowInterstitial(displayAsLiveLobbyGame ? 'winner-lobby' : 'winner-settings');
 
-        if (isLiveLobbyGame) {
+        if (displayAsLiveLobbyGame) {
           navigation.reset('Lobby', {
             config,
+            tutorialMode,
             transition: {
               color: '#1A7BD4',
               originX: width / 2,
@@ -1704,7 +2345,7 @@ function GameScreen({
       onReplay={async () => {
         await maybeShowInterstitial('winner-replay');
 
-        if (config.syncType === 'live' && config.lobbyCode) {
+        if (!tutorialMode && config.syncType === 'live' && config.lobbyCode) {
           if (!canReplayLive) {
             return;
           }
@@ -1723,6 +2364,7 @@ function GameScreen({
             salt: createRandomSalt(),
           },
           replayAt: Date.now(),
+          tutorialMode,
           transition: {
             color: '#159B3B',
             originX: width / 2,

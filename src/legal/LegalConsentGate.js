@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LEGAL_ACCEPTANCE_STORAGE_KEY, LEGAL_TERMS_VERSION, LEGAL_URLS } from './legalConfig';

@@ -1,5 +1,11 @@
 import { THEMES } from './themeCatalog';
 import { LOBBY_CODE_SALT_ENTROPY_BITS } from '../src/utils/lobbyCode';
+import {
+  FREE_EPIC_CHALLENGE_SKIN_OPTIONS,
+  PREMIUM_CHALLENGE_SKIN_OPTIONS,
+  PREMIUM_SKIN_OPTIONS,
+  STANDARD_CHALLENGE_SKIN_OPTIONS,
+} from '../src/skins/skinCatalog';
 
 export const THEME_OPTIONS = THEMES.map(({ id, label, premium }) => ({
   id,
@@ -26,20 +32,10 @@ export const SKIN_OPTIONS = [
   'lichtblauw',
   'zwart',
   'wit',
-  'regenboog',
-  'koe',
-  'kerst',
-  'politie',
-  'ambulance',
-  'brandweer',
-  'brons',
-  'zilver',
-  'goud',
-  'kat',
-  'hond',
-  'hartjes',
-  'taxi',
-  'vlammen',
+  ...STANDARD_CHALLENGE_SKIN_OPTIONS,
+  ...FREE_EPIC_CHALLENGE_SKIN_OPTIONS,
+  ...PREMIUM_SKIN_OPTIONS,
+  ...PREMIUM_CHALLENGE_SKIN_OPTIONS,
 ];
 
 export const BASIC_SKIN_OPTIONS = [

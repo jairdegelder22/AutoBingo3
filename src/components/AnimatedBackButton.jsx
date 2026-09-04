@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { memo, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import * as Haptics from '../settings/haptics';

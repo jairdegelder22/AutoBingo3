@@ -1,7 +1,7 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated, Easing, Modal, StyleSheet, Text, View, Pressable,
-  Image, ImageBackground, Dimensions, Platform, useWindowDimensions,
+  Image, ImageBackground, Platform, useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
@@ -23,11 +23,14 @@ import { getRandomItems } from './themeIcons';
 import { PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getPlayerThemes, withDefaultPlayerNames } from './gameFlowConfig';
 import { getBoardState, setBoardCell, subscribeToBoardState } from '../src/services/liveLobbyService';
-import { getResponsiveMetrics } from '../src/utils/responsive';
+import { DESIGN_BASELINE_HEIGHT, DESIGN_BASELINE_WIDTH, getResponsiveMetrics } from '../src/utils/responsive';
 import useOnlineConnectionStatus from '../src/hooks/useOnlineConnectionStatus';
 import ConnectionWarningOverlay from '../src/components/ConnectionWarningOverlay';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
+import { useTranslation } from '../src/i18n/useTranslation';
 import { recordFinishedGameForSkinChallenges } from '../src/challenges/skinChallenges';
+import { usePremium } from '../src/premium/PremiumContext';
+import { useAccount } from '../src/account/AccountContext';
 import { preloadImageAssets } from '../src/assets/preloadImages';
 import {
   playPooledSoundEffect,
@@ -41,7 +44,9 @@ import { stopGameBackgroundMusicForBingo } from '../src/audio/backgroundMusic';
 const STANDARD_GRID_SIZE = 4;
 const RECENT_BINGO_ITEMS_STORAGE_KEY = 'autobingo-recent-bingo-item-ids-v1';
 const RECENT_BINGO_ITEMS_LIMIT = 64;
+const PROGRESS_SAVE_AFTER_SKIN_UNLOCK_PROMPT_STORAGE_KEY = '@AutoBingo:progressSaveAfterSkinUnlockPromptSeen:v1';
 const CLAIM_GRID_SIZE = 4;
+
 const CLAIM_TARGET_TILE_COUNT = 12;
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
@@ -85,7 +90,8 @@ async function rememberRecentBingoItems(boardItems) {
   }
 }
 
-const { width, height } = Dimensions.get('window');
+const width = DESIGN_BASELINE_WIDTH;
+const height = DESIGN_BASELINE_HEIGHT;
 const { isTablet: IS_TABLET_GAME, tabletScale: GAME_TABLET_SCALE } = getResponsiveMetrics(width, height);
 const GAME_BACK_BUTTON = require('../assets/images/navigation/back-button.png');
 const GAME_BACK_BUTTON_PRESSED = require('../assets/images/navigation/back-button-pressed.png');
@@ -114,6 +120,24 @@ const CLAIM_PODIUM_ASSETS = {
   hartjes: require('../assets/images/claim-results/podium-hartjes.png'),
   taxi: require('../assets/images/claim-results/podium-taxi.png'),
   vlammen: require('../assets/images/claim-results/podium-vlammen.png'),
+  premium_racer: require('../assets/images/claim-results/podium-premium-racer.png'),
+  eend: require('../assets/images/claim-results/podium-eend.png'),
+  sport_coupe: require('../assets/images/claim-results/podium-sport-coupe.png'),
+  neon_nacht: require('../assets/images/claim-results/podium-neon-nacht.png'),
+  maanrijder: require('../assets/images/claim-results/podium-maanrijder.png'),
+  hot_rod: require('../assets/images/claim-results/podium-hot-rod.png'),
+  monstertruck: require('../assets/images/claim-results/podium-monstertruck.png'),
+  carbon_supercar: require('../assets/images/claim-results/podium-carbon-supercar.png'),
+  ijsco_wagen: require('../assets/images/claim-results/podium-ijsco-wagen.png'),
+  piraten_wagen: require('../assets/images/claim-results/podium-piraten-wagen.png'),
+  safari_jeep: require('../assets/images/claim-results/podium-safari-jeep.png'),
+  koninklijke_racer: require('../assets/images/claim-results/podium-koninklijke-racer.png'),
+  klassieke_brandweer: require('../assets/images/claim-results/podium-klassieke-brandweer.png'),
+  supercar_racer: require('../assets/images/claim-results/podium-supercar-racer.png'),
+  locomotief: require('../assets/images/claim-results/podium-locomotief.png'),
+  strand_buggy: require('../assets/images/claim-results/podium-strand-buggy.png'),
+  sneeuwschuiver: require('../assets/images/claim-results/podium-sneeuwschuiver.png'),
+  ridder: require('../assets/images/claim-results/podium-ridder.png'),
 };
 const BINGO_BOARD_IMAGES = {
   blauw: require('../assets/images/bingo-boards/board-blauw.png'),
@@ -140,6 +164,24 @@ const BINGO_BOARD_IMAGES = {
   hartjes: require('../assets/images/bingo-boards/board-hartjes.png'),
   taxi: require('../assets/images/bingo-boards/board-taxi.png'),
   vlammen: require('../assets/images/bingo-boards/board-vlammen.png'),
+  premium_racer: require('../assets/images/bingo-boards/board-premium-racer.png'),
+  eend: require('../assets/images/bingo-boards/board-eend.png'),
+  sport_coupe: require('../assets/images/bingo-boards/board-sport-coupe.png'),
+  neon_nacht: require('../assets/images/bingo-boards/board-neon-nacht.png'),
+  maanrijder: require('../assets/images/bingo-boards/board-maanrijder.png'),
+  hot_rod: require('../assets/images/bingo-boards/board-hot-rod.png'),
+  monstertruck: require('../assets/images/bingo-boards/board-monstertruck.png'),
+  carbon_supercar: require('../assets/images/bingo-boards/board-carbon-supercar.png'),
+  ijsco_wagen: require('../assets/images/bingo-boards/board-ijsco-wagen.png'),
+  piraten_wagen: require('../assets/images/bingo-boards/board-piraten-wagen.png'),
+  safari_jeep: require('../assets/images/bingo-boards/board-safari-jeep.png'),
+  koninklijke_racer: require('../assets/images/bingo-boards/board-koninklijke-racer.png'),
+  klassieke_brandweer: require('../assets/images/bingo-boards/board-klassieke-brandweer.png'),
+  supercar_racer: require('../assets/images/bingo-boards/board-supercar-racer.png'),
+  locomotief: require('../assets/images/bingo-boards/board-locomotief.png'),
+  strand_buggy: require('../assets/images/bingo-boards/board-strand-buggy.png'),
+  sneeuwschuiver: require('../assets/images/bingo-boards/board-sneeuwschuiver.png'),
+  ridder: require('../assets/images/bingo-boards/board-ridder.png'),
   neutral: require('../assets/images/bingo-boards/board-neutral.png'),
 };
 const GAME_BACK_CONFIRM_REVEAL_COLOR = '#159B3B';
@@ -184,6 +226,15 @@ const BINGO_BOARD_SCALE_BY_SKIN = {
   groen: 1.14,
   default: 1.09,
 };
+const BINGO_BOARD_DISPLAY_BOOST_BY_SKIN = {
+  maanrijder: 1.05,
+  ijsco_wagen: 1.05,
+  koninklijke_racer: 1.05,
+  klassieke_brandweer: 1.05,
+  supercar_racer: 1.05,
+  strand_buggy: 1.05,
+  ridder: 1.05,
+};
 
 function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default', viewport = {}) {
   const viewportWidth = viewport.width ?? width;
@@ -194,10 +245,10 @@ function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default', v
     ? (viewportHeight - TWO_PLAYER_VERTICAL_RESERVE - TWO_PLAYER_MIDDLE_ROW_HEIGHT) / 2
     : viewportHeight - TOP_CONTROLS_HEIGHT - 4;
   const boardPlayArea = BINGO_BOARD_PLAY_AREA;
-  const boardScale = BINGO_BOARD_SCALE_BY_SKIN[skin] ?? BINGO_BOARD_SCALE_BY_SKIN.default;
-  const maxDisplayBoardSize = Math.max(compact ? 218 : 240, Math.min(availableWidth, availableHeight));
-  const boardSize = Math.floor(maxDisplayBoardSize / boardScale);
-  const displayBoardSize = Math.floor(boardSize * boardScale);
+  const displayBoost = BINGO_BOARD_DISPLAY_BOOST_BY_SKIN[skin] ?? 1;
+  const maxVisibleBoardSize = Math.max(compact ? 218 : 240, Math.min(availableWidth, availableHeight));
+  const boostedBoardSize = Math.floor(maxVisibleBoardSize * displayBoost);
+  const displayBoardSize = Math.min(boostedBoardSize, Math.floor(Math.max(1, Math.min(availableWidth, availableHeight))));
   const playArea = {
     left: displayBoardSize * boardPlayArea.left,
     top: displayBoardSize * boardPlayArea.top,
@@ -206,8 +257,10 @@ function getBingoBoardImageLayout(gridSize, compact = false, skin = 'default', v
   };
   const gap = boardPlayArea.gap ?? (compact ? 5 : 6);
   const padding = viewportIsTablet ? 7 : 5;
-  const targetGridSize = Math.floor(Math.min(playArea.width, playArea.height) * (viewportIsTablet ? 0.96 : 1));
-  const cellSize = Math.floor((targetGridSize - padding * 2 - gap * (gridSize - 1)) / gridSize);
+  const targetGridSize = Math.floor(
+    Math.max(1, Math.min(playArea.width, playArea.height) * (viewportIsTablet ? 0.96 : 1))
+  );
+  const cellSize = Math.max(1, Math.floor((targetGridSize - padding * 2 - gap * (gridSize - 1)) / gridSize));
   const gridPixelSize = gridSize * cellSize + (gridSize - 1) * gap + padding * 2;
 
   return {
@@ -1599,6 +1652,8 @@ function BingoCell({
 }
 
 function CellInspectOverlay({ cell, progress, onClose }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
   if (!cell) {
     return null;
   }
@@ -1606,11 +1661,11 @@ function CellInspectOverlay({ cell, progress, onClose }) {
   const startSize = cell.rect.width || cell.cellSize;
   const targetSize = Math.min(
     Math.max(cell.cellSize * 2.82, 197),
-    width - 48,
-    height - 170
+    screenWidth - 48,
+    screenHeight - 170
   );
-  const targetLeft = (width - targetSize) / 2;
-  const targetTop = (height - targetSize) / 2;
+  const targetLeft = (screenWidth - targetSize) / 2;
+  const targetTop = (screenHeight - targetSize) / 2;
   const borderRadius = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [Math.max(10, Math.round(cell.cellSize * 0.18)), 28],
@@ -1822,11 +1877,31 @@ const BRONZE_BINGO_SPLASH = require('../assets/logo (bingo-brons).png');
 const POLICE_BINGO_SPLASH = require('../assets/logo (bingo-politie).png');
 const FIRETRUCK_BINGO_SPLASH = require('../assets/logo (bingo-brandweer).png');
 const AMBULANCE_BINGO_SPLASH = require('../assets/logo (bingo-ambulance).png');
+const PREMIUM_RACER_BINGO_SPLASH = require('../assets/logo (bingo-premium-racer).png');
+const DUCK_BINGO_SPLASH = require('../assets/logo (bingo-eend).png');
+const SPORT_COUPE_BINGO_SPLASH = require('../assets/logo (bingo-sport-coupe).png');
+const NEON_NIGHT_BINGO_SPLASH = require('../assets/logo (bingo-neon-nacht).png');
+const MOON_RIDER_BINGO_SPLASH = require('../assets/logo (bingo-maanrijder).png');
+const HOT_ROD_BINGO_SPLASH = require('../assets/logo (bingo-hot-rod).png');
+const MONSTERTRUCK_BINGO_SPLASH = require('../assets/logo (bingo-monstertruck).png');
+const CARBON_SUPERCAR_BINGO_SPLASH = require('../assets/logo (bingo-carbon-supercar).png');
+const ICE_CREAM_TRUCK_BINGO_SPLASH = require('../assets/logo (bingo-ijsco-wagen).png');
+const PIRATE_CAR_BINGO_SPLASH = require('../assets/logo (bingo-piraten-wagen).png');
+const SAFARI_JEEP_BINGO_SPLASH = require('../assets/logo (bingo-safari-jeep).png');
+const ROYAL_RACER_BINGO_SPLASH = require('../assets/logo (bingo-koninklijke-racer).png');
+const CLASSIC_FIRETRUCK_BINGO_SPLASH = require('../assets/logo (bingo-klassieke-brandweer).png');
+const SUPERCAR_RACER_BINGO_SPLASH = require('../assets/logo (bingo-supercar-racer).png');
+const LOCOMOTIVE_BINGO_SPLASH = require('../assets/logo (bingo-locomotief).png');
+const BEACH_BUGGY_BINGO_SPLASH = require('../assets/logo (bingo-strand-buggy).png');
+const SNOWPLOW_BINGO_SPLASH = require('../assets/logo (bingo-sneeuwschuiver).png');
+const KNIGHT_BINGO_SPLASH = require('../assets/logo (bingo-ridder).png');
 const BINGO_LIGHT_LOTTIE = require('../assets/animations/bingo-light.json');
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
 const CHALLENGE_SKIN_UNLOCK_IMAGE = require('../assets/images/players/challenge-skin-lock-swing-open.png');
 const CHALLENGE_UNLOCK_STAR_BLUE = require('../assets/images/players/challenge-unlock-star-blue.png');
 const WINNER_SKIN_UNLOCK_DELAY_MS = 1120;
+const PROGRESS_SAVE_PANEL_IMAGE = require('../assets/images/ui/popups/progress-save-panel-v2.png');
+const PROGRESS_SAVE_PANEL_ASPECT_RATIO = 843 / 1115;
 const BINGO_SPLASH_BY_SKIN = {
   geel: YELLOW_BINGO_SPLASH,
   rood: RED_BINGO_SPLASH,
@@ -1852,13 +1927,66 @@ const BINGO_SPLASH_BY_SKIN = {
   politie: POLICE_BINGO_SPLASH,
   brandweer: FIRETRUCK_BINGO_SPLASH,
   ambulance: AMBULANCE_BINGO_SPLASH,
+  premium_racer: PREMIUM_RACER_BINGO_SPLASH,
+  eend: DUCK_BINGO_SPLASH,
+  sport_coupe: SPORT_COUPE_BINGO_SPLASH,
+  neon_nacht: NEON_NIGHT_BINGO_SPLASH,
+  maanrijder: MOON_RIDER_BINGO_SPLASH,
+  hot_rod: HOT_ROD_BINGO_SPLASH,
+  monstertruck: MONSTERTRUCK_BINGO_SPLASH,
+  carbon_supercar: CARBON_SUPERCAR_BINGO_SPLASH,
+  ijsco_wagen: ICE_CREAM_TRUCK_BINGO_SPLASH,
+  piraten_wagen: PIRATE_CAR_BINGO_SPLASH,
+  safari_jeep: SAFARI_JEEP_BINGO_SPLASH,
+  koninklijke_racer: ROYAL_RACER_BINGO_SPLASH,
+  klassieke_brandweer: CLASSIC_FIRETRUCK_BINGO_SPLASH,
+  supercar_racer: SUPERCAR_RACER_BINGO_SPLASH,
+  locomotief: LOCOMOTIVE_BINGO_SPLASH,
+  strand_buggy: BEACH_BUGGY_BINGO_SPLASH,
+  sneeuwschuiver: SNOWPLOW_BINGO_SPLASH,
+  ridder: KNIGHT_BINGO_SPLASH,
 };
+const NEW_BINGO_SPLASH_SKINS = new Set([
+  'premium_racer',
+  'eend',
+  'sport_coupe',
+  'neon_nacht',
+  'maanrijder',
+  'hot_rod',
+  'monstertruck',
+  'carbon_supercar',
+  'ijsco_wagen',
+  'piraten_wagen',
+  'safari_jeep',
+  'koninklijke_racer',
+  'klassieke_brandweer',
+  'supercar_racer',
+  'locomotief',
+  'strand_buggy',
+  'sneeuwschuiver',
+  'ridder',
+]);
 const COLOR_BINGO_SPLASH_LAYOUT = { imageOffsetY: COLOR_BINGO_SPLASH_IMAGE_LIFT_Y };
 const CENTERED_BINGO_SPLASH_LAYOUT = {
   widthMultiplier: 3.96,
   compactWidthMultiplier: 3.08,
   marginBottom: IS_TABLET_GAME ? -124 : -96,
   imageOffsetY: 0,
+};
+const SMALL_BINGO_SPLASH_LAYOUT = {
+  ...CENTERED_BINGO_SPLASH_LAYOUT,
+  widthMultiplier: 1.86,
+  compactWidthMultiplier: 1.44,
+};
+const EXTRA_SMALL_BINGO_SPLASH_LAYOUT = {
+  ...CENTERED_BINGO_SPLASH_LAYOUT,
+  widthMultiplier: 1.18,
+  compactWidthMultiplier: 0.92,
+};
+const MEDIUM_SMALL_BINGO_SPLASH_LAYOUT = {
+  ...CENTERED_BINGO_SPLASH_LAYOUT,
+  widthMultiplier: 2.02,
+  compactWidthMultiplier: 1.56,
 };
 const BINGO_SPLASH_LAYOUT_BY_SKIN = {
   geel: COLOR_BINGO_SPLASH_LAYOUT,
@@ -1885,6 +2013,24 @@ const BINGO_SPLASH_LAYOUT_BY_SKIN = {
   politie: CENTERED_BINGO_SPLASH_LAYOUT,
   brandweer: CENTERED_BINGO_SPLASH_LAYOUT,
   ambulance: CENTERED_BINGO_SPLASH_LAYOUT,
+  premium_racer: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  eend: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  sport_coupe: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  neon_nacht: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  maanrijder: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  hot_rod: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  monstertruck: CENTERED_BINGO_SPLASH_LAYOUT,
+  carbon_supercar: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  ijsco_wagen: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  piraten_wagen: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  safari_jeep: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  koninklijke_racer: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  klassieke_brandweer: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  supercar_racer: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  locomotief: CENTERED_BINGO_SPLASH_LAYOUT,
+  strand_buggy: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  sneeuwschuiver: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
+  ridder: EXTRA_SMALL_BINGO_SPLASH_LAYOUT,
 };
 
 function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = false, screenOverlay = false }) {
@@ -1962,6 +2108,7 @@ function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = fal
         ? splashLayout?.compactWidthMultiplier ?? 3.36
         : splashLayout?.widthMultiplier ?? 3.96;
     const logoImageOffsetY = splashLayout?.imageOffsetY ?? 0;
+    const useRaisedLogoLight = NEW_BINGO_SPLASH_SKINS.has(skin);
 
     return (
       <Animated.View
@@ -1990,6 +2137,8 @@ function BingoSplash({ color, fontFamily, skin, visibleKey, width, compact = fal
             style={[
               styles.bingoLogoLight,
               compact && styles.bingoLogoLightCompact,
+              useRaisedLogoLight && styles.bingoLogoLightRaised,
+              useRaisedLogoLight && compact && styles.bingoLogoLightRaisedCompact,
             ]}
           />
         ) : null}
@@ -2093,11 +2242,15 @@ function WinnerActionOverlay({
   canReplay,
   mirrorCar = false,
   settingsLabel = 'Instellingen',
+  disabledActions = {},
   onReplay,
   onSettings,
   onMenu,
 }) {
-  const latestPressPointRef = useRef({ x: width / 2, y: height / 2 });
+  const { t } = useTranslation();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const winnerMetrics = getResponsiveMetrics(screenWidth, screenHeight);
+  const latestPressPointRef = useRef({ x: screenWidth / 2, y: screenHeight / 2 });
   const carProgress = useRef(new Animated.Value(0)).current;
   const playButtonProgress = useRef(new Animated.Value(0)).current;
   const settingsButtonProgress = useRef(new Animated.Value(0)).current;
@@ -2176,10 +2329,24 @@ function WinnerActionOverlay({
     outputRange: [-10, 0],
   });
   return (
-    <View style={styles.winnerOverlay}>
+    <View
+      style={[
+        styles.winnerOverlay,
+        {
+          top: Math.max(
+            winnerMetrics.s(winnerMetrics.isTablet ? 270 : 230),
+            screenHeight * (winnerMetrics.isTablet ? 0.34 : 0.31)
+          ),
+        },
+      ]}
+    >
       <Animated.View
         style={[
           styles.winnerHero,
+          {
+            minHeight: winnerMetrics.s(winnerMetrics.isTablet ? 268 : 220),
+            marginTop: winnerMetrics.sy(winnerMetrics.isTablet ? -2 : -8),
+          },
           {
             opacity: carProgress,
             transform: [
@@ -2193,6 +2360,10 @@ function WinnerActionOverlay({
           source={PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.groen}
           style={[
             styles.winnerHeroCar,
+            {
+              width: Math.min(screenWidth * (winnerMetrics.isTablet ? 0.74 : 0.9), winnerMetrics.isTablet ? 560 : 430),
+              height: Math.min(screenWidth * (winnerMetrics.isTablet ? 0.48 : 0.56), winnerMetrics.isTablet ? 360 : 270),
+            },
             mirrorCar && styles.winnerCarImageMirrored,
           ]}
           resizeMode="contain"
@@ -2205,28 +2376,34 @@ function WinnerActionOverlay({
           <WinnerMenuButton
             progress={playButtonProgress}
             disabled={!canReplay}
+            interactionDisabled={disabledActions.replay}
             variant="green"
             onPress={onReplay}
             fontFamily={fontFamily}
-            label="Speel"
+            label={t('home.play')}
+            metrics={winnerMetrics}
           />
           <WinnerMenuButton
             progress={settingsButtonProgress}
+            interactionDisabled={disabledActions.settings}
             variant="blue"
             onPress={onSettings}
             onPressIn={rememberPressPoint}
             fontFamily={fontFamily}
             label={settingsLabel}
             getPressOrigin={() => latestPressPointRef.current}
+            metrics={winnerMetrics}
           />
           <WinnerMenuButton
             progress={homeButtonProgress}
+            interactionDisabled={disabledActions.menu}
             variant="yellow"
             onPress={onMenu}
             onPressIn={rememberPressPoint}
             fontFamily={fontFamily}
             label="Hoofdmenu"
             getPressOrigin={() => latestPressPointRef.current}
+            metrics={winnerMetrics}
           />
         </View>
 
@@ -2255,17 +2432,28 @@ function WinnerMenuButton({
   onPressIn,
   label,
   disabled = false,
+  interactionDisabled = false,
   getPressOrigin,
+  metrics,
 }) {
+  const fallbackDimensions = useWindowDimensions();
+  const buttonMetrics = metrics ?? getResponsiveMetrics(fallbackDimensions.width, fallbackDimensions.height);
   const translateY = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [-18, 0],
+    outputRange: [buttonMetrics.sy(-18), 0],
   });
 
   return (
     <Animated.View
+      pointerEvents={interactionDisabled ? 'none' : 'auto'}
       style={[
         styles.winnerMenuButtonWrap,
+        {
+          width: Math.min(
+            buttonMetrics.shortestSide * (buttonMetrics.isTablet ? 0.52 : 0.62),
+            buttonMetrics.isTablet ? 360 : 282
+          ),
+        },
         {
           opacity: progress,
           transform: [{ translateY }],
@@ -2279,9 +2467,9 @@ function WinnerMenuButton({
         disabled={disabled}
         onPress={() => onPress?.(getPressOrigin?.())}
         onPressIn={onPressIn}
-        heightOverride={IS_TABLET_GAME ? 108 : 84}
-        horizontalPadding={IS_TABLET_GAME ? (label.length > 8 ? 30 : 44) : (label.length > 8 ? 18 : 30)}
-        labelFontScale={IS_TABLET_GAME ? 1.12 : 1}
+        heightOverride={buttonMetrics.s(84, 76, buttonMetrics.isTablet ? 108 : 96)}
+        horizontalPadding={buttonMetrics.s(label.length > 8 ? 18 : 30, 16, buttonMetrics.isTablet ? 44 : 34)}
+        labelFontScale={buttonMetrics.isTablet ? 1.12 : 1}
         labelOffsetY={0}
         contentOffsetY={0}
         hapticStyle={Haptics.ImpactFeedbackStyle.Medium}
@@ -2321,6 +2509,13 @@ const UNLOCK_STAR_POINTS = [
 ];
 
 function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const unlockMetrics = getResponsiveMetrics(screenWidth, screenHeight);
+  const unlockStageWidth = Math.min(
+    screenWidth * (unlockMetrics.isTablet ? 0.86 : 1.08),
+    unlockMetrics.isTablet ? 680 : 470
+  );
+  const unlockLockSize = unlockMetrics.s(120, 104, unlockMetrics.isTablet ? 152 : 132);
   const entrance = useRef(new Animated.Value(0)).current;
   const progressFill = useRef(new Animated.Value(0)).current;
   const lockJump = useRef(new Animated.Value(0)).current;
@@ -2329,6 +2524,7 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
   const openLockPulse = useRef(new Animated.Value(0)).current;
   const carReveal = useRef(new Animated.Value(0)).current;
   const starBurst = useRef(new Animated.Value(0)).current;
+  const onDismissRef = useRef(onDismiss);
   const [progressTextCurrent, setProgressTextCurrent] = useState(unlock?.previous?.current ?? 0);
   const previousValue = unlock?.previous?.current ?? 0;
   const currentValue = unlock?.current?.current ?? previousValue;
@@ -2345,7 +2541,7 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
   });
   const lockTranslateY = lockJump.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, IS_TABLET_GAME ? -14 : -12],
+    outputRange: [0, unlockMetrics.sy(unlockMetrics.isTablet ? -14 : -12)],
   });
   const lockScale = lockJump.interpolate({
     inputRange: [0, 1],
@@ -2363,6 +2559,10 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
     inputRange: [0, 0.38, 1],
     outputRange: [1, 1.46, 1],
   });
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     let lockAnimation = null;
@@ -2400,6 +2600,7 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
       timers.push(setTimeout(() => {
         void playSoundEffect(SKIN_UNLOCK_BELL_SOUND, settings, {
           volumeMultiplier: 0.58,
+          forceAudioMode: true,
         });
       }, 1120));
 
@@ -2476,7 +2677,7 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
         useNativeDriver: true,
       }).start(({ finished }) => {
         if (finished) {
-          onDismiss?.();
+          onDismissRef.current?.();
         }
       });
     }, 5200));
@@ -2491,7 +2692,6 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
     currentValue,
     entrance,
     lockJump,
-    onDismiss,
     openLockOpacity,
     openLockPulse,
     previousValue,
@@ -2516,7 +2716,15 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
             },
           ]}
         >
-          <View style={styles.skinUnlockStage}>
+          <View
+            style={[
+              styles.skinUnlockStage,
+              {
+                width: unlockStageWidth,
+                height: unlockStageWidth * 0.58,
+              },
+            ]}
+          >
             {UNLOCK_STAR_POINTS.map((star, index) => {
               const starOpacity = starBurst.interpolate({
                 inputRange: [0, 0.18 + index * 0.03, 1],
@@ -2546,8 +2754,8 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
                     {
                       left: star.left,
                       top: star.top,
-                      width: star.size,
-                      height: star.size,
+                      width: unlockMetrics.s(star.size),
+                      height: unlockMetrics.s(star.size),
                       opacity: starOpacity,
                       transform: [
                         { translateX: starTranslateX },
@@ -2578,6 +2786,10 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
               style={[
                 styles.skinUnlockClosedLock,
                 {
+                  width: unlockLockSize,
+                  height: unlockLockSize,
+                  marginLeft: -unlockLockSize / 2,
+                  marginTop: -unlockLockSize / 2,
                   opacity: closedLockOpacity,
                   transform: [
                     { translateY: lockTranslateY },
@@ -2593,6 +2805,10 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
               style={[
                 styles.skinUnlockOpenLock,
                 {
+                  width: unlockLockSize,
+                  height: unlockLockSize,
+                  marginLeft: -unlockLockSize / 2,
+                  marginTop: -unlockLockSize / 2,
                   opacity: openLockOpacity,
                   transform: [
                     { translateY: lockTranslateY },
@@ -2603,7 +2819,16 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
               ]}
             />
           </View>
-          <Animated.View style={[styles.skinUnlockChallengeTextBlock, { opacity: entrance }]}>
+          <Animated.View
+            style={[
+              styles.skinUnlockChallengeTextBlock,
+              {
+                width: Math.min(screenWidth - 22, unlockMetrics.isTablet ? 650 : 620),
+                minHeight: unlockMetrics.s(122, 112, unlockMetrics.isTablet ? 142 : 132),
+                opacity: entrance,
+              },
+            ]}
+          >
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -2642,6 +2867,182 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
         </Animated.View>
       </Pressable>
     </View>
+  );
+}
+
+function ProgressSaveAfterSkinUnlockPrompt({ visible, fontFamily, onClose }) {
+  const { loading: accountLoading, signingInProvider, signInWithApple, user } = useAccount();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const [errorText, setErrorText] = useState('');
+  const signingIn = signingInProvider === 'apple';
+  const panelWidth = Math.round(Math.min(screenWidth - 4, 390));
+  const panelHeight = Math.round(panelWidth / PROGRESS_SAVE_PANEL_ASPECT_RATIO);
+  const panelScale = panelWidth / 390;
+  const titleSitsLowerOnPlusPhone = screenWidth >= 420 && screenHeight >= 900;
+  const contentTopPadding = (titleSitsLowerOnPlusPhone ? 56 : 68) * panelScale;
+
+  useEffect(() => {
+    if (visible) {
+      setErrorText('');
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible && user) {
+      onClose?.();
+    }
+  }, [onClose, user, visible]);
+
+  if (Platform.OS !== 'ios') {
+    return null;
+  }
+
+  async function handleSaveProgress() {
+    if (accountLoading || signingIn) {
+      return;
+    }
+
+    setErrorText('');
+
+    try {
+      const nextSession = await signInWithApple();
+
+      if (nextSession?.user) {
+        onClose?.();
+        return;
+      }
+
+      setErrorText('Inloggen is geannuleerd.');
+    } catch (_error) {
+      setErrorText('Opslaan lukt nu niet. Probeer het straks opnieuw via instellingen.');
+    }
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={[styles.modalBackdrop, styles.progressSavePromptBackdrop]}>
+        <View
+          style={[
+            styles.progressSavePromptPanel,
+            {
+              width: panelWidth,
+              height: panelHeight,
+              transform: [{ translateY: -28 * panelScale }],
+            },
+          ]}
+        >
+          <Image
+            source={PROGRESS_SAVE_PANEL_IMAGE}
+            resizeMode="stretch"
+            style={[
+              styles.progressSavePromptPanelImage,
+              {
+                width: panelWidth,
+                height: panelHeight,
+              },
+            ]}
+            fadeDuration={0}
+          />
+          <View
+            style={[
+              styles.progressSavePromptContent,
+              {
+                paddingHorizontal: 54 * panelScale,
+                paddingTop: contentTopPadding,
+                paddingBottom: 70 * panelScale,
+              },
+            ]}
+          >
+            <Text
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              style={[
+                styles.progressSavePromptTitle,
+                {
+                  fontFamily,
+                  fontSize: 34 * panelScale,
+                  lineHeight: 39 * panelScale,
+                },
+              ]}
+            >
+              Voortgang opslaan?
+            </Text>
+            <View style={styles.progressSavePromptBody}>
+              <Text
+                style={[
+                  styles.progressSavePromptText,
+                  {
+                    fontFamily,
+                    fontSize: 18 * panelScale,
+                    lineHeight: 25 * panelScale,
+                  },
+                ]}
+              >
+                Log in met je Apple account om geen autoskins te verliezen als je AutoBingo opnieuw download.
+              </Text>
+              <View style={[styles.progressSavePromptActions, { marginTop: 20 * panelScale, gap: 10 * panelScale }]}>
+                <View style={styles.progressSavePromptButtonWrap}>
+                  <GlossyButton
+                    label={signingIn ? 'Even wachten...' : 'Voortgang opslaan'}
+                    variant="green"
+                    size="normal"
+                    disabled={accountLoading || signingIn}
+                    heightOverride={68 * panelScale}
+                    horizontalPadding={32 * panelScale}
+                    labelFontScale={1}
+                    onPress={handleSaveProgress}
+                  />
+                </View>
+                <View style={[styles.progressSavePromptButtonWrap, styles.progressSavePromptNoButtonWrap]}>
+                  <GlossyButton
+                    label="Nee"
+                    variant="red"
+                    size="normal"
+                    disabled={signingIn}
+                    heightOverride={56 * panelScale}
+                    horizontalPadding={28 * panelScale}
+                    labelFontScale={0.92}
+                    onPress={onClose}
+                  />
+                </View>
+              </View>
+              {errorText ? (
+                <Text
+                  style={[
+                    styles.progressSavePromptError,
+                    {
+                      fontFamily,
+                      fontSize: 12 * panelScale,
+                      lineHeight: 16 * panelScale,
+                    },
+                  ]}
+                >
+                  {errorText}
+                </Text>
+              ) : null}
+              <Text
+                style={[
+                  styles.progressSavePromptFootnote,
+                  {
+                    fontFamily,
+                    fontSize: 12 * panelScale,
+                    lineHeight: 16 * panelScale,
+                    marginTop: 12 * panelScale,
+                  },
+                ]}
+              >
+                Dit kan je altijd nog aanpassen in de instellingen
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -2902,6 +3303,8 @@ const ClaimConfettiOverlay = memo(function ClaimConfettiOverlay({
   winnerColors,
   onAnimationEnd,
 }) {
+  const { width: screenWidth } = useWindowDimensions();
+
   if (!visible) {
     return null;
   }
@@ -2920,7 +3323,7 @@ const ClaimConfettiOverlay = memo(function ClaimConfettiOverlay({
     <View pointerEvents="none" style={styles.claimConfettiForeground}>
       <ConfettiCannon
         count={64}
-        origin={{ x: width / 2, y: 12 }}
+        origin={{ x: screenWidth / 2, y: 12 }}
         autoStart
         fadeOut
         fallSpeed={2600}
@@ -2932,7 +3335,19 @@ const ClaimConfettiOverlay = memo(function ClaimConfettiOverlay({
   );
 });
 
-function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Instellingen', onMenu, onReplay, onSettings }) {
+function ClaimResultsPodium({
+  players,
+  fredoka,
+  canReplay,
+  settingsLabel = 'Instellingen',
+  confirmHomeMenu = false,
+  onBeforeWinnerMenu,
+  onMenu,
+  onReplay,
+  onSettings,
+}) {
+  const { t } = useTranslation();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isCrowdedPodium = players.length >= 5;
   const isMediumPodium = players.length >= 3 && players.length <= 4;
   const pillarDelay = 500;
@@ -3002,7 +3417,7 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
   const animationRef = useRef(null);
   const startTimeoutRef = useRef(null);
   const confettiTimeoutRef = useRef(null);
-  const latestPressPointRef = useRef({ x: width / 2, y: height / 2 });
+  const latestPressPointRef = useRef({ x: screenWidth / 2, y: screenHeight / 2 });
   const claimRouteRevealRef = useRef(null);
   const pendingClaimRouteActionRef = useRef(null);
   const claimRouteRevealBusyRef = useRef(false);
@@ -3013,7 +3428,7 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
   const [showConfetti, setShowConfetti] = useState(false);
   const [claimRouteReveal, setClaimRouteReveal] = useState({
     color: '#F5C400',
-    origin: { x: width / 2, y: height / 2 },
+    origin: { x: screenWidth / 2, y: screenHeight / 2 },
     key: 0,
   });
   const rememberPressPoint = (event) => {
@@ -3029,8 +3444,8 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
     }
 
     const revealOrigin = {
-      x: origin.x ?? width / 2,
-      y: origin.y ?? height / 2,
+      x: origin.x ?? screenWidth / 2,
+      y: origin.y ?? screenHeight / 2,
     };
 
     claimRouteRevealBusyRef.current = true;
@@ -3300,7 +3715,7 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
                   ) : null}
                   <Text style={{ color: winnerPart.color }}>{winnerPart.name}</Text>
                 </Text>
-              )) : 'Speler'}
+              )) : t('players.defaultName', { number: 1 })}
             </Animated.Text>
           </View>
         </View>
@@ -3490,7 +3905,7 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
           progress={playButtonProgress}
           disabled={!canReplay}
           variant="green"
-          label="Speel"
+          label={t('home.play')}
           onPress={() => {
               if (!canReplay) {
                 return;
@@ -3520,10 +3935,18 @@ function ClaimResultsPodium({ players, fredoka, canReplay, settingsLabel = 'Inst
           onPressIn={rememberPressPoint}
           getPressOrigin={() => latestPressPointRef.current}
           onPress={() => {
-              startClaimRouteReveal((revealOrigin) => {
+              if (confirmHomeMenu) {
                 setShowConfetti(false);
-                onMenu?.(revealOrigin);
-              }, latestPressPointRef.current, '#F5C400');
+                onMenu?.(latestPressPointRef.current);
+                return;
+              }
+
+              void Promise.resolve(onBeforeWinnerMenu?.()).then(() => {
+                setShowConfetti(false);
+                startClaimRouteReveal((revealOrigin) => {
+                  onMenu?.(revealOrigin);
+                }, latestPressPointRef.current, '#F5C400');
+              });
           }}
         />
       </View>
@@ -3724,19 +4147,22 @@ export default function BingoCardScreen({
   aantalSpelersOpDitApparaat,
   kaartOpzet,
   onGameBack,
+  onBeforeWinnerMenu,
   onMenu,
   onReplay,
   onSettings,
   settingsLabel = 'Instellingen',
   canReplay = true,
   isLiveLobbyHost = true,
+  tutorialMode = false,
   tutorialActive = false,
   tutorialStep = null,
   onTutorialTargetLayout = null,
   onTutorialAction = null,
 }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { isTablet: isTabletGame } = getResponsiveMetrics(screenWidth, screenHeight);
+  const gameResponsiveMetrics = getResponsiveMetrics(screenWidth, screenHeight);
+  const { isTablet: isTabletGame } = gameResponsiveMetrics;
   const boardViewport = useMemo(() => ({
     width: screenWidth,
     height: screenHeight,
@@ -3744,61 +4170,33 @@ export default function BingoCardScreen({
   }), [isTabletGame, screenHeight, screenWidth]);
   const [fontsLoaded] = useFonts({ FredokaOne_400Regular });
   const { settings } = useAppSettings();
+  const { isPremium } = usePremium();
+  const { loading: accountLoading, user } = useAccount();
   const normalizedMode = typeof modus === 'string' ? modus.toLowerCase() : '';
   const isCollectiveMode = normalizedMode === 'collectief';
   const isClaimMode = normalizedMode === 'claim';
   const boardGridSize = isClaimMode ? CLAIM_GRID_SIZE : STANDARD_GRID_SIZE;
   const boardCellCount = boardGridSize * boardGridSize;
   const resolvedTheme = thema ?? theme ?? 'snelweg';
-  const resolvedPlayers = useMemo(
-    () => withDefaultPlayerNames(
-      spelers?.length
-        ? spelers
-        : Array.from({ length: aantalSpelersOpDitApparaat ?? playerCount ?? 1 }, (_, index) => ({
-            naam: playerNames?.[index] ?? `Speler ${index + 1}`,
-            skin: playerColors?.[index] ?? 'groen',
-          }))
-    ),
-    [aantalSpelersOpDitApparaat, playerColors, playerCount, playerNames, spelers]
-  );
-  const resolvedPlayerCount = resolvedPlayers.length || aantalSpelersOpDitApparaat || playerCount || 1;
-  const resolvedPlayerColors = useMemo(
-    () => resolvedPlayers.map((player, index) => player.skin ?? playerColors?.[index] ?? 'groen'),
-    [playerColors, resolvedPlayers]
-  );
-  const derivedThemes = useMemo(
-    () => (
-      playerThemes?.length
-        ? playerThemes
-        : kaartOpzet === 'ander-thema'
-          ? getPlayerThemes(resolvedTheme, resolvedPlayerCount)
-          : Array.from({ length: resolvedPlayerCount }, () => resolvedTheme)
-    ),
-    [kaartOpzet, playerThemes, resolvedPlayerCount, resolvedTheme]
-  );
-  const actieveRegels = useMemo(
-    () => getRulesFromProps({
-      rules,
-      wincondition,
-      diagonaal,
-      kaartOpzet,
-    }),
-    [rules, wincondition, diagonaal, kaartOpzet]
-  );
-  const resolvedSeed = Number.isFinite(seed) ? seed : 0;
   const liveSyncEnabled = syncType === 'live' && Boolean(lobbyCode);
-  const connectionStatus = useOnlineConnectionStatus(liveSyncEnabled);
-  const liveConnectionOffline = liveSyncEnabled && connectionStatus.isOffline;
-  const compactTwoPlayerLayout = !isClaimMode && resolvedPlayerCount >= 2;
-  const boardKeys = useMemo(
-    () => resolvedPlayers.map((player, index) => {
-      if (isCollectiveMode || isClaimMode) {
-        return 'shared:0';
-      }
-
-      return player.playerId ?? `local:${index}`;
-    }),
-    [isClaimMode, isCollectiveMode, resolvedPlayers]
+  const resolvedPlayers = useMemo(
+    () => (
+      withDefaultPlayerNames(
+        spelers?.length
+          ? spelers
+          : Array.from({ length: aantalSpelersOpDitApparaat ?? playerCount ?? 1 }, (_, index) => ({
+              naam: playerNames?.[index] ?? `Speler ${index + 1}`,
+              skin: playerColors?.[index] ?? 'groen',
+            }))
+      )
+    ),
+    [
+      aantalSpelersOpDitApparaat,
+      playerColors,
+      playerCount,
+      playerNames,
+      spelers,
+    ]
   );
   const allKnownPlayers = useMemo(() => {
     const playerMap = new Map();
@@ -3819,6 +4217,61 @@ export default function BingoCardScreen({
   const displayPlayers = useMemo(
     () => Array.from(allKnownPlayers.values()),
     [allKnownPlayers]
+  );
+  const boardPlayers = useMemo(
+    () => resolvedPlayers,
+    [resolvedPlayers]
+  );
+  const liveBingoPlayers = useMemo(
+    () => (
+      liveSyncEnabled && !isCollectiveMode && !isClaimMode
+        ? displayPlayers
+        : []
+    ),
+    [displayPlayers, isClaimMode, isCollectiveMode, liveSyncEnabled]
+  );
+  const localPlayerIds = useMemo(
+    () => new Set(resolvedPlayers.map((player, index) => getLocalPlayerKey(player, index))),
+    [resolvedPlayers]
+  );
+  const resolvedPlayerCount = boardPlayers.length || resolvedPlayers.length || aantalSpelersOpDitApparaat || playerCount || 1;
+  const resolvedPlayerColors = useMemo(
+    () => boardPlayers.map((player, index) => player.skin ?? playerColors?.[index] ?? 'groen'),
+    [boardPlayers, playerColors]
+  );
+
+  const derivedThemes = useMemo(
+    () => (
+      playerThemes?.length
+        ? playerThemes
+        : kaartOpzet === 'ander-thema'
+          ? getPlayerThemes(resolvedTheme, resolvedPlayerCount)
+          : Array.from({ length: resolvedPlayerCount }, () => resolvedTheme)
+    ),
+    [kaartOpzet, playerThemes, resolvedPlayerCount, resolvedTheme]
+  );
+  const actieveRegels = useMemo(
+    () => getRulesFromProps({
+      rules,
+      wincondition,
+      diagonaal,
+      kaartOpzet,
+    }),
+    [rules, wincondition, diagonaal, kaartOpzet]
+  );
+  const resolvedSeed = Number.isFinite(seed) ? seed : 0;
+  const connectionStatus = useOnlineConnectionStatus(liveSyncEnabled);
+  const liveConnectionOffline = liveSyncEnabled && connectionStatus.isOffline;
+  const compactTwoPlayerLayout = !isClaimMode && resolvedPlayerCount >= 2;
+  const boardKeys = useMemo(
+    () => boardPlayers.map((player, index) => {
+      if (isCollectiveMode || isClaimMode) {
+        return 'shared:0';
+      }
+
+      return player.playerId ?? `local:${index}`;
+    }),
+    [boardPlayers, isClaimMode, isCollectiveMode]
   );
   const collectiveGradientPlayers = useMemo(
     () => (liveLobbyPlayers?.length ? liveLobbyPlayers : resolvedPlayers),
@@ -3867,22 +4320,42 @@ export default function BingoCardScreen({
   const [middleCarFeedbackKeys, setMiddleCarFeedbackKeys] = useState(() =>
     Array.from({ length: resolvedPlayerCount }, () => 0)
   );
+
+  useEffect(() => {
+    setPlayerChecked((current) => Array.from({ length: resolvedPlayerCount }, (_, index) => (
+      current[index] ?? Array(boardCellCount).fill(false)
+    )));
+    setPlayerClaimOwners((current) => Array.from({ length: resolvedPlayerCount }, (_, index) => (
+      current[index] ?? Array(boardCellCount).fill(null)
+    )));
+    setPlayerWinLines((current) => Array.from({ length: resolvedPlayerCount }, (_, index) => (
+      current[index] ?? []
+    )));
+    setMiddleCarFeedbackKeys((current) => Array.from({ length: resolvedPlayerCount }, (_, index) => (
+      current[index] ?? 0
+    )));
+  }, [boardCellCount, resolvedPlayerCount]);
+
   const [winnerColor, setWinnerColor] = useState(null);
   const [winnerIndex, setWinnerIndex] = useState(null);
   const [winnerModalVisible, setWinnerModalVisible] = useState(false);
+  const [winnerIsRemote, setWinnerIsRemote] = useState(false);
   const [winnerRouteReveal, setWinnerRouteReveal] = useState({
     color: '#E03030',
-    origin: { x: width / 2, y: height / 2 },
+    origin: { x: screenWidth / 2, y: screenHeight / 2 },
     key: 0,
   });
   const [lineCelebrations, setLineCelebrations] = useState([]);
   const [celebrationConfettiVisible, setCelebrationConfettiVisible] = useState(false);
   const [celebrationSplashVisible, setCelebrationSplashVisible] = useState(false);
   const [pendingWinnerModalKey, setPendingWinnerModalKey] = useState(null);
-  const [pendingSkinUnlockAnnouncement, setPendingSkinUnlockAnnouncement] = useState(null);
+  const [pendingSkinUnlockAnnouncements, setPendingSkinUnlockAnnouncements] = useState([]);
   const [skinUnlockAnnouncement, setSkinUnlockAnnouncement] = useState(null);
+  const [progressSavePromptVisible, setProgressSavePromptVisible] = useState(false);
   const [inspectedCell, setInspectedCell] = useState(null);
   const [backConfirmVisible, setBackConfirmVisible] = useState(false);
+  const [homeConfirmVisible, setHomeConfirmVisible] = useState(false);
+  const [pendingHomeOrigin, setPendingHomeOrigin] = useState(null);
   const [suppressedCheckPulseKeys, setSuppressedCheckPulseKeys] = useState({});
   const [collectiveGradientTick, setCollectiveGradientTick] = useState(0);
   const nearBingoSpin = useRef(new Animated.Value(0)).current;
@@ -3904,11 +4377,25 @@ export default function BingoCardScreen({
   const pendingLocalBoardCellsRef = useRef(new Map());
   const celebrationTimeoutsRef = useRef([]);
   const activeCelebrationKeysRef = useRef(new Set());
+  const announcedLiveWinnerKeyRef = useRef(null);
   const suppressWinnerCelebrationRestartRef = useRef(false);
   const winnerRouteRevealRef = useRef(null);
   const pendingWinnerRouteActionRef = useRef(null);
   const winnerRouteRevealBusyRef = useRef(false);
+  const progressSavePromptQueuedRef = useRef(false);
   const boardAreaRef = useRef(null);
+  const tutorialRemoteMarksPlayedRef = useRef(false);
+  const winnerInfoTutorialStepActive = [
+    'game-winner-play-info',
+    'game-winner-lobby-info',
+    'game-winner-home-info',
+  ].includes(tutorialStep?.id);
+  const winnerHomeTutorialStepActive = tutorialStep?.id === 'game-winner-home-action';
+  const winnerTutorialActionLocks = {
+    replay: winnerInfoTutorialStepActive || winnerHomeTutorialStepActive,
+    settings: winnerInfoTutorialStepActive || winnerHomeTutorialStepActive,
+    menu: winnerInfoTutorialStepActive,
+  };
   const fredoka = fontsLoaded ? 'FredokaOne_400Regular' : undefined;
   const claimChecked = playerChecked[0] ?? Array(boardCellCount).fill(false);
   const claimOwners = playerClaimOwners[0] ?? Array(boardCellCount).fill(null);
@@ -3926,8 +4413,10 @@ export default function BingoCardScreen({
     }
 
     requestAnimationFrame(() => {
-      boardAreaRef.current?.measureInWindow?.((x, y, width, height) => {
-        onTutorialTargetLayout('game.boardArea', { x, y, width, height });
+      requestAnimationFrame(() => {
+        boardAreaRef.current?.measureInWindow?.((x, y, width, height) => {
+          onTutorialTargetLayout('game.boardArea', { x, y, width, height });
+        });
       });
     });
   }, [
@@ -3939,6 +4428,51 @@ export default function BingoCardScreen({
     tutorialStep?.target,
     winnerModalVisible,
   ]);
+
+  useEffect(() => {
+    if (!tutorialActive || tutorialStep?.id !== 'host-game-other-player' || !tutorialMode || !isCollectiveMode) {
+      tutorialRemoteMarksPlayedRef.current = false;
+      return undefined;
+    }
+
+    if (tutorialRemoteMarksPlayedRef.current) {
+      return undefined;
+    }
+
+    tutorialRemoteMarksPlayedRef.current = true;
+    const markIndexes = [
+      boardGridSize,
+      boardCellCount - 1,
+      boardGridSize + 2,
+    ]
+      .filter((index, itemIndex, list) => index > 0 && list.indexOf(index) === itemIndex);
+    const timeoutIds = markIndexes.map((cellIndex, stepIndex) => (
+      setTimeout(() => {
+        setPlayerChecked((current) => current.map((cells, playerIndex) => {
+          if (playerIndex !== 0 || cells[cellIndex]) {
+            return cells;
+          }
+
+          const nextCells = [...cells];
+          nextCells[cellIndex] = true;
+          return nextCells;
+        }));
+        triggerMiddleCarFeedback(1);
+      }, 620 + stepIndex * 520)
+    ));
+
+    return () => {
+      timeoutIds.forEach(clearTimeout);
+    };
+  }, [
+    boardCellCount,
+    boardGridSize,
+    isCollectiveMode,
+    tutorialActive,
+    tutorialMode,
+    tutorialStep?.id,
+  ]);
+
   const claimScores = useMemo(() => {
     const scoreMap = new Map(displayPlayers.map((player) => [player.playerId, 0]));
 
@@ -3954,9 +4488,9 @@ export default function BingoCardScreen({
       ...player,
       originalIndex: index,
       tileCount: scoreMap.get(player.playerId) ?? 0,
-      isLocal: resolvedPlayers.some((localPlayer) => localPlayer.playerId === player.playerId),
+      isLocal: localPlayerIds.has(player.playerId),
     }));
-  }, [claimOwners, displayPlayers, resolvedPlayers]);
+  }, [claimOwners, displayPlayers, localPlayerIds]);
   const rankedClaimPlayers = useMemo(
     () => buildClaimLeaderboard(claimScores),
     [claimScores]
@@ -3968,11 +4502,11 @@ export default function BingoCardScreen({
   const claimTargetTileCount = Math.min(CLAIM_TARGET_TILE_COUNT, boardCellCount);
   const claimGameFinished = isClaimMode && claimedTileCount >= claimTargetTileCount;
   const activeClaimPlayer = resolvedPlayers[0] ?? null;
-  const twoPlayerBingoSplashSkin = compactTwoPlayerLayout && celebrationSplashVisible && winnerIndex != null
-    ? resolvedPlayerColors[winnerIndex] ?? 'groen'
+  const screenBingoSplashSkin = (winnerIsRemote || compactTwoPlayerLayout) && celebrationSplashVisible && (winnerIndex != null || winnerColor)
+    ? winnerColor ?? resolvedPlayerColors[winnerIndex] ?? 'groen'
     : null;
-  const twoPlayerBingoSplashLayout = twoPlayerBingoSplashSkin
-    ? getBingoBoardImageLayout(boardGridSize, false, twoPlayerBingoSplashSkin, boardViewport)
+  const screenBingoSplashLayout = screenBingoSplashSkin
+    ? getBingoBoardImageLayout(boardGridSize, false, screenBingoSplashSkin, boardViewport)
     : null;
   useEffect(() => {
     const splashAssets = resolvedPlayerColors
@@ -3983,13 +4517,37 @@ export default function BingoCardScreen({
       preloadImageAssets(splashAssets).catch(() => {});
     }
   }, [resolvedPlayerColors]);
+
   function getGameElapsedMs() {
     const parsedStartedAt = typeof startedAt === 'string' ? Date.parse(startedAt) : Number.NaN;
     const startTime = Number.isFinite(parsedStartedAt) ? parsedStartedAt : localGameStartedAtRef.current;
     return Math.max(0, Date.now() - startTime);
   }
 
+  async function queueProgressSavePromptAfterSkinUnlock() {
+    if (Platform.OS !== 'ios' || tutorialMode || accountLoading || user || progressSavePromptQueuedRef.current) {
+      return;
+    }
+
+    try {
+      const seenPrompt = await AsyncStorage.getItem(PROGRESS_SAVE_AFTER_SKIN_UNLOCK_PROMPT_STORAGE_KEY);
+
+      if (seenPrompt || user || progressSavePromptQueuedRef.current) {
+        return;
+      }
+
+      await AsyncStorage.setItem(PROGRESS_SAVE_AFTER_SKIN_UNLOCK_PROMPT_STORAGE_KEY, 'true');
+      progressSavePromptQueuedRef.current = true;
+    } catch (_error) {
+      progressSavePromptQueuedRef.current = true;
+    }
+  }
+
   function recordFinishedChallengeProgress(completedBingos = []) {
+    if (tutorialMode) {
+      return;
+    }
+
     if (finishedGameRecordedRef.current) {
       return;
     }
@@ -3997,24 +4555,38 @@ export default function BingoCardScreen({
     finishedGameRecordedRef.current = true;
 
     const boards = isClaimMode
-      ? [{ checked: claimChecked, icons: sharedIcons }]
+      ? [{
+          checked: claimChecked,
+          icons: sharedIcons,
+          itemIds: sharedItems.map((item) => item.id),
+        }]
       : playerChecked.map((checked, index) => ({
           checked,
           icons: playerIcons[index] ?? sharedIcons,
+          itemIds: (playerItemEntries[index] ?? sharedItems).map((item) => item.id),
         }));
+    const claimWinner = isClaimMode
+      ? rankedClaimPlayers.find((player) => player.rank === 1 && player.tileCount > 0)
+      : null;
 
     void recordFinishedGameForSkinChallenges({
-      players: resolvedPlayers,
+      players: displayPlayers.length ? displayPlayers : resolvedPlayers,
       boards,
       completedBingos,
       elapsedMs: getGameElapsedMs(),
       syncType,
       theme: resolvedTheme,
       mode: normalizedMode,
-    }).then((result) => {
-      const firstUnlock = result?.unlockedSkins?.[0];
-      if (firstUnlock) {
-        setPendingSkinUnlockAnnouncement(firstUnlock);
+      wincondition,
+      isPremium,
+      hostedOnline: syncType === 'live' && isLiveLobbyHost,
+      claimWon: Boolean(claimWinner?.isLocal),
+      finishedAt: Date.now(),
+    }).then(async (result) => {
+      const unlockedSkins = Array.isArray(result?.unlockedSkins) ? result.unlockedSkins : [];
+      if (unlockedSkins.length > 0) {
+        await queueProgressSavePromptAfterSkinUnlock();
+        setPendingSkinUnlockAnnouncements(unlockedSkins);
       }
     });
   }
@@ -4027,6 +4599,7 @@ export default function BingoCardScreen({
   function resetWinnerCelebrationState() {
     clearCelebrationTimeouts();
     activeCelebrationKeysRef.current.clear();
+    announcedLiveWinnerKeyRef.current = null;
     setCelebrationConfettiVisible(false);
     setCelebrationSplashVisible(false);
     setLineCelebrations([]);
@@ -4034,8 +4607,11 @@ export default function BingoCardScreen({
     setWinnerModalVisible(false);
     setWinnerColor(null);
     setWinnerIndex(null);
-    setPendingSkinUnlockAnnouncement(null);
+    setWinnerIsRemote(false);
+    setPendingSkinUnlockAnnouncements([]);
     setSkinUnlockAnnouncement(null);
+    progressSavePromptQueuedRef.current = false;
+    setProgressSavePromptVisible(false);
     setSuppressedCheckPulseKeys({});
   }
 
@@ -4054,8 +4630,8 @@ export default function BingoCardScreen({
     }
 
     const revealOrigin = {
-      x: origin.x ?? width / 2,
-      y: origin.y ?? height / 2,
+      x: origin.x ?? screenWidth / 2,
+      y: origin.y ?? screenHeight / 2,
     };
 
     winnerRouteRevealBusyRef.current = true;
@@ -4079,8 +4655,8 @@ export default function BingoCardScreen({
 
   function getPressOrigin(event) {
     return {
-      x: event?.nativeEvent?.pageX ?? width / 2,
-      y: event?.nativeEvent?.pageY ?? height / 2,
+      x: event?.nativeEvent?.pageX ?? screenWidth / 2,
+      y: event?.nativeEvent?.pageY ?? screenHeight / 2,
     };
   }
 
@@ -4094,6 +4670,35 @@ export default function BingoCardScreen({
     startWinnerRouteReveal((revealOrigin) => {
       onGameBack?.({ ...revealOrigin, color: GAME_BACK_CONFIRM_REVEAL_COLOR });
     }, origin, GAME_BACK_CONFIRM_REVEAL_COLOR);
+  }
+
+  function shouldConfirmHostHomeMenu() {
+    return liveSyncEnabled && isLiveLobbyHost && !tutorialMode;
+  }
+
+  async function requestWinnerHomeMenu(origin = {}) {
+    if (shouldConfirmHostHomeMenu()) {
+      setPendingHomeOrigin(origin);
+      setHomeConfirmVisible(true);
+      return;
+    }
+
+    await onBeforeWinnerMenu?.();
+    keepWinnerOverlayForRouteAction();
+    startWinnerRouteReveal((revealOrigin) => {
+      onMenu?.(revealOrigin);
+    }, origin, '#F5C400');
+  }
+
+  async function confirmWinnerHomeMenu(event) {
+    const origin = pendingHomeOrigin ?? getPressOrigin(event);
+    setHomeConfirmVisible(false);
+    setPendingHomeOrigin(null);
+    await onBeforeWinnerMenu?.();
+    keepWinnerOverlayForRouteAction();
+    startWinnerRouteReveal((revealOrigin) => {
+      onMenu?.(revealOrigin);
+    }, origin, '#F5C400');
   }
 
   function openCellInspect(cell) {
@@ -4192,8 +4797,56 @@ export default function BingoCardScreen({
     pendingLocalBoardCellsRef.current.delete(pendingKey);
   }
 
-  function startWinnerCelebration(playerIndex, checkedCells, completedLine = null, isFinalBingo = true) {
-    const winnerSkin = resolvedPlayerColors[playerIndex] ?? 'groen';
+  function detectLiveWinnerFromBoardState(boardState) {
+    if (!liveBingoPlayers.length || winnerColor || winnerModalVisible || pendingWinnerModalKey) {
+      return;
+    }
+
+    const localWinnerIndex = playerCheckedRef.current.findIndex((checked) => (
+      findBingo(checked, actieveRegels, boardGridSize)
+    ));
+
+    if (localWinnerIndex >= 0) {
+      return;
+    }
+
+    const remoteWinner = liveBingoPlayers
+      .map((player, liveIndex) => {
+        const playerId = getLocalPlayerKey(player, liveIndex);
+        const entries = boardState[playerId];
+        const checkedCells = Array.isArray(entries)
+          ? entries.map((entry) => Boolean(entry?.checked))
+          : null;
+        const winningLine = checkedCells ? findBingo(checkedCells, actieveRegels, boardGridSize) : null;
+
+        return {
+          player,
+          playerId,
+          checkedCells,
+          winningLine,
+          isLocal: localPlayerIds.has(playerId),
+        };
+      })
+      .find((candidate) => candidate.winningLine && !candidate.isLocal);
+
+    if (!remoteWinner?.checkedCells) {
+      return;
+    }
+
+    const winnerKey = `${remoteWinner.playerId}:${getLineKey(remoteWinner.winningLine, boardGridSize)}`;
+    if (announcedLiveWinnerKeyRef.current === winnerKey) {
+      return;
+    }
+
+    announcedLiveWinnerKeyRef.current = winnerKey;
+    startWinnerCelebration(-1, remoteWinner.checkedCells, remoteWinner.winningLine, true, {
+      remote: true,
+      winnerSkin: remoteWinner.player?.skin ?? 'groen',
+    });
+  }
+
+  function startWinnerCelebration(playerIndex, checkedCells, completedLine = null, isFinalBingo = true, options = {}) {
+    const winnerSkin = options.winnerSkin ?? resolvedPlayerColors[playerIndex] ?? 'groen';
     const winnerSplashAsset = BINGO_SPLASH_BY_SKIN[winnerSkin];
     if (winnerSplashAsset) {
       preloadImageAssets([winnerSplashAsset]).catch(() => {});
@@ -4206,6 +4859,7 @@ export default function BingoCardScreen({
       if (isFinalBingo) {
         setWinnerColor(winnerSkin);
         setWinnerIndex(playerIndex);
+        setWinnerIsRemote(Boolean(options.remote));
         setWinnerModalVisible(true);
       }
       return;
@@ -4227,6 +4881,7 @@ export default function BingoCardScreen({
     if (isFinalBingo) {
       setWinnerColor(winnerSkin);
       setWinnerIndex(playerIndex);
+      setWinnerIsRemote(Boolean(options.remote));
       setWinnerModalVisible(false);
       setCelebrationConfettiVisible(false);
       setCelebrationSplashVisible(false);
@@ -4281,14 +4936,15 @@ export default function BingoCardScreen({
   }
 
   function applyLiveBoardState(boardState) {
-    setPlayerChecked((current) => current.map((cells, index) => {
-      const entries = boardState[boardKeys[index]];
+    setPlayerChecked((current) => boardKeys.map((boardKey, index) => {
+      const entries = boardState[boardKey];
+      const cells = current[index] ?? Array(boardCellCount).fill(false);
       if (!entries) {
         return cells;
       }
 
       return entries.map((entry, entryIndex) => {
-        const pendingKey = `${boardKeys[index]}:${entryIndex}`;
+        const pendingKey = `${boardKey}:${entryIndex}`;
         const pendingCell = pendingLocalBoardCellsRef.current.get(pendingKey);
         const remoteChecked = Boolean(entry?.checked);
 
@@ -4304,14 +4960,15 @@ export default function BingoCardScreen({
       });
     }));
 
-    setPlayerClaimOwners((current) => current.map((owners, index) => {
-      const entries = boardState[boardKeys[index]];
+    setPlayerClaimOwners((current) => boardKeys.map((boardKey, index) => {
+      const entries = boardState[boardKey];
+      const owners = current[index] ?? Array(boardCellCount).fill(null);
       if (!entries) {
         return owners;
       }
 
       return entries.map((entry, entryIndex) => {
-        const pendingKey = `${boardKeys[index]}:${entryIndex}`;
+        const pendingKey = `${boardKey}:${entryIndex}`;
         const pendingCell = pendingLocalBoardCellsRef.current.get(pendingKey);
         const remoteChecked = Boolean(entry?.checked);
 
@@ -4322,6 +4979,8 @@ export default function BingoCardScreen({
         return remoteChecked ? (entry?.playerId ?? null) : null;
       });
     }));
+
+    detectLiveWinnerFromBoardState(boardState);
   }
 
   useEffect(() => {
@@ -4407,7 +5066,7 @@ export default function BingoCardScreen({
     if (firstWinnerIndex >= 0) {
       recordFinishedChallengeProgress([{
         playerIndex: firstWinnerIndex,
-        skin: resolvedPlayerColors[firstWinnerIndex] ?? resolvedPlayers[firstWinnerIndex]?.skin,
+        skin: resolvedPlayerColors[firstWinnerIndex] ?? boardPlayers[firstWinnerIndex]?.skin,
       }]);
 
       if (suppressWinnerCelebrationRestartRef.current) {
@@ -4420,12 +5079,16 @@ export default function BingoCardScreen({
       return;
     }
 
+    if (winnerIsRemote) {
+      return;
+    }
+
     suppressWinnerCelebrationRestartRef.current = false;
 
     if (winnerColor || winnerModalVisible) {
       resetWinnerCelebrationState();
     }
-  }, [actieveRegels, boardGridSize, isClaimMode, playerChecked, resolvedPlayerColors, resolvedPlayerCount, winnerColor, winnerModalVisible]);
+  }, [actieveRegels, boardGridSize, isClaimMode, playerChecked, resolvedPlayerColors, resolvedPlayerCount, winnerColor, winnerIsRemote, winnerModalVisible]);
 
   useEffect(() => {
     if (claimGameFinished) {
@@ -4434,33 +5097,50 @@ export default function BingoCardScreen({
   }, [claimGameFinished]);
 
   useEffect(() => {
-    if (!pendingSkinUnlockAnnouncement || !winnerModalVisible || isClaimMode) {
+    if (
+      pendingSkinUnlockAnnouncements.length === 0
+      || skinUnlockAnnouncement
+      || !winnerModalVisible
+      || isClaimMode
+    ) {
       return undefined;
     }
 
     const timeoutId = setTimeout(() => {
-      setSkinUnlockAnnouncement(pendingSkinUnlockAnnouncement);
-      setPendingSkinUnlockAnnouncement(null);
+      const [nextUnlock, ...remainingUnlocks] = pendingSkinUnlockAnnouncements;
+      setSkinUnlockAnnouncement(nextUnlock);
+      setPendingSkinUnlockAnnouncements(remainingUnlocks);
     }, WINNER_SKIN_UNLOCK_DELAY_MS);
 
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [isClaimMode, pendingSkinUnlockAnnouncement, winnerModalVisible]);
+  }, [isClaimMode, pendingSkinUnlockAnnouncements, skinUnlockAnnouncement, winnerModalVisible]);
 
   useEffect(() => {
-    if (!tutorialActive || tutorialStep?.id !== 'game-finish' || !winnerModalVisible || isClaimMode) {
+    if (
+      !tutorialActive
+      || tutorialStep?.advanceOnAction !== 'game.bingoShown'
+      || !winnerModalVisible
+      || isClaimMode
+    ) {
       return undefined;
     }
 
     const timeoutId = setTimeout(() => {
       onTutorialAction?.('game.bingoShown');
-    }, 700);
+    }, 1350);
 
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [isClaimMode, onTutorialAction, tutorialActive, tutorialStep?.id, winnerModalVisible]);
+  }, [
+    isClaimMode,
+    onTutorialAction,
+    tutorialActive,
+    tutorialStep?.advanceOnAction,
+    winnerModalVisible,
+  ]);
 
   useEffect(() => () => {
     clearCelebrationTimeouts();
@@ -4547,6 +5227,15 @@ export default function BingoCardScreen({
 
     if (bingoInputLocked) return;
 
+    const activeBoardPlayer = boardPlayers[playerIndex] ?? resolvedPlayers[playerIndex];
+    const canEditClassicBoard = !liveSyncEnabled
+      || isCollectiveMode
+      || localPlayerIds.has(getLocalPlayerKey(activeBoardPlayer, playerIndex));
+
+    if (!canEditClassicBoard) {
+      return;
+    }
+
     const sharedPlayerIndex = isCollectiveMode ? 0 : playerIndex;
     const currentBoardState = playerCheckedRef.current?.[sharedPlayerIndex] ?? [];
     if (findBingo(currentBoardState, actieveRegels, boardGridSize)) return;
@@ -4557,7 +5246,7 @@ export default function BingoCardScreen({
     const liveBoardKey = boardKeys[playerIndex];
     const pendingBoardKey = `${liveBoardKey}:${index}`;
     const nextOwnerPlayerId = nextCheckedValue
-      ? getLocalPlayerKey(resolvedPlayers[playerIndex], playerIndex)
+      ? getLocalPlayerKey(activeBoardPlayer, playerIndex)
       : null;
     const nextWinningLine = findBingo(nextBoardState, actieveRegels, boardGridSize);
     const newlyCompletedLines = nextCheckedValue
@@ -4626,11 +5315,11 @@ export default function BingoCardScreen({
       void setBoardCell({
         code: lobbyCode,
         boardKey: liveBoardKey,
-        cellIndex: index,
-        checked: nextCheckedValue,
-        playerId: resolvedPlayers[playerIndex]?.playerId,
-        boardSize: boardCellCount,
-      }).then((syncedBoardState) => {
+          cellIndex: index,
+          checked: nextCheckedValue,
+          playerId: activeBoardPlayer?.playerId,
+          boardSize: boardCellCount,
+        }).then((syncedBoardState) => {
         if (syncedBoardState) {
           applyLiveBoardState(syncedBoardState);
         } else {
@@ -4653,7 +5342,7 @@ export default function BingoCardScreen({
     }
   }
 
-  function handleUndo(playerIndex, index) {
+	  function handleUndo(playerIndex, index) {
     if (bingoInputLocked) {
       return;
     }
@@ -4711,6 +5400,15 @@ export default function BingoCardScreen({
           }
         });
       }
+      return;
+    }
+
+    const activeBoardPlayer = boardPlayers[playerIndex] ?? resolvedPlayers[playerIndex];
+    const canEditClassicBoard = !liveSyncEnabled
+      || isCollectiveMode
+      || localPlayerIds.has(getLocalPlayerKey(activeBoardPlayer, playerIndex));
+
+    if (!canEditClassicBoard) {
       return;
     }
 
@@ -4785,7 +5483,7 @@ export default function BingoCardScreen({
     const kleur = resolvedPlayerColors[playerIndex] ?? 'groen';
     const checked = playerChecked[playerIndex];
     const claimOwnersForBoard = playerClaimOwners[playerIndex];
-    const icons = playerIcons[playerIndex];
+    const icons = playerIcons[playerIndex] ?? sharedIcons;
     const winLines = Array.isArray(playerWinLines[playerIndex]) ? playerWinLines[playerIndex] : [];
     const checkedColor = PLAYER_HEX[kleur] ?? '#2E8B3F';
     const boardSkin = isCollectiveMode ? 'neutral' : kleur;
@@ -4825,6 +5523,9 @@ export default function BingoCardScreen({
         && getLineKey(celebration.sequence, boardGridSize) === lineKey
       ));
       const trackLength = length + 16;
+      const lineTrackHeight = Math.round(Math.max(18, Math.min(30, boardLayout.cellSize * 0.18)));
+      const lineEdgeHeight = Math.round(lineTrackHeight * 0.78);
+      const lineCoreHeight = Math.round(Math.max(6, lineTrackHeight * 0.28));
       const startScale = 16 / trackLength;
       const drawScale = activeLineCelebration
         ? activeLineCelebration.progress.interpolate({
@@ -4848,8 +5549,9 @@ export default function BingoCardScreen({
           pointerEvents="none"
           style={[styles.lineTrack, {
             width: trackLength,
+            height: lineTrackHeight,
             left: midX - trackLength / 2,
-            top: midY - 9,
+            top: midY - lineTrackHeight / 2,
             transform: [{ rotate: `${angle}deg` }],
           }]}
         >
@@ -4858,6 +5560,7 @@ export default function BingoCardScreen({
               styles.lineGlow,
               {
                 width: trackLength,
+                height: lineTrackHeight,
                 backgroundColor: lineColors.glow,
                 transform: drawTransform,
               },
@@ -4868,6 +5571,8 @@ export default function BingoCardScreen({
               styles.lineEdge,
               {
                 width: trackLength,
+                top: Math.round((lineTrackHeight - lineEdgeHeight) / 2),
+                height: lineEdgeHeight,
                 backgroundColor: lineColors.edge,
                 transform: drawTransform,
               },
@@ -4878,6 +5583,8 @@ export default function BingoCardScreen({
               styles.lineCore,
               {
                 width: trackLength,
+                top: Math.round((lineTrackHeight - lineCoreHeight) / 2),
+                height: lineCoreHeight,
                 backgroundColor: lineColors.core,
                 transform: drawTransform,
               },
@@ -4955,11 +5662,11 @@ export default function BingoCardScreen({
       </>
     );
 
-    return (
-      <View
-        key={playerIndex}
-        style={[
-          styles.playerSection,
+	    return (
+	      <View
+	        key={`${playerIndex}:${kleur}:${boardGridSize}`}
+	        style={[
+	          styles.playerSection,
           compactTwoPlayerLayout && styles.playerSectionCompact,
         ]}
       >
@@ -4974,7 +5681,11 @@ export default function BingoCardScreen({
           />
         )}
 
-        <View style={styles.boardShell}>
+        <View
+          ref={playerIndex === 0 ? boardAreaRef : null}
+          collapsable={playerIndex !== 0}
+          style={styles.boardShell}
+        >
           <ImageBackground
             source={boardImage}
             resizeMode="contain"
@@ -5055,7 +5766,7 @@ export default function BingoCardScreen({
           </View>
         </View>
 
-        <View style={styles.claimBoardWrap}>
+	        <View key={`claim:${fallbackSkin}:${boardGridSize}`} style={styles.claimBoardWrap}>
           <ImageBackground
             source={boardImage}
             resizeMode="contain"
@@ -5173,7 +5884,9 @@ export default function BingoCardScreen({
             fredoka={fredoka}
             canReplay={canReplay}
             settingsLabel={settingsLabel}
-            onMenu={onMenu}
+            confirmHomeMenu={shouldConfirmHostHomeMenu()}
+            onBeforeWinnerMenu={onBeforeWinnerMenu}
+            onMenu={requestWinnerHomeMenu}
             onReplay={onReplay}
             onSettings={onSettings}
           />
@@ -5197,9 +5910,9 @@ export default function BingoCardScreen({
                     label="Nee"
                     variant="red"
                     size="normal"
-                    heightOverride={IS_TABLET_GAME ? 86 : 58}
-                    horizontalPadding={IS_TABLET_GAME ? 40 : 20}
-                    labelFontScale={IS_TABLET_GAME ? 1.18 : 1}
+                    heightOverride={gameResponsiveMetrics.s(58, 52, gameResponsiveMetrics.isTablet ? 86 : 64)}
+                    horizontalPadding={gameResponsiveMetrics.s(20, 18, gameResponsiveMetrics.isTablet ? 40 : 24)}
+                    labelFontScale={gameResponsiveMetrics.isTablet ? 1.18 : 1}
                     onPress={() => setBackConfirmVisible(false)}
                   />
                 </View>
@@ -5208,9 +5921,9 @@ export default function BingoCardScreen({
                     label="Ja"
                     variant="green"
                     size="normal"
-                    heightOverride={IS_TABLET_GAME ? 86 : 58}
-                    horizontalPadding={IS_TABLET_GAME ? 42 : 22}
-                    labelFontScale={IS_TABLET_GAME ? 1.18 : 1}
+                    heightOverride={gameResponsiveMetrics.s(58, 52, gameResponsiveMetrics.isTablet ? 86 : 64)}
+                    horizontalPadding={gameResponsiveMetrics.s(22, 18, gameResponsiveMetrics.isTablet ? 42 : 26)}
+                    labelFontScale={gameResponsiveMetrics.isTablet ? 1.18 : 1}
                     onPress={confirmGameBack}
                   />
                 </View>
@@ -5225,10 +5938,57 @@ export default function BingoCardScreen({
           </PopupPanel>
         </View>
       </Modal>
+      <Modal
+        visible={homeConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setHomeConfirmVisible(false);
+          setPendingHomeOrigin(null);
+        }}
+      >
+        <View style={[styles.modalBackdrop, styles.backConfirmBackdrop]}>
+          <PopupPanel
+            title="Hoofdmenu?"
+            fontFamily={fredoka}
+            actions={(
+              <>
+                <View style={styles.backConfirmButtonWrap}>
+                  <GlossyButton
+                    label="Nee"
+                    variant="red"
+                    size="normal"
+                    heightOverride={gameResponsiveMetrics.s(58, 52, gameResponsiveMetrics.isTablet ? 86 : 64)}
+                    horizontalPadding={gameResponsiveMetrics.s(20, 18, gameResponsiveMetrics.isTablet ? 40 : 24)}
+                    labelFontScale={gameResponsiveMetrics.isTablet ? 1.18 : 1}
+                    onPress={() => {
+                      setHomeConfirmVisible(false);
+                      setPendingHomeOrigin(null);
+                    }}
+                  />
+                </View>
+                <View style={styles.backConfirmButtonWrap}>
+                  <GlossyButton
+                    label="Ja"
+                    variant="green"
+                    size="normal"
+                    heightOverride={gameResponsiveMetrics.s(58, 52, gameResponsiveMetrics.isTablet ? 86 : 64)}
+                    horizontalPadding={gameResponsiveMetrics.s(22, 18, gameResponsiveMetrics.isTablet ? 42 : 26)}
+                    labelFontScale={gameResponsiveMetrics.isTablet ? 1.18 : 1}
+                    onPress={confirmWinnerHomeMenu}
+                  />
+                </View>
+              </>
+            )}
+          >
+            Weet je zeker dat je naar het hoofdmenu wilt? De lobby wordt dan gestopt.
+          </PopupPanel>
+        </View>
+      </Modal>
 
       <View style={styles.topControls} />
 
-      <View ref={boardAreaRef} collapsable={false} style={styles.cardsColumn}>
+      <View style={styles.cardsColumn}>
         {isClaimMode ? renderClaimBoard() : compactTwoPlayerLayout ? (
           <View style={styles.twoPlayerStack}>
             {renderBoard(0)}
@@ -5251,14 +6011,14 @@ export default function BingoCardScreen({
           </View>
         )}
       </View>
-      {twoPlayerBingoSplashSkin && twoPlayerBingoSplashLayout ? (
+      {screenBingoSplashSkin && screenBingoSplashLayout ? (
         <View pointerEvents="none" style={styles.twoPlayerBingoSplashLayer}>
           <BingoSplash
-            color={PLAYER_HEX[twoPlayerBingoSplashSkin] ?? '#2E8B3F'}
+            color={PLAYER_HEX[screenBingoSplashSkin] ?? '#2E8B3F'}
             fontFamily={fredoka}
-            skin={twoPlayerBingoSplashSkin}
-            visibleKey={`two-player:${winnerIndex}:${twoPlayerBingoSplashSkin}`}
-            width={twoPlayerBingoSplashLayout.gridPixelSize}
+            skin={screenBingoSplashSkin}
+            visibleKey={`screen:${winnerIndex}:${screenBingoSplashSkin}`}
+            width={screenBingoSplashLayout.gridPixelSize}
             screenOverlay
           />
         </View>
@@ -5268,8 +6028,8 @@ export default function BingoCardScreen({
       ) : null}
       <ConnectionWarningOverlay
         visible={liveConnectionOffline}
-        width={width}
-        height={height}
+        width={screenWidth}
+        height={screenHeight}
       />
       {winnerModalVisible && !isClaimMode ? (
         <View pointerEvents="box-none" style={styles.winnerControlsLayer}>
@@ -5279,18 +6039,25 @@ export default function BingoCardScreen({
             fontFamily={fredoka}
             canReplay={canReplay}
             settingsLabel={settingsLabel}
+            disabledActions={winnerTutorialActionLocks}
             onReplay={() => {
               if (tutorialStep?.id === 'game-winner-actions') {
                 onTutorialAction?.('game.winnerMenuSelected');
               }
+              if (tutorialStep?.id === 'game-winner-home-action') {
+                return;
+              }
               keepWinnerOverlayForRouteAction();
               startWinnerRouteReveal((revealOrigin) => {
                 onReplay?.(revealOrigin);
-              }, { x: width / 2, y: height / 2 }, GAME_BACK_CONFIRM_REVEAL_COLOR);
+              }, { x: screenWidth / 2, y: screenHeight / 2 }, GAME_BACK_CONFIRM_REVEAL_COLOR);
             }}
             onSettings={(origin) => {
               if (tutorialStep?.id === 'game-winner-actions') {
                 onTutorialAction?.('game.winnerMenuSelected');
+              }
+              if (tutorialStep?.id === 'game-winner-home-action') {
+                return;
               }
               keepWinnerOverlayForRouteAction();
               startWinnerRouteReveal((revealOrigin) => {
@@ -5298,13 +6065,10 @@ export default function BingoCardScreen({
               }, origin, '#1A7BD4');
             }}
             onMenu={(origin) => {
-              if (tutorialStep?.id === 'game-winner-actions') {
+              if (tutorialStep?.id === 'game-winner-actions' || tutorialStep?.id === 'game-winner-home-action') {
                 onTutorialAction?.('game.winnerMenuSelected');
               }
-              keepWinnerOverlayForRouteAction();
-              startWinnerRouteReveal((revealOrigin) => {
-                onMenu?.(revealOrigin);
-              }, origin, '#F5C400');
+              void requestWinnerHomeMenu(origin);
             }}
           />
         </View>
@@ -5314,9 +6078,25 @@ export default function BingoCardScreen({
           unlock={skinUnlockAnnouncement}
           fontFamily={fredoka}
           settings={settings}
-          onDismiss={() => setSkinUnlockAnnouncement(null)}
+          onDismiss={() => {
+            setSkinUnlockAnnouncement(null);
+
+            if (pendingSkinUnlockAnnouncements.length > 0) {
+              return;
+            }
+
+            if (progressSavePromptQueuedRef.current) {
+              progressSavePromptQueuedRef.current = false;
+              setProgressSavePromptVisible(true);
+            }
+          }}
         />
       ) : null}
+      <ProgressSaveAfterSkinUnlockPrompt
+        visible={progressSavePromptVisible}
+        fontFamily={fredoka}
+        onClose={() => setProgressSavePromptVisible(false)}
+      />
       <CellInspectOverlay
         cell={liveInspectedCell}
         progress={inspectProgress}
@@ -5560,6 +6340,12 @@ const styles = StyleSheet.create({
     width: '98%',
     height: '98%',
     top: '20%',
+  },
+  bingoLogoLightRaised: {
+    top: '10%',
+  },
+  bingoLogoLightRaisedCompact: {
+    top: '12%',
   },
   bingoLogoImage: {
     width: '100%',
@@ -5934,6 +6720,77 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 10,
     backgroundColor: 'rgba(7, 12, 18, 0.68)',
+  },
+  progressSavePromptBackdrop: {
+    justifyContent: 'center',
+    padding: 0,
+    backgroundColor: 'rgba(7, 12, 18, 0.68)',
+  },
+  progressSavePromptPanel: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    shadowColor: '#032B72',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.34,
+    shadowRadius: 16,
+    elevation: 18,
+  },
+  progressSavePromptPanelImage: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+  },
+  progressSavePromptContent: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  progressSavePromptTitle: {
+    width: '100%',
+    color: '#17364A',
+    textAlign: 'center',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(255,255,255,0.75)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 2,
+    marginBottom: 12,
+  },
+  progressSavePromptBody: {
+    width: '100%',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  progressSavePromptText: {
+    width: '100%',
+    color: '#315266',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  progressSavePromptError: {
+    marginTop: 8,
+    color: '#B83232',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  progressSavePromptFootnote: {
+    color: '#6F8796',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
+  progressSavePromptActions: {
+    width: '100%',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  progressSavePromptButtonWrap: {
+    width: '100%',
+    maxWidth: 282,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressSavePromptNoButtonWrap: {
+    width: '58%',
   },
   backConfirmCard: {
     maxWidth: 360,

@@ -32,9 +32,6 @@ export const HOME_ASSETS = [
   require('../../assets/images/host-lock-padlock.png'),
   require('../../assets/images/license-plates/dutch-join-plate-cropped.png'),
   require('../../assets/images/premium/main-menu-premium-crown.png'),
-  require('../../assets/images/ui/bug-report-button.png'),
-  require('../../assets/images/ui/bug-report-menu.png'),
-  require('../../assets/images/ui/bug-report-close.png'),
   require('../../assets/images/ui/driver-warning-menu.png'),
   require('../../assets/images/ui/driver-warning-icon.png'),
   require('../../assets/images/backgrounds/skin-road-background.png'),
@@ -57,7 +54,6 @@ export const HOME_CRITICAL_ASSETS = [
   require('../../assets/images/home-online-button.png'),
   require('../../assets/images/navigation/settings-gear.png'),
   require('../../assets/images/premium/main-menu-premium-crown.png'),
-  require('../../assets/images/ui/bug-report-button.png'),
   require('../../assets/images/nav-icons/nav-palette.png'),
   require('../../assets/images/nav-icons/nav-home.png'),
   require('../../assets/images/nav-icons/nav-cards.png'),
@@ -75,11 +71,8 @@ export const PREMIUM_MODAL_ASSETS = [
   require('../../assets/images/premium/radio-unselected.png'),
   require('../../assets/images/premium/radio-selected.png'),
   require('../../assets/images/premium/main-menu-premium-crown.png'),
-];
-
-export const BUG_REPORT_MODAL_ASSETS = [
-  require('../../assets/images/ui/bug-report-menu.png'),
-  require('../../assets/images/ui/bug-report-close.png'),
+  require('../../assets/images/premium/premium-skin-plus-badge.png'),
+  require('../../assets/images/players/player-premium-racer.png'),
 ];
 
 export const SETTINGS_ASSETS = [
@@ -100,7 +93,7 @@ export const SETTINGS_ASSETS = [
   require('../../assets/images/settings/toggles/state-off.png'),
   require('../../assets/images/tutorial/tutorial-hand.png'),
   require('../../assets/images/tutorial/tutorial-speech-bubble.png'),
-  require('../../assets/images/tutorial/tutorial-car-red.png'),
+  require('../../assets/images/players/player-rood.png'),
 ];
 
 export const POPUP_PANEL_ASSETS = [
@@ -128,6 +121,7 @@ export const SETUP_RULE_ASSETS = [
   require('../../assets/images/settings/card-layout-title.png'),
   require('../../assets/images/settings/card-layout-same.png'),
   require('../../assets/images/settings/card-layout-different.png'),
+  require('../../assets/images/ui/info-button.png'),
 ];
 
 export const SETUP_ASSETS = [
@@ -148,7 +142,7 @@ export const SETUP_ASSETS = [
 export const GAME_MODE_ASSETS = [
   require('../../assets/images/game-mode-cards/wifi-required.png'),
   require('../../assets/images/game-mode-cards/wifi-not-required.png'),
-  require('../../assets/images/game-mode-cards/offline-section-no-wifi.png'),
+  require('../../assets/images/game-mode-cards/wifi-not-required.png'),
   require('../../assets/images/game-mode-cards/wifi-status-panel.png'),
   require('../../assets/images/game-mode-cards/klassiek-card-red.png'),
   require('../../assets/images/game-mode-cards/klassiek-card-green.png'),
@@ -212,6 +206,24 @@ export const BINGO_BOARD_ASSET_BY_SKIN = {
   hartjes: require('../../assets/images/bingo-boards/board-hartjes.png'),
   taxi: require('../../assets/images/bingo-boards/board-taxi.png'),
   vlammen: require('../../assets/images/bingo-boards/board-vlammen.png'),
+  premium_racer: require('../../assets/images/bingo-boards/board-premium-racer.png'),
+  eend: require('../../assets/images/bingo-boards/board-eend.png'),
+  sport_coupe: require('../../assets/images/bingo-boards/board-sport-coupe.png'),
+  neon_nacht: require('../../assets/images/bingo-boards/board-neon-nacht.png'),
+  maanrijder: require('../../assets/images/bingo-boards/board-maanrijder.png'),
+  hot_rod: require('../../assets/images/bingo-boards/board-hot-rod.png'),
+  monstertruck: require('../../assets/images/bingo-boards/board-monstertruck.png'),
+  carbon_supercar: require('../../assets/images/bingo-boards/board-carbon-supercar.png'),
+  ijsco_wagen: require('../../assets/images/bingo-boards/board-ijsco-wagen.png'),
+  piraten_wagen: require('../../assets/images/bingo-boards/board-piraten-wagen.png'),
+  safari_jeep: require('../../assets/images/bingo-boards/board-safari-jeep.png'),
+  koninklijke_racer: require('../../assets/images/bingo-boards/board-koninklijke-racer.png'),
+  klassieke_brandweer: require('../../assets/images/bingo-boards/board-klassieke-brandweer.png'),
+  supercar_racer: require('../../assets/images/bingo-boards/board-supercar-racer.png'),
+  locomotief: require('../../assets/images/bingo-boards/board-locomotief.png'),
+  strand_buggy: require('../../assets/images/bingo-boards/board-strand-buggy.png'),
+  sneeuwschuiver: require('../../assets/images/bingo-boards/board-sneeuwschuiver.png'),
+  ridder: require('../../assets/images/bingo-boards/board-ridder.png'),
 };
 
 export const BINGO_BOARD_ASSETS = Object.values(BINGO_BOARD_ASSET_BY_SKIN);
@@ -241,6 +253,24 @@ export const BINGO_SPLASH_ASSET_BY_SKIN = {
   hartjes: require('../../assets/logo (bingo-hartjes).png'),
   taxi: require('../../assets/logo (bingo-taxi).png'),
   vlammen: require('../../assets/logo (bingo-vlammen).png'),
+  premium_racer: require('../../assets/logo (bingo-premium-racer).png'),
+  eend: require('../../assets/logo (bingo-eend).png'),
+  sport_coupe: require('../../assets/logo (bingo-sport-coupe).png'),
+  neon_nacht: require('../../assets/logo (bingo-neon-nacht).png'),
+  maanrijder: require('../../assets/logo (bingo-maanrijder).png'),
+  hot_rod: require('../../assets/logo (bingo-hot-rod).png'),
+  monstertruck: require('../../assets/logo (bingo-monstertruck).png'),
+  carbon_supercar: require('../../assets/logo (bingo-carbon-supercar).png'),
+  ijsco_wagen: require('../../assets/logo (bingo-ijsco-wagen).png'),
+  piraten_wagen: require('../../assets/logo (bingo-piraten-wagen).png'),
+  safari_jeep: require('../../assets/logo (bingo-safari-jeep).png'),
+  koninklijke_racer: require('../../assets/logo (bingo-koninklijke-racer).png'),
+  klassieke_brandweer: require('../../assets/logo (bingo-klassieke-brandweer).png'),
+  supercar_racer: require('../../assets/logo (bingo-supercar-racer).png'),
+  locomotief: require('../../assets/logo (bingo-locomotief).png'),
+  strand_buggy: require('../../assets/logo (bingo-strand-buggy).png'),
+  sneeuwschuiver: require('../../assets/logo (bingo-sneeuwschuiver).png'),
+  ridder: require('../../assets/logo (bingo-ridder).png'),
 };
 
 export const BINGO_SPLASH_ASSETS = Object.values(BINGO_SPLASH_ASSET_BY_SKIN);
@@ -270,6 +300,24 @@ export const CLAIM_PODIUM_ASSETS = [
   require('../../assets/images/claim-results/podium-hartjes.png'),
   require('../../assets/images/claim-results/podium-taxi.png'),
   require('../../assets/images/claim-results/podium-vlammen.png'),
+  require('../../assets/images/claim-results/podium-premium-racer.png'),
+  require('../../assets/images/claim-results/podium-eend.png'),
+  require('../../assets/images/claim-results/podium-sport-coupe.png'),
+  require('../../assets/images/claim-results/podium-neon-nacht.png'),
+  require('../../assets/images/claim-results/podium-maanrijder.png'),
+  require('../../assets/images/claim-results/podium-hot-rod.png'),
+  require('../../assets/images/claim-results/podium-monstertruck.png'),
+  require('../../assets/images/claim-results/podium-carbon-supercar.png'),
+  require('../../assets/images/claim-results/podium-ijsco-wagen.png'),
+  require('../../assets/images/claim-results/podium-piraten-wagen.png'),
+  require('../../assets/images/claim-results/podium-safari-jeep.png'),
+  require('../../assets/images/claim-results/podium-koninklijke-racer.png'),
+  require('../../assets/images/claim-results/podium-klassieke-brandweer.png'),
+  require('../../assets/images/claim-results/podium-supercar-racer.png'),
+  require('../../assets/images/claim-results/podium-locomotief.png'),
+  require('../../assets/images/claim-results/podium-strand-buggy.png'),
+  require('../../assets/images/claim-results/podium-sneeuwschuiver.png'),
+  require('../../assets/images/claim-results/podium-ridder.png'),
 ];
 
 export const GAME_BASE_ASSETS = [
@@ -282,8 +330,6 @@ export const BOOT_ASSETS = [
   require('../../assets/images/ui/driver-warning-menu.png'),
   require('../../assets/images/ui/driver-warning-icon.png'),
   ...POPUP_PANEL_ASSETS,
-  ...SETTINGS_ASSETS,
-  ...PREMIUM_MODAL_ASSETS,
 ];
 
 export const ROUTE_PRELOADERS = {

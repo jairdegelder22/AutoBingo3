@@ -8,9 +8,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 5,
     themeWeights: {},
-    defaultIcon: require("../assets/images/Platteland/100 bord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/100 bord.png"),
     iconsByTheme: {
-      platteland: require("../assets/images/Platteland/100 bord.png"),
+      platteland: require("../assets/images/Verkeersborden/100 bord.png"),
       verkeersborden: require("../assets/images/Verkeersborden/100 bord.png"),
     },
   },
@@ -21,9 +21,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 4,
     themeWeights: {"verkeersborden":3},
-    defaultIcon: require("../assets/images/Snelweg/130 bord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/130 bord.png"),
     iconsByTheme: {
-      snelweg: require("../assets/images/Snelweg/130 bord.png"),
+      snelweg: require("../assets/images/Verkeersborden/130 bord.png"),
       verkeersborden: require("../assets/images/Verkeersborden/130 bord.png"),
     },
   },
@@ -34,9 +34,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 5,
     themeWeights: {"verkeersborden":3},
-    defaultIcon: require("../assets/images/stad/30 bord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/30 bord.png"),
     iconsByTheme: {
-      stad: require("../assets/images/stad/30 bord.png"),
+      stad: require("../assets/images/Verkeersborden/30 bord.png"),
       verkeersborden: require("../assets/images/Verkeersborden/30 bord.png"),
     },
   },
@@ -47,9 +47,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 2,
     themeWeights: {"verkeersborden":3},
-    defaultIcon: require("../assets/images/Platteland/adviessnelheid 60.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/adviessnelheid 60.png"),
     iconsByTheme: {
-      platteland: require("../assets/images/Platteland/adviessnelheid 60.png"),
+      platteland: require("../assets/images/Verkeersborden/adviessnelheid 60.png"),
       verkeersborden: require("../assets/images/Verkeersborden/adviessnelheid 60.png"),
     },
   },
@@ -111,7 +111,7 @@ const ITEM_CATALOG = [
     defaultIcon: require("../assets/images/Snelweg/auto met aanhangwagen.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/auto met aanhangwagen.png"),
-      platteland: require("../assets/images/Platteland/auto met aanhangwagen.png"),
+      platteland: require("../assets/images/Snelweg/auto met aanhangwagen.png"),
     },
   },
   {
@@ -193,7 +193,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"snelweg":4,"verkeersborden":3},
-    defaultIcon: require("../assets/images/NieuweItems/autosnelweg-bord.png"),
+    defaultIcon: require("../assets/images/Snelweg/autosnelweg-bord.png"),
     iconsByTheme: {
     },
   },
@@ -204,7 +204,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["verkeersborden"],
     weight: 3,
     themeWeights: {"algemeen":3},
-    defaultIcon: require("../assets/images/NieuweItems/bestelbus.png"),
+    defaultIcon: require("../assets/images/Voertuigen/bestelbus.png"),
     iconsByTheme: {
     },
   },
@@ -215,7 +215,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"stad":2,"platteland":2},
-    defaultIcon: require("../assets/images/NieuweItems/afvalbak-groen.png"),
+    defaultIcon: require("../assets/images/stad/afvalbak-groen.png"),
     iconsByTheme: {
     },
   },
@@ -226,7 +226,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/blokhut.png"),
+    defaultIcon: require("../assets/images/Bergen/blokhut.png"),
     iconsByTheme: {
     },
   },
@@ -249,7 +249,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 5,
     themeWeights: {"snelweg":5},
-    defaultIcon: require("../assets/images/NieuweItems/wegwijzerbord.png"),
+    defaultIcon: require("../assets/images/Snelweg/wegwijzerbord.png"),
     iconsByTheme: {
     },
   },
@@ -332,9 +332,9 @@ const ITEM_CATALOG = [
     excludedThemes: ["verkeersborden"],
     weight: 1,
     themeWeights: {"algemeen":5,"voertuigen":4},
-    defaultIcon: require("../assets/images/Snelweg/busje.png"),
+    defaultIcon: require("../assets/images/Voertuigen/busje.png"),
     iconsByTheme: {
-      snelweg: require("../assets/images/Snelweg/busje.png"),
+      snelweg: require("../assets/images/Voertuigen/busje.png"),
       voertuigen: require("../assets/images/Voertuigen/busje.png"),
     },
   },
@@ -419,7 +419,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 4,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/dennenbomen.png"),
+    defaultIcon: require("../assets/images/Platteland/dennenbomen.png"),
     iconsByTheme: {
     },
   },
@@ -430,9 +430,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"stad":3,"verkeersborden":3},
-    defaultIcon: require("../assets/images/stad/doodlopende weg.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/doodlopende weg.png"),
     iconsByTheme: {
-      stad: require("../assets/images/stad/doodlopende weg.png"),
+      stad: require("../assets/images/Verkeersborden/doodlopende weg.png"),
       verkeersborden: require("../assets/images/Verkeersborden/doodlopende weg.png"),
     },
   },
@@ -479,7 +479,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"snelweg":3,"verkeersborden":3},
-    defaultIcon: require("../assets/images/NieuweItems/einde-autosnelweg-bord.png"),
+    defaultIcon: require("../assets/images/Snelweg/einde-autosnelweg-bord.png"),
     iconsByTheme: {
     },
   },
@@ -490,7 +490,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"snelweg":2,"verkeersborden":1},
-    defaultIcon: require("../assets/images/NieuweItems/zwart-wit-markeringsbord.png"),
+    defaultIcon: require("../assets/images/Snelweg/zwart-wit-markeringsbord.png"),
     iconsByTheme: {
     },
   },
@@ -501,7 +501,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","stad","voertuigen","verkeersborden"],
     weight: 1,
     themeWeights: {"platteland":1,"vakantie":3},
-    defaultIcon: require("../assets/images/NieuweItems/houten-afzetpaal.png"),
+    defaultIcon: require("../assets/images/Platteland/houten-afzetpaal.png"),
     iconsByTheme: {
     },
   },
@@ -620,7 +620,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"stad":1,"vakantie":1},
-    defaultIcon: require("../assets/images/NieuweItems/rood-wit-baken.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/rood-wit-baken.png"),
     iconsByTheme: {
     },
   },
@@ -703,7 +703,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"winter":3,"verkeersborden":1},
-    defaultIcon: require("../assets/images/NieuweItems/gladheid-bord.png"),
+    defaultIcon: require("../assets/images/Winter/gladheid-bord.png"),
     iconsByTheme: {
       winter: require("../assets/images/Winter/gladheid-bord.png"),
     },
@@ -763,7 +763,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"snelweg":4,"verkeersborden":3},
-    defaultIcon: require("../assets/images/NieuweItems/groen-pijlbord.png"),
+    defaultIcon: require("../assets/images/Snelweg/groen-pijlbord.png"),
     iconsByTheme: {
     },
   },
@@ -774,7 +774,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","voertuigen","verkeersborden"],
     weight: 3,
     themeWeights: {"stad":4,"platteland":2,"vakantie":4},
-    defaultIcon: require("../assets/images/NieuweItems/groene-container.png"),
+    defaultIcon: require("../assets/images/stad/groene-container.png"),
     iconsByTheme: {
     },
   },
@@ -809,9 +809,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"snelweg":2,"stad":3},
-    defaultIcon: require("../assets/images/Snelweg/hijskraan.png"),
+    defaultIcon: require("../assets/images/stad/hijskraan.png"),
     iconsByTheme: {
-      snelweg: require("../assets/images/Snelweg/hijskraan.png"),
+      snelweg: require("../assets/images/stad/hijskraan.png"),
       stad: require("../assets/images/stad/hijskraan.png"),
     },
   },
@@ -870,7 +870,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"platteland":4,"vakantie":3,"bergen":4},
-    defaultIcon: require("../assets/images/NieuweItems/houtstapel.png"),
+    defaultIcon: require("../assets/images/Bergen/houtstapel.png"),
     iconsByTheme: {
       bergen: require("../assets/images/Bergen/houtstapel.png"),
     },
@@ -894,7 +894,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"winter":4},
-    defaultIcon: require("../assets/images/NieuweItems/huis-met-lichtjes.png"),
+    defaultIcon: require("../assets/images/Winter/huis-met-lichtjes.png"),
     iconsByTheme: {
       winter: require("../assets/images/Winter/huis-met-lichtjes.png"),
     },
@@ -930,7 +930,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"vakantie":3,"bergen":4},
-    defaultIcon: require("../assets/images/NieuweItems/informatiebord-natuurgebied.png"),
+    defaultIcon: require("../assets/images/Bergen/informatiebord-natuurgebied.png"),
     iconsByTheme: {
       bergen: require("../assets/images/Bergen/informatiebord-natuurgebied.png"),
     },
@@ -1005,7 +1005,7 @@ const ITEM_CATALOG = [
     defaultIcon: require("../assets/images/stad/kerk.png"),
     iconsByTheme: {
       stad: require("../assets/images/stad/kerk.png"),
-      platteland: require("../assets/images/Platteland/kerk.png"),
+      platteland: require("../assets/images/stad/kerk.png"),
     },
   },
   {
@@ -1015,7 +1015,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"winter":5},
-    defaultIcon: require("../assets/images/NieuweItems/kerstboom.png"),
+    defaultIcon: require("../assets/images/Winter/kerstboom.png"),
     iconsByTheme: {
       winter: require("../assets/images/Winter/kerstboom.png"),
     },
@@ -1027,7 +1027,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/kerstkrans.png"),
+    defaultIcon: require("../assets/images/Winter/kerstkrans.png"),
     iconsByTheme: {
     },
   },
@@ -1038,7 +1038,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/kerstman.png"),
+    defaultIcon: require("../assets/images/Winter/kerstman.png"),
     iconsByTheme: {
     },
   },
@@ -1097,7 +1097,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","voertuigen","verkeersborden"],
     weight: 1,
     themeWeights: {"algemeen":3},
-    defaultIcon: require("../assets/images/NieuweItems/kruising.png"),
+    defaultIcon: require("../assets/images/stad/kruising.png"),
     iconsByTheme: {
     },
   },
@@ -1276,7 +1276,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"vakantie":2},
-    defaultIcon: require("../assets/images/NieuweItems/motorboot.png"),
+    defaultIcon: require("../assets/images/Vakantie/motorboot.png"),
     iconsByTheme: {
     },
   },
@@ -1323,9 +1323,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"platteland":3,"bergen":3,"verkeersborden":3},
-    defaultIcon: require("../assets/images/Platteland/overstekend wild.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/overstekend wild.png"),
     iconsByTheme: {
-      platteland: require("../assets/images/Platteland/overstekend wild.png"),
+      platteland: require("../assets/images/Verkeersborden/overstekend wild.png"),
       verkeersborden: require("../assets/images/Verkeersborden/overstekend wild.png"),
     },
   },
@@ -1372,7 +1372,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","voertuigen"],
     weight: 3,
     themeWeights: {"stad":4,"algemeen":3},
-    defaultIcon: require("../assets/images/NieuweItems/parkeerbord.png"),
+    defaultIcon: require("../assets/images/stad/parkeerbord.png"),
     iconsByTheme: {
     },
   },
@@ -1395,7 +1395,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["voertuigen","verkeersborden"],
     weight: 1,
     themeWeights: {"algemeen":1,"vakantie":2},
-    defaultIcon: require("../assets/images/NieuweItems/picknicktafel.png"),
+    defaultIcon: require("../assets/images/Vakantie/picknicktafel.png"),
     iconsByTheme: {
     },
   },
@@ -1406,7 +1406,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["verkeersborden"],
     weight: 3,
     themeWeights: {"voertuigen":4},
-    defaultIcon: require("../assets/images/NieuweItems/pickup.png"),
+    defaultIcon: require("../assets/images/Voertuigen/pickup.png"),
     iconsByTheme: {
     },
   },
@@ -1477,9 +1477,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"platteland":1,"voertuigen":1},
-    defaultIcon: require("../assets/images/Platteland/quad.png"),
+    defaultIcon: require("../assets/images/Voertuigen/quad.png"),
     iconsByTheme: {
-      platteland: require("../assets/images/Platteland/quad.png"),
+      platteland: require("../assets/images/Voertuigen/quad.png"),
       voertuigen: require("../assets/images/Voertuigen/quad.png"),
     },
   },
@@ -1490,7 +1490,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","bergen","voertuigen"],
     weight: 3,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/rechts-houden-bord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/rechts-houden-bord.png"),
     iconsByTheme: {
     },
   },
@@ -1537,7 +1537,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/bergrivier.png"),
+    defaultIcon: require("../assets/images/Bergen/bergrivier.png"),
     iconsByTheme: {
     },
   },
@@ -1548,7 +1548,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"vakantie":3},
-    defaultIcon: require("../assets/images/NieuweItems/roeiboot.png"),
+    defaultIcon: require("../assets/images/Vakantie/roeiboot.png"),
     iconsByTheme: {
     },
   },
@@ -1583,9 +1583,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"snelweg":1,"voertuigen":1},
-    defaultIcon: require("../assets/images/Snelweg/lijkwagen.png"),
+    defaultIcon: require("../assets/images/Voertuigen/lijkwagen.png"),
     iconsByTheme: {
-      snelweg: require("../assets/images/Snelweg/lijkwagen.png"),
+      snelweg: require("../assets/images/Voertuigen/lijkwagen.png"),
       voertuigen: require("../assets/images/Voertuigen/lijkwagen.png"),
     },
   },
@@ -1596,7 +1596,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"vakantie":2},
-    defaultIcon: require("../assets/images/NieuweItems/rubberboot.png"),
+    defaultIcon: require("../assets/images/Vakantie/rubberboot.png"),
     iconsByTheme: {
     },
   },
@@ -1607,7 +1607,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["stad","voertuigen"],
     weight: 1,
     themeWeights: {"verkeersborden":3,"bergen":4,"platteland":2,"algemeen":2},
-    defaultIcon: require("../assets/images/NieuweItems/bochtig-verkeersbord.png"),
+    defaultIcon: require("../assets/images/Bergen/bochtig-verkeersbord.png"),
     iconsByTheme: {
       bergen: require("../assets/images/Bergen/bochtig-verkeersbord.png"),
     },
@@ -1631,7 +1631,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"winter":3},
-    defaultIcon: require("../assets/images/NieuweItems/schaatser.png"),
+    defaultIcon: require("../assets/images/Winter/schaatser.png"),
     iconsByTheme: {
       winter: require("../assets/images/Winter/schaatser.png"),
     },
@@ -1643,7 +1643,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"snelweg":2,"vakantie":4,"bergen":4},
-    defaultIcon: require("../assets/images/NieuweItems/bocht-reflectoren.png"),
+    defaultIcon: require("../assets/images/Bergen/bocht-reflectoren.png"),
     iconsByTheme: {
       bergen: require("../assets/images/Bergen/bocht-reflectoren.png"),
     },
@@ -1655,7 +1655,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","voertuigen","verkeersborden"],
     weight: 1,
     themeWeights: {"stad":3,"platteland":3,"vakantie":3,"bergen":3},
-    defaultIcon: require("../assets/images/NieuweItems/schotelantenne.png"),
+    defaultIcon: require("../assets/images/Bergen/schotelantenne.png"),
     iconsByTheme: {
       bergen: require("../assets/images/Bergen/schotelantenne.png"),
     },
@@ -1715,7 +1715,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"winter":3},
-    defaultIcon: require("../assets/images/NieuweItems/slee.png"),
+    defaultIcon: require("../assets/images/Winter/slee.png"),
     iconsByTheme: {
       winter: require("../assets/images/Winter/slee.png"),
     },
@@ -1751,7 +1751,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 4,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/sneeuwpop.png"),
+    defaultIcon: require("../assets/images/Winter/sneeuwpop.png"),
     iconsByTheme: {
     },
   },
@@ -1762,7 +1762,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","voertuigen"],
     weight: 3,
     themeWeights: {"algemeen":2},
-    defaultIcon: require("../assets/images/NieuweItems/snelheidsbord-50.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/snelheidsbord-50.png"),
     iconsByTheme: {
     },
   },
@@ -1773,7 +1773,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"vakantie":2,"verkeersborden":3,"platteland":4},
-    defaultIcon: require("../assets/images/NieuweItems/snelheidsbord-80.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/snelheidsbord-80.png"),
     iconsByTheme: {
     },
   },
@@ -1832,7 +1832,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"snelweg":4,"vakantie":2},
-    defaultIcon: require("../assets/images/NieuweItems/spoorrails.png"),
+    defaultIcon: require("../assets/images/Snelweg/spoorrails.png"),
     iconsByTheme: {
     },
   },
@@ -1867,9 +1867,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"stad":4,"verkeersborden":3},
-    defaultIcon: require("../assets/images/stad/stopbord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/stopbord.png"),
     iconsByTheme: {
-      stad: require("../assets/images/stad/stopbord.png"),
+      stad: require("../assets/images/Verkeersborden/stopbord.png"),
       verkeersborden: require("../assets/images/Verkeersborden/stopbord.png"),
     },
   },
@@ -1976,9 +1976,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 5,
     themeWeights: {"platteland":5,"voertuigen":3},
-    defaultIcon: require("../assets/images/Platteland/tractor.png"),
+    defaultIcon: require("../assets/images/Voertuigen/tractor.png"),
     iconsByTheme: {
-      platteland: require("../assets/images/Platteland/tractor.png"),
+      platteland: require("../assets/images/Voertuigen/tractor.png"),
       voertuigen: require("../assets/images/Voertuigen/tractor.png"),
     },
   },
@@ -2001,7 +2001,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","voertuigen","verkeersborden"],
     weight: 1,
     themeWeights: {"bergen":1,"vakantie":3,"platteland":3,"stad":4},
-    defaultIcon: require("../assets/images/NieuweItems/trampoline.png"),
+    defaultIcon: require("../assets/images/stad/trampoline.png"),
     iconsByTheme: {
     },
   },
@@ -2013,7 +2013,7 @@ const ITEM_CATALOG = [
     weight: 3,
     themeWeights: {"voertuigen":2,"snelweg":3,"vakantie":3},
     defaultIcon: require("../assets/images/Snelweg/trein.png"),
-    generalIcon: require("../assets/images/NieuweItems/oranje-trein.png"),
+    generalIcon: require("../assets/images/Voertuigen/oranje-trein.png"),
     iconsByTheme: {
       snelweg: require("../assets/images/Snelweg/trein.png"),
     },
@@ -2037,7 +2037,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 4,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/vallende-stenen-bord.png"),
+    defaultIcon: require("../assets/images/Bergen/vallende-stenen-bord.png"),
     iconsByTheme: {
     },
   },
@@ -2048,7 +2048,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 2,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/vee-rooster.png"),
+    defaultIcon: require("../assets/images/Platteland/vee-rooster.png"),
     iconsByTheme: {
     },
   },
@@ -2131,7 +2131,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"vakantie":1,"stad":2},
-    defaultIcon: require("../assets/images/NieuweItems/verkeerskegel.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/verkeerskegel.png"),
     iconsByTheme: {
     },
   },
@@ -2142,7 +2142,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["snelweg","voertuigen","verkeersborden"],
     weight: 1,
     themeWeights: {"stad":2,"platteland":2,"vakantie":3,"bergen":4},
-    defaultIcon: require("../assets/images/NieuweItems/bolle-spiegel.png"),
+    defaultIcon: require("../assets/images/Bergen/bolle-spiegel.png"),
     iconsByTheme: {
     },
   },
@@ -2177,9 +2177,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"stad":5,"platteland":3,"vakantie":3,"verkeersborden":3},
-    defaultIcon: require("../assets/images/Platteland/voorrang verlenen.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/voorrang verlenen.png"),
     iconsByTheme: {
-      platteland: require("../assets/images/Platteland/voorrang verlenen.png"),
+      platteland: require("../assets/images/Verkeersborden/voorrang verlenen.png"),
       verkeersborden: require("../assets/images/Verkeersborden/voorrang verlenen.png"),
     },
   },
@@ -2190,9 +2190,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"stad":5,"platteland":4,"vakantie":3,"verkeersborden":3},
-    defaultIcon: require("../assets/images/Platteland/voorrangsbord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/voorrangsbord.png"),
     iconsByTheme: {
-      platteland: require("../assets/images/Platteland/voorrangsbord.png"),
+      platteland: require("../assets/images/Verkeersborden/voorrangsbord.png"),
       verkeersborden: require("../assets/images/Verkeersborden/voorrangsbord.png"),
     },
   },
@@ -2203,9 +2203,9 @@ const ITEM_CATALOG = [
     excludedThemes: ["verkeersborden"],
     weight: 1,
     themeWeights: {"voertuigen":5,"bergen":2,"winter":2,"vakantie":4,"platteland":3,"stad":3,"snelweg":5},
-    defaultIcon: require("../assets/images/Snelweg/vrachtwagen.png"),
+    defaultIcon: require("../assets/images/Voertuigen/vrachtwagen.png"),
     iconsByTheme: {
-      snelweg: require("../assets/images/Snelweg/vrachtwagen.png"),
+      snelweg: require("../assets/images/Voertuigen/vrachtwagen.png"),
       voertuigen: require("../assets/images/Voertuigen/vrachtwagen.png"),
     },
   },
@@ -2216,9 +2216,9 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"stad":3,"voertuigen":2},
-    defaultIcon: require("../assets/images/stad/vuilniswagen.png"),
+    defaultIcon: require("../assets/images/Voertuigen/vuilniswagen.png"),
     iconsByTheme: {
-      stad: require("../assets/images/stad/vuilniswagen.png"),
+      stad: require("../assets/images/Voertuigen/vuilniswagen.png"),
       voertuigen: require("../assets/images/Voertuigen/vuilniswagen.png"),
     },
   },
@@ -2241,7 +2241,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/wandelaars.png"),
+    defaultIcon: require("../assets/images/Bergen/wandelaars.png"),
     iconsByTheme: {
     },
   },
@@ -2252,7 +2252,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 1,
     themeWeights: {"bergen":4,"vakantie":2},
-    defaultIcon: require("../assets/images/NieuweItems/waterval.png"),
+    defaultIcon: require("../assets/images/Bergen/waterval.png"),
     iconsByTheme: {
       bergen: require("../assets/images/Bergen/waterval.png"),
     },
@@ -2276,7 +2276,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"stad":2,"platteland":2},
-    defaultIcon: require("../assets/images/NieuweItems/wegversmalling.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/wegversmalling.png"),
     iconsByTheme: {
     },
   },
@@ -2287,7 +2287,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {"stad":2,"verkeersborden":1},
-    defaultIcon: require("../assets/images/NieuweItems/wegversmalling-bord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/wegversmalling-bord.png"),
     iconsByTheme: {
     },
   },
@@ -2298,7 +2298,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 3,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/werkzaamhedenbord.png"),
+    defaultIcon: require("../assets/images/Verkeersborden/werkzaamhedenbord.png"),
     iconsByTheme: {
     },
   },
@@ -2345,7 +2345,7 @@ const ITEM_CATALOG = [
     excludedThemes: [],
     weight: 2,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/windzak.png"),
+    defaultIcon: require("../assets/images/Snelweg/windzak.png"),
     iconsByTheme: {
     },
   },
@@ -2404,7 +2404,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["voertuigen","verkeersborden"],
     weight: 1,
     themeWeights: {"winter":2,"bergen":2,"vakantie":3,"platteland":2,"stad":3,"snelweg":4},
-    defaultIcon: require("../assets/images/NieuweItems/blauwe-zeecontainer.png"),
+    defaultIcon: require("../assets/images/Snelweg/blauwe-zeecontainer.png"),
     iconsByTheme: {
     },
   },
@@ -2427,7 +2427,7 @@ const ITEM_CATALOG = [
     excludedThemes: ["voertuigen","verkeersborden"],
     weight: 4,
     themeWeights: {},
-    defaultIcon: require("../assets/images/NieuweItems/zendmast.png"),
+    defaultIcon: require("../assets/images/Snelweg/zendmast.png"),
     iconsByTheme: {
     },
   },

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, Text, View } from 'react-native';
 import { getResponsiveMetrics } from '../utils/responsive';
 
@@ -6,7 +6,8 @@ const NO_WIFI_IMAGE = require('../../assets/images/game-mode-cards/kaartcode-no-
 
 export default function ConnectionWarningOverlay({ visible, width = 390, height = 844 }) {
   const pulse = useRef(new Animated.Value(0)).current;
-  const { isTablet } = getResponsiveMetrics(width, height);
+  const metrics = getResponsiveMetrics(width, height);
+  const { isTablet } = metrics;
 
   useEffect(() => {
     if (!visible) {
@@ -41,10 +42,11 @@ export default function ConnectionWarningOverlay({ visible, width = 390, height 
     return null;
   }
 
-  const imageSize = isTablet ? 112 : 82;
+  const imageSize = metrics.s(82, 74, isTablet ? 112 : 96);
+  const topOffset = metrics.sy(82, 60, isTablet ? 118 : 92);
 
   return (
-    <View pointerEvents="none" style={[styles.wrap, isTablet && styles.wrapTablet]}>
+    <View pointerEvents="none" style={[styles.wrap, { top: topOffset }]}>
       <Animated.View
         style={[
           styles.panel,
@@ -70,7 +72,15 @@ export default function ConnectionWarningOverlay({ visible, width = 390, height 
           fadeDuration={0}
           style={{ width: imageSize, height: imageSize }}
         />
-        <Text style={[styles.text, isTablet && styles.textTablet]}>
+        <Text
+          style={[
+            styles.text,
+            {
+              fontSize: metrics.font(15, 14, isTablet ? 21 : 17),
+              lineHeight: metrics.font(20, 18, isTablet ? 27 : 22),
+            },
+          ]}
+        >
           Verbinding herstellen...
         </Text>
       </Animated.View>
@@ -81,15 +91,11 @@ export default function ConnectionWarningOverlay({ visible, width = 390, height 
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    top: 82,
     left: 0,
     right: 0,
     zIndex: 80,
     elevation: 80,
     alignItems: 'center',
-  },
-  wrapTablet: {
-    top: 104,
   },
   panel: {
     alignItems: 'center',
@@ -109,9 +115,5 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.42)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 3,
-  },
-  textTablet: {
-    fontSize: 21,
-    lineHeight: 27,
   },
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import CircularReveal from '../../components/CircularReveal';
 import AnimatedBackButton from './AnimatedBackButton';

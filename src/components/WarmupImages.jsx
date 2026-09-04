@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform, StyleSheet, View } from 'react-native';
 import {
   getAssetKey,
@@ -24,9 +24,9 @@ function WarmupImages({
   const assetKeys = useMemo(() => stableAssets.map(getAssetKey), [stableAssets]);
   const keySignature = assetKeys.join('|');
   const resolvedBatchSize = Platform.OS === 'android'
-    ? Math.min(batchSize, 4)
+    ? Math.min(batchSize, 8)
     : batchSize;
-  const batchIntervalMs = Platform.OS === 'android' ? 80 : 16;
+  const batchIntervalMs = Platform.OS === 'android' ? 32 : 16;
 
   useEffect(() => {
     readyKeysRef.current = new Set();

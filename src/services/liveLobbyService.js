@@ -5,6 +5,23 @@ const CONNECTION_CHECK_TIMEOUT_MS = 3500;
 const PLAYER_PRESENCE_STALE_MS = 15000;
 let playerPresenceColumnAvailable = true;
 
+function normalizeThemeForApp(theme) {
+  if (theme === 'borden') {
+    return 'verkeersborden';
+  }
+
+  if (theme === 'natuur') {
+    return 'platteland';
+  }
+
+  return theme || 'snelweg';
+}
+
+function normalizeThemeForDatabase(theme) {
+  const normalizedTheme = normalizeThemeForApp(theme);
+  return normalizedTheme === 'verkeersborden' ? 'borden' : normalizedTheme;
+}
+
 function withTimeout(promise, timeoutMs = CONNECTION_CHECK_TIMEOUT_MS) {
   let timeoutId = null;
 
@@ -74,7 +91,7 @@ function mapLobbyRowToSnapshot(lobbyRow, playerRows = []) {
   return {
     code: lobbyRow.lobby_code,
     config: {
-      thema: lobbyRow.theme,
+      thema: normalizeThemeForApp(lobbyRow.theme),
       modus: lobbyRow.game_mode,
       syncType: lobbyRow.sync_type === 'live' ? 'live' : 'geen',
       lobbyCode: lobbyRow.lobby_code,
@@ -148,7 +165,7 @@ async function fetchPlayersByLobbyId(lobbyId) {
 function buildLobbyPayload(config = {}, hostPlayerId, includeAdvancedSettings = true) {
   const payload = {
     lobby_code: config?.lobbyCode,
-    theme: config?.thema ?? 'snelweg',
+    theme: normalizeThemeForDatabase(config?.thema),
     game_mode: config?.modus ?? 'klassiek',
     sync_type: config?.syncType === 'live' ? 'live' : 'offline',
     seed: config?.seed ?? 0,
@@ -422,7 +439,7 @@ export async function joinLobby({ code, config, players }) {
     .from('lobbies')
     .update(buildLobbyPayload({
       ...config,
-      thema: config?.thema ?? lobbyRow.theme,
+      thema: config?.thema ?? normalizeThemeForApp(lobbyRow.theme),
       modus: config?.modus ?? lobbyRow.game_mode,
       syncType: config?.syncType === 'live' ? 'live' : 'offline',
       seed: config?.seed ?? lobbyRow.seed,
@@ -436,7 +453,7 @@ export async function joinLobby({ code, config, players }) {
       .from('lobbies')
       .update(buildLobbyPayload({
         ...config,
-        thema: config?.thema ?? lobbyRow.theme,
+        thema: config?.thema ?? normalizeThemeForApp(lobbyRow.theme),
         modus: config?.modus ?? lobbyRow.game_mode,
         syncType: config?.syncType === 'live' ? 'live' : 'offline',
         seed: config?.seed ?? lobbyRow.seed,
@@ -505,7 +522,7 @@ export async function updateLobbySettings(code, config = {}) {
   }
 
   const updatePayload = {
-    theme: config?.thema ?? lobbyRow.theme,
+    theme: normalizeThemeForDatabase(config?.thema ?? lobbyRow.theme),
     game_mode: config?.modus ?? lobbyRow.game_mode,
     seed: config?.seed ?? lobbyRow.seed,
     salt: config?.salt ?? lobbyRow.salt,

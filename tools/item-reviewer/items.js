@@ -666,7 +666,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/Platteland/100 bord.png",
+        "../../assets/images/Verkeersborden/100 bord.png",
         "../../assets/images/Verkeersborden/100 bord.png"
       ],
       "removed": false,
@@ -691,7 +691,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/Snelweg/130 bord.png",
+        "../../assets/images/Verkeersborden/130 bord.png",
         "../../assets/images/Verkeersborden/130 bord.png"
       ],
       "removed": false,
@@ -716,7 +716,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/stad/30 bord.png",
+        "../../assets/images/Verkeersborden/30 bord.png",
         "../../assets/images/Verkeersborden/30 bord.png"
       ],
       "removed": false,
@@ -741,7 +741,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/Platteland/adviessnelheid 60.png",
+        "../../assets/images/Verkeersborden/adviessnelheid 60.png",
         "../../assets/images/Verkeersborden/adviessnelheid 60.png"
       ],
       "removed": false,
@@ -883,7 +883,7 @@ window.ITEM_REVIEW_DATA = {
       ],
       "images": [
         "../../assets/images/Snelweg/auto met aanhangwagen.png",
-        "../../assets/images/Platteland/auto met aanhangwagen.png"
+        "../../assets/images/Snelweg/auto met aanhangwagen.png"
       ],
       "removed": false,
       "approved": true
@@ -1267,7 +1267,7 @@ window.ITEM_REVIEW_DATA = {
         "voertuigen"
       ],
       "images": [
-        "../../assets/images/Snelweg/busje.png",
+        "../../assets/images/Voertuigen/busje.png",
         "../../assets/images/Voertuigen/busje.png"
       ],
       "removed": false,
@@ -1442,7 +1442,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/stad/doodlopende weg.png",
+        "../../assets/images/Verkeersborden/doodlopende weg.png",
         "../../assets/images/Verkeersborden/doodlopende weg.png"
       ],
       "removed": false,
@@ -2091,7 +2091,7 @@ window.ITEM_REVIEW_DATA = {
         "stad"
       ],
       "images": [
-        "../../assets/images/Snelweg/hijskraan.png",
+        "../../assets/images/stad/hijskraan.png",
         "../../assets/images/stad/hijskraan.png"
       ],
       "removed": false,
@@ -2469,7 +2469,7 @@ window.ITEM_REVIEW_DATA = {
       ],
       "images": [
         "../../assets/images/stad/kerk.png",
-        "../../assets/images/Platteland/kerk.png"
+        "../../assets/images/stad/kerk.png"
       ],
       "removed": false,
       "approved": true
@@ -2677,7 +2677,7 @@ window.ITEM_REVIEW_DATA = {
         "voertuigen"
       ],
       "images": [
-        "../../assets/images/Snelweg/lijkwagen.png",
+        "../../assets/images/Voertuigen/lijkwagen.png",
         "../../assets/images/Voertuigen/lijkwagen.png"
       ],
       "removed": false,
@@ -3077,7 +3077,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/Platteland/overstekend wild.png",
+        "../../assets/images/Verkeersborden/overstekend wild.png",
         "../../assets/images/Verkeersborden/overstekend wild.png"
       ],
       "removed": false,
@@ -3336,7 +3336,7 @@ window.ITEM_REVIEW_DATA = {
         "voertuigen"
       ],
       "images": [
-        "../../assets/images/Platteland/quad.png",
+        "../../assets/images/Voertuigen/quad.png",
         "../../assets/images/Voertuigen/quad.png"
       ],
       "removed": false,
@@ -3956,7 +3956,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/stad/stopbord.png",
+        "../../assets/images/Verkeersborden/stopbord.png",
         "../../assets/images/Verkeersborden/stopbord.png"
       ],
       "removed": false,
@@ -4190,7 +4190,7 @@ window.ITEM_REVIEW_DATA = {
         "voertuigen"
       ],
       "images": [
-        "../../assets/images/Platteland/tractor.png",
+        "../../assets/images/Voertuigen/tractor.png",
         "../../assets/images/Voertuigen/tractor.png"
       ],
       "removed": false,
@@ -4540,7 +4540,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/Platteland/voorrang verlenen.png",
+        "../../assets/images/Verkeersborden/voorrang verlenen.png",
         "../../assets/images/Verkeersborden/voorrang verlenen.png"
       ],
       "removed": false,
@@ -4570,7 +4570,7 @@ window.ITEM_REVIEW_DATA = {
         "verkeersborden"
       ],
       "images": [
-        "../../assets/images/Platteland/voorrangsbord.png",
+        "../../assets/images/Verkeersborden/voorrangsbord.png",
         "../../assets/images/Verkeersborden/voorrangsbord.png"
       ],
       "removed": false,
@@ -4608,7 +4608,7 @@ window.ITEM_REVIEW_DATA = {
         "voertuigen"
       ],
       "images": [
-        "../../assets/images/Snelweg/vrachtwagen.png",
+        "../../assets/images/Voertuigen/vrachtwagen.png",
         "../../assets/images/Voertuigen/vrachtwagen.png"
       ],
       "removed": false,
@@ -4634,7 +4634,7 @@ window.ITEM_REVIEW_DATA = {
         "voertuigen"
       ],
       "images": [
-        "../../assets/images/stad/vuilniswagen.png",
+        "../../assets/images/Voertuigen/vuilniswagen.png",
         "../../assets/images/Voertuigen/vuilniswagen.png"
       ],
       "removed": false,

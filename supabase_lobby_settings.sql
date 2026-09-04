@@ -11,3 +11,27 @@ check (card_layout in ('zelfde', 'anders', 'ander-thema'));
 
 alter table public.lobbies
 add column if not exists dutch_items_enabled boolean not null default true;
+
+alter table public.lobbies
+alter column theme type text;
+
+alter table public.lobbies
+drop constraint if exists lobbies_theme_check;
+
+alter table public.lobbies
+drop constraint if exists lobbies_theme_valid_check;
+
+alter table public.lobbies
+add constraint lobbies_theme_check
+check (theme in (
+  'snelweg',
+  'stad',
+  'platteland',
+  'natuur',
+  'vakantie',
+  'winter',
+  'bergen',
+  'voertuigen',
+  'verkeersborden',
+  'borden'
+));

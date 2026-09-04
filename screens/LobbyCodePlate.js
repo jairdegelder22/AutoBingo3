@@ -1,3 +1,4 @@
+import React from 'react';
 import { Image, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { normalizeLobbyCode } from '../src/utils/lobbyCode';
 import { getResponsiveMetrics } from '../src/utils/responsive';
@@ -23,15 +24,41 @@ function buildCodeSlots(code = '') {
   ];
 }
 
-export default function LobbyCodePlate({ code, title = 'Lobbycode' }) {
+function normalizeRawPlateCode(code = '') {
+  return String(code)
+    .toUpperCase()
+    .replace(/[·.\-\s]/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+}
+
+function buildRawCodeSlots(code = '') {
+  const chars = normalizeRawPlateCode(code).split('');
+  return [
+    { key: 'char-0', type: 'char', value: chars[0] ?? '' },
+    { key: 'char-1', type: 'char', value: chars[1] ?? '' },
+    { key: 'dash-0', type: 'dash', value: chars.length >= 2 ? '-' : '' },
+    { key: 'char-2', type: 'char', value: chars[2] ?? '' },
+    { key: 'char-3', type: 'char', value: chars[3] ?? '' },
+    { key: 'char-4', type: 'char', value: chars[4] ?? '' },
+    { key: 'dash-1', type: 'dash', value: chars.length >= 5 ? '-' : '' },
+    { key: 'char-5', type: 'char', value: chars[5] ?? '' },
+    { key: 'char-6', type: 'char', value: chars[6] ?? '' },
+    { key: 'char-7', type: 'char', value: chars[7] ?? '' },
+  ];
+}
+
+export default function LobbyCodePlate({ code, title = 'Lobbycode', preserveCodeCharacters = false }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(windowWidth, windowHeight);
   const plateWidth = isTablet
     ? Math.min(windowWidth - 64, 760)
     : Math.min(windowWidth - 12, 470);
   const plateHeight = plateWidth / PLATE_IMAGE_RATIO;
-  const rawCode = normalizeLobbyCode(code || 'BG47KW2A');
-  const slots = buildCodeSlots(rawCode);
+  const rawCode = preserveCodeCharacters
+    ? normalizeRawPlateCode(code || 'BG47KW2A')
+    : normalizeLobbyCode(code || 'BG47KW2A');
+  const slots = preserveCodeCharacters ? buildRawCodeSlots(rawCode) : buildCodeSlots(rawCode);
   const codeRowWidth = plateWidth * 0.728;
   const slotWidth = codeRowWidth / TOTAL_SLOT_UNITS;
   const dashSlotWidth = slotWidth * DASH_SLOT_WEIGHT;

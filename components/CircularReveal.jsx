@@ -11,6 +11,7 @@ import { Animated, Easing, StyleSheet, useWindowDimensions } from 'react-native'
 import Svg, { Path } from 'react-native-svg';
 
 const DEFAULT_DURATION = 620;
+const MIN_COVER_SCALE = 0.002;
 
 function buildCirclePath(originX, originY, circleRadius) {
   const safeRadius = Math.max(0.001, circleRadius);
@@ -44,12 +45,22 @@ const CircularReveal = forwardRef(function CircularReveal(
   const [blocksTouches, setBlocksTouches] = useState(initiallyVisible);
   const [renderProgress, setRenderProgress] = useState(initialProgress);
 
-  const diameter = useMemo(
-    () => Math.sqrt(width * width + height * height) * 2,
-    [height, width]
-  );
+  const diameter = useMemo(() => {
+    const distances = [
+      Math.hypot(originX, originY),
+      Math.hypot(width - originX, originY),
+      Math.hypot(originX, height - originY),
+      Math.hypot(width - originX, height - originY),
+    ];
+
+    return Math.max(...distances, 1) * 2;
+  }, [height, originX, originY, width]);
   const radius = diameter / 2;
   const circleRadius = Math.max(0.001, radius * renderProgress);
+  const coverScale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [MIN_COVER_SCALE, 1],
+  });
 
   const visiblePath = useMemo(() => {
     const circle = buildCirclePath(originX, originY, circleRadius);
@@ -169,7 +180,7 @@ const CircularReveal = forwardRef(function CircularReveal(
               height: diameter,
               borderRadius: radius,
               backgroundColor: color,
-              transform: [{ scale: progress }],
+              transform: [{ scale: coverScale }],
             },
           ]}
         />
@@ -192,7 +203,8 @@ const CircularReveal = forwardRef(function CircularReveal(
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 9999,
+    zIndex: 11000,
+    elevation: 11000,
   },
   coverCircle: {
     position: 'absolute',

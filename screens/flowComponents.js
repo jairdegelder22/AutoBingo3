@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import CircularReveal from '../components/CircularReveal';
 import AnimatedBackButton from '../src/components/AnimatedBackButton';
@@ -101,7 +101,7 @@ export function PrimaryButton({ label, disabled, onPress }) {
   );
 }
 
-export function BackButton({ onPress, navigation }) {
+export function BackButton({ onPress, navigation, disabled = false }) {
   const { width, height } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(width, height);
   const buttonSize = isTablet ? Math.round(66 * Math.min(tabletScale, 1.22)) : 66;
@@ -120,6 +120,10 @@ export function BackButton({ onPress, navigation }) {
   }, [transitioning]);
 
   function handleActivated(nextOrigin) {
+    if (disabled) {
+      return;
+    }
+
     if (onPress) {
       onPress(nextOrigin);
       return;
@@ -147,7 +151,7 @@ export function BackButton({ onPress, navigation }) {
   return (
     <View pointerEvents="box-none" style={styles.backButton}>
       <AnimatedBackButton
-        disabled={transitioning}
+        disabled={transitioning || disabled}
         onActivated={handleActivated}
         size={buttonSize}
       />
