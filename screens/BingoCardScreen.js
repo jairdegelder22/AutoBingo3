@@ -2871,10 +2871,12 @@ function SkinUnlockAnnouncement({ unlock, fontFamily, settings, onDismiss }) {
 }
 
 function ProgressSaveAfterSkinUnlockPrompt({ visible, fontFamily, onClose }) {
-  const { loading: accountLoading, signingInProvider, signInWithApple, user } = useAccount();
+  const { loading: accountLoading, signingInProvider, signInWithApple, signInWithGoogle, user } = useAccount();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [errorText, setErrorText] = useState('');
-  const signingIn = signingInProvider === 'apple';
+  const progressSaveProvider = Platform.OS === 'android' ? 'google' : Platform.OS === 'ios' ? 'apple' : null;
+  const providerLabel = progressSaveProvider === 'google' ? 'Google' : 'Apple';
+  const signingIn = signingInProvider === progressSaveProvider;
   const panelWidth = Math.round(Math.min(screenWidth - 4, 390));
   const panelHeight = Math.round(panelWidth / PROGRESS_SAVE_PANEL_ASPECT_RATIO);
   const panelScale = panelWidth / 390;
@@ -2893,7 +2895,7 @@ function ProgressSaveAfterSkinUnlockPrompt({ visible, fontFamily, onClose }) {
     }
   }, [onClose, user, visible]);
 
-  if (Platform.OS !== 'ios') {
+  if (!progressSaveProvider) {
     return null;
   }
 
@@ -2905,7 +2907,9 @@ function ProgressSaveAfterSkinUnlockPrompt({ visible, fontFamily, onClose }) {
     setErrorText('');
 
     try {
-      const nextSession = await signInWithApple();
+      const nextSession = progressSaveProvider === 'google'
+        ? await signInWithGoogle()
+        : await signInWithApple();
 
       if (nextSession?.user) {
         onClose?.();
@@ -2983,7 +2987,7 @@ function ProgressSaveAfterSkinUnlockPrompt({ visible, fontFamily, onClose }) {
                   },
                 ]}
               >
-                Log in met je Apple account om geen autoskins te verliezen als je AutoBingo opnieuw download.
+                Log in met je {providerLabel} account om geen autoskins te verliezen als je AutoBingo opnieuw download.
               </Text>
               <View style={[styles.progressSavePromptActions, { marginTop: 20 * panelScale, gap: 10 * panelScale }]}>
                 <View style={styles.progressSavePromptButtonWrap}>
@@ -4525,7 +4529,9 @@ export default function BingoCardScreen({
   }
 
   async function queueProgressSavePromptAfterSkinUnlock() {
-    if (Platform.OS !== 'ios' || tutorialMode || accountLoading || user || progressSavePromptQueuedRef.current) {
+    const supportsNativeProgressSavePrompt = Platform.OS === 'ios' || Platform.OS === 'android';
+
+    if (!supportsNativeProgressSavePrompt || tutorialMode || accountLoading || user || progressSavePromptQueuedRef.current) {
       return;
     }
 

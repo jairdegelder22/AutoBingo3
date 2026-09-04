@@ -245,6 +245,11 @@ export default function SettingsScreen({ navigation, onClose, onTutorial, onPrem
       return;
     }
 
+    if (Platform.OS === 'android') {
+      void signInAndReport('google');
+      return;
+    }
+
     Alert.alert(
       t('settings.saveProgress'),
       t('settings.saveProgressMessage'),

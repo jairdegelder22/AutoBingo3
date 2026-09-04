@@ -10,6 +10,12 @@ import { supabase } from '../services/supabaseClient';
 WebBrowser.maybeCompleteAuthSession();
 
 const AUTH_CALLBACK_PATH = 'auth/callback';
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
+  ?? process.env.EXPO_PUBLIC_GOOGLE_ANDROID_WEB_CLIENT_ID
+  ?? null;
+
+let nativeGoogleConfigured = false;
+
 const AccountContext = createContext({
   session: null,
   user: null,
@@ -43,6 +49,14 @@ function isUserCancelledAppleSignIn(error) {
   return error?.code === 'ERR_REQUEST_CANCELED'
     || error?.code === 'ERR_CANCELED'
     || error?.message?.toLowerCase?.().includes('cancel');
+}
+
+function getGoogleSignInModule() {
+  try {
+    return require('@react-native-google-signin/google-signin');
+  } catch (_error) {
+    return null;
+  }
 }
 
 async function createSessionFromUrl(url) {
@@ -129,6 +143,54 @@ async function signInWithNativeApple() {
   }
 }
 
+async function signInWithNativeGoogle() {
+  if (!GOOGLE_WEB_CLIENT_ID) {
+    return { available: false, session: null };
+  }
+
+  const googleSignInModule = getGoogleSignInModule();
+  const GoogleSignin = googleSignInModule?.GoogleSignin;
+
+  if (!GoogleSignin) {
+    return { available: false, session: null };
+  }
+
+  if (!nativeGoogleConfigured) {
+    GoogleSignin.configure({
+      webClientId: GOOGLE_WEB_CLIENT_ID,
+      offlineAccess: false,
+      forceCodeForRefreshToken: false,
+      profileImageSize: 120,
+    });
+    nativeGoogleConfigured = true;
+  }
+
+  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+  const response = await GoogleSignin.signIn();
+
+  if (response?.type === 'cancelled' || response?.type === 'noSavedCredentialFound') {
+    return { available: true, session: null };
+  }
+
+  const idToken = response?.data?.idToken ?? response?.idToken ?? null;
+
+  if (!idToken) {
+    throw new Error('Google login gaf geen identity token terug.');
+  }
+
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: 'google',
+    token: idToken,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return { available: true, session: data?.session ?? null };
+}
+
 export function AccountProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -176,6 +238,18 @@ export function AccountProvider({ children }) {
         }
 
         return nativeSession;
+      }
+
+      if (provider === 'google' && Platform.OS === 'android') {
+        const nativeResult = await signInWithNativeGoogle();
+
+        if (nativeResult.available) {
+          if (nativeResult.session?.user) {
+            await loadSkinChallengeProgress();
+          }
+
+          return nativeResult.session;
+        }
       }
 
       const redirectTo = getAuthRedirectUrl();
