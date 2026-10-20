@@ -34,7 +34,8 @@ export function createActivityTracker({ storage, send, now = () => new Date() })
 
       const currentTime = now();
       const day = activityDate(currentTime);
-      const cutoff = activityDate(new Date(currentTime.getTime() - 89 * DAY_MS));
+      // Subtract calendar days, so the daylight-saving transition cannot drop a day.
+      const cutoff = new Date(Date.parse(`${day}T00:00:00Z`) - 89 * DAY_MS).toISOString().slice(0, 10);
       for (const previousDay of Object.keys(state.days)) {
         if (previousDay < cutoff || previousDay > day) {
           delete state.days[previousDay];

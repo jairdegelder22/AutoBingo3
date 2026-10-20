@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const babel = require('@babel/core');
 
-function loadModule(file, mocks) {
+function loadModule(file, mocks, globals = {}) {
   const { code } = babel.transformSync(fs.readFileSync(file, 'utf8'), {
     babelrc: false, configFile: false,
     plugins: ['@babel/plugin-transform-modules-commonjs'],
@@ -15,6 +15,7 @@ function loadModule(file, mocks) {
       if (!(name in mocks)) throw new Error(`Unexpected import: ${name}`);
       return mocks[name];
     },
+    ...globals,
   });
   return module.exports;
 }
@@ -79,6 +80,15 @@ async function main() {
   await tracker.record();
   assert.deepEqual(Object.keys(JSON.parse(value).days), ['2027-02-01']);
 
+  // Late evening after the autumn clock change still retains the 90th calendar day.
+  date = new Date('2026-10-26T22:30:00Z');
+  const oldestDay = new Date(Date.parse('2026-10-26T00:00:00Z') - 89 * 86400000).toISOString().slice(0, 10);
+  value = JSON.stringify({ days: {
+    [oldestDay]: { online_players: 0, offline_players: 2, games: [] },
+  }, acknowledged: {} });
+  await tracker.record();
+  assert.ok(JSON.parse(value).days[oldestDay], 'DST must not prematurely expire queued activity');
+
   // Storage failures must not replace a previously persisted offline queue.
   const broken = createActivityTracker({ ...options,
     storage: { ...storage, getItem: async () => { throw new Error('Storage unavailable'); } } });
@@ -97,6 +107,83 @@ async function main() {
   const ids = await Promise.all(Array.from({ length: 8 }, getOrCreateInstallationId));
   assert.equal(new Set(ids).size, 1);
   assert.equal(writes, 1, 'Simultaneous tracking must use a single installation ID');
+
+  // Exercise the production hook: foreground, background, rerenders and replays.
+  const calls = [];
+  const refs = [];
+  const effects = [];
+  const pendingEffects = [];
+  const timers = new Map();
+  let hookIndex = 0;
+  let listener = null;
+  const appState = {
+    currentState: 'active',
+    addEventListener: (_, callback) => {
+      listener = callback;
+      return { remove: () => { listener = null; } };
+    },
+  };
+  const react = {
+    useRef: (initial) => { const index = hookIndex++; return refs[index] ??= { current: initial }; },
+    useEffect: (effect, deps) => {
+      const index = hookIndex++;
+      const previous = effects[index];
+      if (!previous || deps.some((value, i) => value !== previous.deps[i])) {
+        pendingEffects.push(() => {
+          previous?.cleanup?.();
+          effects[index] = { deps, cleanup: effect() };
+        });
+      }
+    },
+  };
+  const hookMocks = {
+    react,
+    'react-native': { AppState: appState },
+    '../services/activityTrackingService': {
+      activityDate,
+      activityTracker: { record: (event) => { calls.push(event); return Promise.resolve(); } },
+    },
+  };
+  const globals = {
+    __DEV__: false,
+    setInterval: (callback) => { const id = timers.size + 1; timers.set(id, callback); return id; },
+    clearInterval: (id) => timers.delete(id),
+  };
+  const useTracking = loadModule('src/hooks/useActivityTracking.js', hookMocks, globals).default;
+  const render = (...args) => {
+    hookIndex = 0;
+    useTracking(...args);
+    while (pendingEffects.length) pendingEffects.shift()();
+  };
+  render(false);
+  assert.equal(calls.length, 0, 'Do not track before the app is enabled');
+  render(true, 'offline', 3, 'first-game');
+  assert.equal(calls.length, 1);
+  const firstSession = calls[0].session.id;
+  render(true, 'offline', 3, 'first-game');
+  assert.equal(calls.length, 1, 'Rerenders must not start new games');
+  appState.currentState = 'background';
+  for (const tick of timers.values()) tick();
+  assert.equal(calls.length, 1, 'Do not track background activity');
+  appState.currentState = 'active';
+  listener('active');
+  assert.equal(calls.at(-1).session.id, firstSession, 'Foregrounding must retain the game');
+  render(true, 'offline', 3, 'replay');
+  assert.notEqual(calls.at(-1).session.id, firstSession, 'A replay must have its own session');
+  render(true, null, 1, null);
+  assert.equal(calls.at(-1).session, null);
+  render(false);
+  assert.equal(timers.size, 0, 'Unmounted/disabled tracking must remove timers');
+  assert.equal(listener, null);
+
+  const devEffects = [];
+  loadModule('src/hooks/useActivityTracking.js', {
+    ...hookMocks,
+    react: { useRef: () => ({ current: null }), useEffect: (effect) => devEffects.push(effect) },
+  }, { ...globals, __DEV__: true }).default(true, 'online', 2, 'dev-game');
+  const beforeDev = calls.length;
+  devEffects.forEach((effect) => effect());
+  assert.equal(calls.length, beforeDev, 'Development builds must not upload analytics');
   console.log('Activity tracking tests passed: offline recovery, deduplication, per-game players, date boundaries, retention, storage failure, installation identity.');
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });
