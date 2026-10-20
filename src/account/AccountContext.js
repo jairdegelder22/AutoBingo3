@@ -300,7 +300,8 @@ export function AccountProvider({ children }) {
 
   const value = useMemo(() => ({
     session,
-    user: session?.user ?? null,
+    // A device session enables purchase verification, not an account sign-in.
+    user: session?.user?.is_anonymous ? null : (session?.user ?? null),
     loading,
     signingInProvider,
     signInWithApple: () => signInWithProvider('apple'),

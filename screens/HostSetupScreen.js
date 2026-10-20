@@ -319,6 +319,7 @@ export default function HostSetupScreen({
   const [gameRulePreferencesLoaded, setGameRulePreferencesLoaded] = useState(tutorialMode);
   const [createLobbyConfirmVisible, setCreateLobbyConfirmVisible] = useState(false);
   const [connectionErrorVisible, setConnectionErrorVisible] = useState(false);
+  const [connectionErrorMessage, setConnectionErrorMessage] = useState('');
   const [createLobbyReveal, setCreateLobbyReveal] = useState(null);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [hostLayoutReady, setHostLayoutReady] = useState(false);
@@ -1068,6 +1069,12 @@ export default function HostSetupScreen({
   }
 
   async function handleConfirmCreateLobbyPress(event) {
+    setConnectionErrorMessage('');
+    if (!tutorialMode && (!isPremium || !selectedThemeAvailable)) {
+      setCreateLobbyConfirmVisible(false);
+      setPremiumModalVisible(true);
+      return;
+    }
     if (!canGenerate || createLobbyReveal) {
       return;
     }
@@ -1138,7 +1145,10 @@ export default function HostSetupScreen({
           config,
           hostPlayer,
           resetExisting: true,
-        }).catch(() => null)
+        }).catch((error) => {
+          setConnectionErrorMessage(error?.message ?? '');
+          return null;
+        })
       : Promise.resolve(null);
 
     setCreateLobbyReveal({
@@ -1696,7 +1706,7 @@ export default function HostSetupScreen({
               </View>
             )}
           >
-            De online lobby kon niet worden aangemaakt. Probeer het nog een keer.
+            {connectionErrorMessage || 'De online lobby kon niet worden aangemaakt. Probeer het nog een keer.'}
           </PopupPanel>
         </View>
       </Modal>

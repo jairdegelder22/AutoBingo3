@@ -24,6 +24,7 @@ import {
   PAID_SKIN_PRODUCT_IDS,
 } from '../skins/skinCatalog';
 import { useAccount } from '../account/AccountContext';
+import { HOST_CODE_REVOCATION_KEY, HOST_PREMIUM_CODE_KEY, revokeHostCodeGrant } from '../services/hostPremiumService';
 
 const CODE_PREMIUM_STORAGE_KEY = 'autobingo:premium-code-unlock:v1';
 const CODE_PAID_SKINS_STORAGE_KEY = 'autobingo:paid-skins-code-unlock:v1';
@@ -115,7 +116,8 @@ function getOwnedPaidSkins(customerInfo) {
 }
 
 export function PremiumProvider({ children }) {
-  const { user } = useAccount();
+  const { session } = useAccount();
+  const purchaseIdentityId = session?.user?.id;
   const [revenueCatPremium, setRevenueCatPremium] = useState(false);
   const [codePremiumUnlocked, setCodePremiumUnlocked] = useState(false);
   const [codePaidSkinsUnlocked, setCodePaidSkinsUnlocked] = useState(false);
@@ -226,7 +228,7 @@ export function PremiumProvider({ children }) {
   }, [available]);
 
   useEffect(() => {
-    if (!available || !user?.id) {
+    if (!available || !purchaseIdentityId) {
       return;
     }
 
@@ -234,7 +236,7 @@ export function PremiumProvider({ children }) {
 
     async function identifyCurrentUser() {
       try {
-        const nextCustomerInfo = await identifyRevenueCatUser(user.id);
+        const nextCustomerInfo = await identifyRevenueCatUser(purchaseIdentityId);
 
         if (cancelled || !nextCustomerInfo) {
           return;
@@ -256,14 +258,20 @@ export function PremiumProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [available, user?.id]);
+  }, [available, purchaseIdentityId]);
 
-  const unlockPremiumWithCode = useCallback(async () => {
+  const unlockPremiumWithCode = useCallback(async (code) => {
+    if (code) {
+      await AsyncStorage.setItem(HOST_PREMIUM_CODE_KEY, code);
+      await AsyncStorage.removeItem(HOST_CODE_REVOCATION_KEY);
+    }
     await AsyncStorage.setItem(CODE_PREMIUM_STORAGE_KEY, 'true');
     setCodePremiumUnlocked(true);
   }, []);
 
   const disablePremiumCodeUnlock = useCallback(async () => {
+    await revokeHostCodeGrant();
+    await AsyncStorage.removeItem(HOST_PREMIUM_CODE_KEY);
     await AsyncStorage.removeItem(CODE_PREMIUM_STORAGE_KEY);
     setCodePremiumUnlocked(false);
   }, []);

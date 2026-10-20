@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { verifyHostPremium } from './hostPremiumService';
 
 const BOARD_SIZE = 16;
 const CONNECTION_CHECK_TIMEOUT_MS = 3500;
@@ -246,15 +247,16 @@ export async function ensureLobby({ code, config, hostPlayer, resetExisting = tr
   }
 
   const normalizedHost = normalizePlayer({ ...hostPlayer, role: 'host' }, 'host');
+  const hostUserId = await verifyHostPremium();
 
   let { error: lobbyError } = await supabase
     .from('lobbies')
-    .upsert(buildLobbyPayload({ ...config, lobbyCode: code }, normalizedHost.playerId, true), { onConflict: 'lobby_code' });
+    .upsert({ ...buildLobbyPayload({ ...config, lobbyCode: code }, normalizedHost.playerId, true), host_user_id: hostUserId }, { onConflict: 'lobby_code' });
 
   if (lobbyError && isMissingLobbySettingsColumn(lobbyError)) {
     ({ error: lobbyError } = await supabase
       .from('lobbies')
-      .upsert(buildLobbyPayload({ ...config, lobbyCode: code }, normalizedHost.playerId, false), { onConflict: 'lobby_code' }));
+      .upsert({ ...buildLobbyPayload({ ...config, lobbyCode: code }, normalizedHost.playerId, false), host_user_id: hostUserId }, { onConflict: 'lobby_code' }));
   }
 
   if (lobbyError) {
@@ -389,7 +391,7 @@ export async function deleteLobby(code) {
   const { error: endError } = await supabase
     .from('lobbies')
     .update({
-      status: 'ended',
+      status: 'closed',
       started_at: null,
     })
     .eq('id', lobbyRow.id);
@@ -429,44 +431,13 @@ export async function deleteLobby(code) {
   return true;
 }
 
-export async function joinLobby({ code, config, players }) {
+export async function joinLobby({ code, players }) {
   const lobbyRow = await fetchLobbyRowByCode(code);
   if (!lobbyRow) {
     return null;
   }
 
-  let { error } = await supabase
-    .from('lobbies')
-    .update(buildLobbyPayload({
-      ...config,
-      thema: config?.thema ?? normalizeThemeForApp(lobbyRow.theme),
-      modus: config?.modus ?? lobbyRow.game_mode,
-      syncType: config?.syncType === 'live' ? 'live' : 'offline',
-      seed: config?.seed ?? lobbyRow.seed,
-      salt: config?.salt ?? lobbyRow.salt,
-      lobbyCode: code,
-    }, lobbyRow.host_player_id, true))
-    .eq('id', lobbyRow.id);
-
-  if (error && isMissingLobbySettingsColumn(error)) {
-    ({ error } = await supabase
-      .from('lobbies')
-      .update(buildLobbyPayload({
-        ...config,
-        thema: config?.thema ?? normalizeThemeForApp(lobbyRow.theme),
-        modus: config?.modus ?? lobbyRow.game_mode,
-        syncType: config?.syncType === 'live' ? 'live' : 'offline',
-        seed: config?.seed ?? lobbyRow.seed,
-        salt: config?.salt ?? lobbyRow.salt,
-        lobbyCode: code,
-      }, lobbyRow.host_player_id, false))
-      .eq('id', lobbyRow.id));
-  }
-
-  if (error) {
-    console.warn('joinLobby update error', error.message);
-  }
-
+  // Joining never rewrites the host's settings and needs no premium grant.
   return upsertPlayers(code, players);
 }
 

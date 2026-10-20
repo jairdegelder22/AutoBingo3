@@ -65,7 +65,7 @@ export async function redeemUnlockCode(code, {
   }
 
   if (unlock.effects.includes('premium') && unlockPremiumWithCode) {
-    await unlockPremiumWithCode();
+    await unlockPremiumWithCode(normalizedCode);
   }
 
   if (unlock.effects.includes('disablePremiumCode') && disablePremiumCodeUnlock) {

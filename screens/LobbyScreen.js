@@ -3277,6 +3277,9 @@ export default function LobbyScreen({
       if (!cancelled) {
         setLobbySetupReady(Boolean(snapshot));
       }
+    }).catch((error) => {
+      console.warn('Lobby premium verification failed', error?.message);
+      if (!cancelled) setLobbySetupReady(false);
     });
 
     return () => {

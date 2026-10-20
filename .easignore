@@ -26,5 +26,6 @@ dist
 web-build
 tools
 docs
+/supabase/
 *.log
 .DS_Store
