@@ -14,6 +14,9 @@ ios/DerivedData
 ios/*.xcworkspace/xcuserdata
 ios/*.xcodeproj/xcuserdata
 
+# Local duplicate; never include a second Xcode project in the build archive.
+/ios/AutoBingo3 2.xcodeproj/
+
 android/.gradle
 android/build
 android/app/build
