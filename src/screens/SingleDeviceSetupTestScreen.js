@@ -2668,7 +2668,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: 22,
     paddingBottom: 152,
     position: 'relative',
   },
@@ -2723,7 +2723,8 @@ const styles = StyleSheet.create({
   },
   actionStack: {
     gap: 20,
-    marginTop: -8,
+    // Compensate for the extra top spacing so the play button stays in place.
+    marginTop: -18,
     zIndex: 1,
   },
   nameFocusShield: {

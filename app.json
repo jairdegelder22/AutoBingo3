@@ -16,6 +16,20 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jairdegelder.autobingo",
       "usesAppleSignIn": true,
+      "infoPlist": {
+        "UIStatusBarHidden": true,
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration",
+                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
+              }
+            ]
+          }
+        }
+      },
       "privacyManifests": {
         "NSPrivacyCollectedDataTypes": [
           {
