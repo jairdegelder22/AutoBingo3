@@ -1,10 +1,11 @@
 {
   "expo": {
-    "name": "AutoBingo3",
+    "name": "AutoBingo",
     "slug": "AutoBingo3",
-    "version": "1.0.0",
+    "scheme": "autobingo",
+    "version": "1.3.3",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.jpeg",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -13,10 +14,28 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jairdegelder.autobingo"
+      "bundleIdentifier": "com.jairdegelder.autobingo",
+      "usesAppleSignIn": true,
+      "privacyManifests": {
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAnalytics"]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAnalytics"]
+          }
+        ]
+      }
     },
     "android": {
       "package": "com.jairdegelder.autobingo",
+      "versionCode": 16,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -26,6 +45,12 @@
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
+    "androidNavigationBar": {
+      "visible": "sticky-immersive",
+      "barStyle": "light-content",
+      "backgroundColor": "#000000",
+      "enforceContrast": false
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -34,10 +59,12 @@
       "expo-video",
       "expo-audio",
       "expo-asset",
+      "expo-apple-authentication",
+      "expo-web-browser",
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "androidAppId": "ca-app-pub-5873918058071695~4181685485",
           "iosAppId": "ca-app-pub-5873918058071695~2488958739"
         }
       ],
@@ -49,7 +76,7 @@
       ]
     ],
     "react-native-google-mobile-ads": {
-      "android_app_id": "ca-app-pub-3940256099942544~3347511713",
+      "android_app_id": "ca-app-pub-5873918058071695~4181685485",
       "ios_app_id": "ca-app-pub-5873918058071695~2488958739"
     },
     "extra": {

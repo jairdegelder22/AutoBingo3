@@ -5,6 +5,23 @@ const CONNECTION_CHECK_TIMEOUT_MS = 3500;
 const PLAYER_PRESENCE_STALE_MS = 15000;
 let playerPresenceColumnAvailable = true;
 
+function normalizeThemeForApp(theme) {
+  if (theme === 'borden') {
+    return 'verkeersborden';
+  }
+
+  if (theme === 'natuur') {
+    return 'platteland';
+  }
+
+  return theme || 'snelweg';
+}
+
+function normalizeThemeForDatabase(theme) {
+  const normalizedTheme = normalizeThemeForApp(theme);
+  return normalizedTheme === 'verkeersborden' ? 'borden' : normalizedTheme;
+}
+
 function withTimeout(promise, timeoutMs = CONNECTION_CHECK_TIMEOUT_MS) {
   let timeoutId = null;
 
@@ -74,7 +91,7 @@ function mapLobbyRowToSnapshot(lobbyRow, playerRows = []) {
   return {
     code: lobbyRow.lobby_code,
     config: {
-      thema: lobbyRow.theme,
+      thema: normalizeThemeForApp(lobbyRow.theme),
       modus: lobbyRow.game_mode,
       syncType: lobbyRow.sync_type === 'live' ? 'live' : 'geen',
       lobbyCode: lobbyRow.lobby_code,
@@ -83,6 +100,7 @@ function mapLobbyRowToSnapshot(lobbyRow, playerRows = []) {
       wincondition: lobbyRow.win_condition ?? '1rij',
       diagonaal: typeof lobbyRow.allow_diagonal === 'boolean' ? lobbyRow.allow_diagonal : true,
       kaartOpzet: lobbyRow.card_layout ?? 'zelfde',
+      nederlands: typeof lobbyRow.dutch_items_enabled === 'boolean' ? lobbyRow.dutch_items_enabled : true,
     },
     started: lobbyRow.status === 'started',
     ended: lobbyRow.status === 'ended',
@@ -147,7 +165,7 @@ async function fetchPlayersByLobbyId(lobbyId) {
 function buildLobbyPayload(config = {}, hostPlayerId, includeAdvancedSettings = true) {
   const payload = {
     lobby_code: config?.lobbyCode,
-    theme: config?.thema ?? 'snelweg',
+    theme: normalizeThemeForDatabase(config?.thema),
     game_mode: config?.modus ?? 'klassiek',
     sync_type: config?.syncType === 'live' ? 'live' : 'offline',
     seed: config?.seed ?? 0,
@@ -159,6 +177,7 @@ function buildLobbyPayload(config = {}, hostPlayerId, includeAdvancedSettings = 
     payload.win_condition = config?.wincondition ?? '1rij';
     payload.allow_diagonal = typeof config?.diagonaal === 'boolean' ? config.diagonaal : true;
     payload.card_layout = config?.kaartOpzet ?? 'zelfde';
+    payload.dutch_items_enabled = config?.nederlands !== false;
   }
 
   return payload;
@@ -169,11 +188,33 @@ function isMissingLobbySettingsColumn(error) {
   return (
     message.includes("'allow_diagonal' column") ||
     message.includes("'win_condition' column") ||
-    message.includes("'card_layout' column")
+    message.includes("'card_layout' column") ||
+    message.includes("'dutch_items_enabled' column")
   );
 }
 
 async function resetLobbyState(lobbyId, hostPlayerId) {
+  // Claim the reset before changing players or boards. An initial lobby setup
+  // must never be able to overwrite a game that has just been started.
+  const { data: resetRows, error: lobbyResetError } = await supabase
+    .from('lobbies')
+    .update({
+      status: 'waiting',
+      started_at: null,
+    })
+    .eq('id', lobbyId)
+    .neq('status', 'started')
+    .select('id');
+
+  if (lobbyResetError) {
+    console.warn('resetLobbyState lobby reset error', lobbyResetError.message);
+    return false;
+  }
+
+  if (!resetRows?.length) {
+    return false;
+  }
+
   const deletePlayersQuery = supabase
     .from('lobby_players')
     .delete()
@@ -183,16 +224,9 @@ async function resetLobbyState(lobbyId, hostPlayerId) {
     ? deletePlayersQuery.neq('player_id', hostPlayerId)
     : deletePlayersQuery;
 
-  const [{ error: playerDeleteError }, { error: boardDeleteError }, { error: lobbyResetError }] = await Promise.all([
+  const [{ error: playerDeleteError }, { error: boardDeleteError }] = await Promise.all([
     filteredPlayersQuery,
     supabase.from('lobby_board_cells').delete().eq('lobby_id', lobbyId),
-    supabase
-      .from('lobbies')
-      .update({
-        status: 'waiting',
-        started_at: null,
-      })
-      .eq('id', lobbyId),
   ]);
 
   if (playerDeleteError) {
@@ -203,9 +237,7 @@ async function resetLobbyState(lobbyId, hostPlayerId) {
     console.warn('resetLobbyState board delete error', boardDeleteError.message);
   }
 
-  if (lobbyResetError) {
-    console.warn('resetLobbyState lobby reset error', lobbyResetError.message);
-  }
+  return !playerDeleteError && !boardDeleteError;
 }
 
 export async function ensureLobby({ code, config, hostPlayer, resetExisting = true }) {
@@ -407,7 +439,7 @@ export async function joinLobby({ code, config, players }) {
     .from('lobbies')
     .update(buildLobbyPayload({
       ...config,
-      thema: config?.thema ?? lobbyRow.theme,
+      thema: config?.thema ?? normalizeThemeForApp(lobbyRow.theme),
       modus: config?.modus ?? lobbyRow.game_mode,
       syncType: config?.syncType === 'live' ? 'live' : 'offline',
       seed: config?.seed ?? lobbyRow.seed,
@@ -421,7 +453,7 @@ export async function joinLobby({ code, config, players }) {
       .from('lobbies')
       .update(buildLobbyPayload({
         ...config,
-        thema: config?.thema ?? lobbyRow.theme,
+        thema: config?.thema ?? normalizeThemeForApp(lobbyRow.theme),
         modus: config?.modus ?? lobbyRow.game_mode,
         syncType: config?.syncType === 'live' ? 'live' : 'offline',
         seed: config?.seed ?? lobbyRow.seed,
@@ -444,16 +476,22 @@ export async function startLobby(code) {
     return null;
   }
 
-  const { error } = await supabase
+  const startedAt = new Date().toISOString();
+
+  const { data: startedLobbyRow, error } = await supabase
     .from('lobbies')
     .update({
       status: 'started',
-      started_at: new Date().toISOString(),
+      started_at: startedAt,
     })
-    .eq('id', lobbyRow.id);
+    .eq('id', lobbyRow.id)
+    .select('*')
+    .maybeSingle();
 
-  if (error) {
-    console.warn('startLobby error', error.message);
+  // With RLS, an UPDATE that matches no permitted rows can otherwise look
+  // successful. Only continue when Supabase confirms the started lobby row.
+  if (error || !startedLobbyRow || startedLobbyRow.status !== 'started' || !startedLobbyRow.started_at) {
+    console.warn('startLobby error', error?.message ?? 'Lobby status was not updated to started.');
     return null;
   }
 
@@ -464,10 +502,17 @@ export async function startLobby(code) {
 
   if (boardError) {
     console.warn('startLobby board delete error', boardError.message);
-    return null;
   }
 
-  return getLobbySnapshot(code);
+  // The lobby has already started successfully. A stale board is less harmful
+  // than sending everyone back to the lobby after a transient delete failure.
+  const snapshot = await getLobbySnapshot(code);
+  if (snapshot?.started && snapshot.startedAt) {
+    return snapshot;
+  }
+
+  const playerRows = await fetchPlayersByLobbyId(lobbyRow.id) ?? [];
+  return mapLobbyRowToSnapshot(startedLobbyRow, playerRows);
 }
 
 export async function updateLobbySettings(code, config = {}) {
@@ -477,7 +522,7 @@ export async function updateLobbySettings(code, config = {}) {
   }
 
   const updatePayload = {
-    theme: config?.thema ?? lobbyRow.theme,
+    theme: normalizeThemeForDatabase(config?.thema ?? lobbyRow.theme),
     game_mode: config?.modus ?? lobbyRow.game_mode,
     seed: config?.seed ?? lobbyRow.seed,
     salt: config?.salt ?? lobbyRow.salt,
@@ -486,12 +531,24 @@ export async function updateLobbySettings(code, config = {}) {
       ? config.diagonaal
       : (typeof lobbyRow.allow_diagonal === 'boolean' ? lobbyRow.allow_diagonal : true),
     card_layout: config?.kaartOpzet ?? lobbyRow.card_layout ?? 'zelfde',
+    dutch_items_enabled: typeof config?.nederlands === 'boolean'
+      ? config.nederlands
+      : (typeof lobbyRow.dutch_items_enabled === 'boolean' ? lobbyRow.dutch_items_enabled : true),
   };
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('lobbies')
     .update(updatePayload)
     .eq('id', lobbyRow.id);
+
+  if (error && isMissingLobbySettingsColumn(error)) {
+    const fallbackPayload = { ...updatePayload };
+    delete fallbackPayload.dutch_items_enabled;
+    ({ error } = await supabase
+      .from('lobbies')
+      .update(fallbackPayload)
+      .eq('id', lobbyRow.id));
+  }
 
   if (error) {
     console.warn('updateLobbySettings error', error.message);
@@ -532,10 +589,14 @@ export async function restartLobbyGame(code, config = {}) {
 
   if (boardError) {
     console.warn('restartLobbyGame board delete error', boardError.message);
-    return null;
   }
 
-  return getLobbySnapshot(code);
+  const snapshot = await getLobbySnapshot(code);
+  return snapshot ?? mapLobbyRowToSnapshot({
+    ...lobbyRow,
+    status: 'started',
+    started_at: startedAt,
+  });
 }
 
 export async function stopLobbyGame(code) {

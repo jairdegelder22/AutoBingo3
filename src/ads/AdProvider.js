@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, TurboModuleRegistry } from 'react-native';
 import { usePremium } from '../premium/PremiumContext';
 
-const AD_MIN_INTERVAL_MS = 120000;
+const AD_MIN_INTERVAL_MS = 0;
 const IOS_INTERSTITIAL_AD_UNIT_ID = 'ca-app-pub-5873918058071695/5969038745';
+const ANDROID_INTERSTITIAL_AD_UNIT_ID = 'ca-app-pub-5873918058071695/9741254060';
 const IOS_TEST_INTERSTITIAL_AD_UNIT_ID = 'ca-app-pub-3940256099942544/4411468910';
 const ANDROID_TEST_INTERSTITIAL_AD_UNIT_ID = 'ca-app-pub-3940256099942544/1033173712';
 
@@ -45,7 +46,7 @@ function getInterstitialUnitId(adsModule) {
   }
 
   if (Platform.OS === 'android') {
-    return process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID ?? null;
+    return process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID ?? ANDROID_INTERSTITIAL_AD_UNIT_ID;
   }
 
   return null;
@@ -94,11 +95,14 @@ export function AdsProvider({ children, onInterstitialFinished }) {
       unsubscribeLoaded();
       unsubscribeError();
       unsubscribeClosed();
+      setTimeout(() => {
+        onInterstitialFinished?.();
+      }, 250);
       preloadInterstitial();
     });
 
     interstitial.load();
-  }, [isPremium]);
+  }, [isPremium, onInterstitialFinished]);
 
   useEffect(() => {
     if (isPremium) {

@@ -11,6 +11,7 @@ import { Animated, Easing, StyleSheet, useWindowDimensions } from 'react-native'
 import Svg, { Path } from 'react-native-svg';
 
 const DEFAULT_DURATION = 620;
+const MIN_COVER_SCALE = 0.002;
 
 function buildCirclePath(originX, originY, circleRadius) {
   const safeRadius = Math.max(0.001, circleRadius);
@@ -30,6 +31,7 @@ const CircularReveal = forwardRef(function CircularReveal(
     originY,
     onComplete,
     onHideComplete,
+    onRevealStart,
     initiallyVisible = false,
     initialProgress = 0,
     mode = 'cover',
@@ -43,12 +45,22 @@ const CircularReveal = forwardRef(function CircularReveal(
   const [blocksTouches, setBlocksTouches] = useState(initiallyVisible);
   const [renderProgress, setRenderProgress] = useState(initialProgress);
 
-  const diameter = useMemo(
-    () => Math.sqrt(width * width + height * height) * 2,
-    [height, width]
-  );
+  const diameter = useMemo(() => {
+    const distances = [
+      Math.hypot(originX, originY),
+      Math.hypot(width - originX, originY),
+      Math.hypot(originX, height - originY),
+      Math.hypot(width - originX, height - originY),
+    ];
+
+    return Math.max(...distances, 1) * 2;
+  }, [height, originX, originY, width]);
   const radius = diameter / 2;
   const circleRadius = Math.max(0.001, radius * renderProgress);
+  const coverScale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [MIN_COVER_SCALE, 1],
+  });
 
   const visiblePath = useMemo(() => {
     const circle = buildCirclePath(originX, originY, circleRadius);
@@ -72,12 +84,15 @@ const CircularReveal = forwardRef(function CircularReveal(
 
       setIsVisible(true);
       setBlocksTouches(toValue > 0);
+      if (toValue > 0) {
+        onRevealStart?.();
+      }
 
       animationRef.current = Animated.timing(progress, {
         toValue,
         duration: DEFAULT_DURATION,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: false,
+        useNativeDriver: mode === 'cover',
       });
 
       animationRef.current.start(({ finished }) => {
@@ -105,7 +120,7 @@ const CircularReveal = forwardRef(function CircularReveal(
         }
       });
     },
-    [mode, onComplete, onHideComplete, progress, stopAnimation]
+    [mode, onComplete, onHideComplete, onRevealStart, progress, stopAnimation]
   );
 
   const reveal = useCallback(() => {
@@ -127,6 +142,11 @@ const CircularReveal = forwardRef(function CircularReveal(
   );
 
   useEffect(() => {
+    if (mode === 'cover') {
+      setRenderProgress(initialProgress);
+      return undefined;
+    }
+
     const id = progress.addListener(({ value }) => {
       setRenderProgress(value);
     });
@@ -136,12 +156,36 @@ const CircularReveal = forwardRef(function CircularReveal(
     return () => {
       progress.removeListener(id);
     };
-  }, [initialProgress, progress]);
+  }, [initialProgress, mode, progress]);
 
   useEffect(() => () => stopAnimation(), [stopAnimation]);
 
   if (!isVisible) {
     return null;
+  }
+
+  if (mode === 'cover') {
+    return (
+      <Animated.View
+        pointerEvents={blocksTouches ? 'auto' : 'none'}
+        style={styles.overlay}
+      >
+        <Animated.View
+          style={[
+            styles.coverCircle,
+            {
+              left: originX - radius,
+              top: originY - radius,
+              width: diameter,
+              height: diameter,
+              borderRadius: radius,
+              backgroundColor: color,
+              transform: [{ scale: coverScale }],
+            },
+          ]}
+        />
+      </Animated.View>
+    );
   }
 
   return (
@@ -159,7 +203,11 @@ const CircularReveal = forwardRef(function CircularReveal(
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 9999,
+    zIndex: 11000,
+    elevation: 11000,
+  },
+  coverCircle: {
+    position: 'absolute',
   },
 });
 

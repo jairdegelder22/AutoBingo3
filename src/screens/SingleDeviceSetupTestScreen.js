@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -7,6 +7,7 @@ import {
   InteractionManager,
   Keyboard,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -15,6 +16,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from '../settings/haptics';
@@ -23,13 +26,23 @@ import GlossyButton from '../components/GlossyButton';
 import RemovePlayerIcon from '../components/RemovePlayerIcon';
 import AnimatedRouteBackButton from '../components/AnimatedRouteBackButton';
 import WarmupImages from '../components/WarmupImages';
+import { TutorialCoachContent, TUTORIAL_HAND_IMAGE } from '../components/TutorialOverlay';
 import CircularReveal from '../../components/CircularReveal';
 import PremiumPaywallModal from '../premium/PremiumPaywallModal';
 import { usePremium } from '../premium/PremiumContext';
 import { PLAYER_ADD_SILHOUETTE_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../../assets/images/players/playerImages';
 import { getThemeCardImage, THEME_CARD_IMAGES, THEME_LOCK_OVERLAY_IMAGE } from '../../assets/images/theme-cards/themeCardImages';
-import { createGameConfig, createPlayer, SKIN_OPTIONS } from '../../screens/gameFlowConfig';
+import {
+  EQUIPPED_SKIN_STORAGE_KEY,
+  GAME_RULE_PREFERENCES_STORAGE_KEY,
+  createGameConfig,
+  createPlayer,
+  parseStoredGameRulePreferences,
+  serializeGameRulePreferences,
+  SKIN_OPTIONS,
+} from '../../screens/gameFlowConfig';
 import { THEMES } from '../../screens/themeCatalog';
+import { getResponsiveMetrics, getRulesPanelMetrics } from '../utils/responsive';
 import { useAppSettings } from '../settings/AppSettingsContext';
 import { playSoundEffect, preloadSoundEffect } from '../audio/soundEffects';
 import {
@@ -40,6 +53,17 @@ import {
   loadSkinChallengeProgress,
 } from '../challenges/skinChallenges';
 import { SETUP_ASSETS } from '../assets/preloadManifest';
+import { isPremiumChallengeSkin, isSkinAvailableForPlayer } from '../skins/skinCatalog';
+import { useTranslation } from '../i18n/useTranslation';
+import {
+  getCardLayoutOptionLabel,
+  getDefaultPlayerNameForLanguage,
+  getSkinChallengeDescription,
+  getSkinLabel,
+  getThemeLabel,
+  getWinOptionLabel,
+  translate,
+} from '../i18n/languages';
 
 const THEME_CARDS = THEMES.map((theme) => ({
   id: theme.id,
@@ -49,23 +73,35 @@ const THEME_CARDS = THEMES.map((theme) => ({
   outline: theme.cardOutline,
   premium: theme.premium,
 }));
+const ANDROID_DISABLE_SETUP_IDLE_MOTION = Platform.OS === 'android';
+const PREMIUM_THEME_IDS = new Set(THEMES.filter((theme) => theme.premium).map((theme) => theme.id));
 const MAX_LOCAL_PLAYERS = 2;
 const MAX_PLAYER_NAME_LENGTH = 12;
 const PLAYER_SILHOUETTE_IMAGE = PLAYER_ADD_SILHOUETTE_IMAGE;
 const GAME_SETUP_BACKGROUND = require('../../assets/images/backgrounds/game-setup-birds-eye-background-v4.png');
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../../assets/images/players/challenge-skin-lock.png');
+const PREMIUM_SKIN_LOCK_IMAGE = require('../../assets/images/host-lock-padlock.png');
+const INFO_BUTTON_IMAGE = require('../../assets/images/ui/info-button.png');
 const SETTINGS_CROWN_ICON = require('../../assets/images/settings/crown-logo.png');
 const SETTINGS_DIAGONAL_ICON = require('../../assets/images/settings/diagonal-logo.png');
 const SETTINGS_RULES_PANEL_IMAGE = require('../../assets/images/settings/rules-menu-panel-v2.png');
 const SETTINGS_RULE_SLIDER_FRAME_WINCONDITION = require('../../assets/images/settings/rules-slider-frame-wincondition.png');
 const SETTINGS_RULE_SLIDER_FRAME_DIAGONAL = require('../../assets/images/settings/rules-slider-frame-diagonal.png');
+const SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS = require('../../assets/images/settings/rules-slider-frame-dutch-items.png');
+const SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT = require('../../assets/images/settings/rules-slider-frame-card-layout.png');
 const SETTINGS_WIN_CONDITION_TITLE_ICON = require('../../assets/images/settings/win-condition-title.png');
 const SETTINGS_DIAGONAL_TITLE_ICON = require('../../assets/images/settings/diagonal-rule-title.png');
+const SETTINGS_CARD_LAYOUT_TITLE_ICON = require('../../assets/images/settings/card-layout-title.png');
 const SETTINGS_WIN_ONE_LINE = require('../../assets/images/settings/win-1-line.png');
 const SETTINGS_WIN_TWO_LINES = require('../../assets/images/settings/win-2-lines.png');
 const SETTINGS_WIN_FULL_CARD = require('../../assets/images/settings/win-full-card.png');
 const SETTINGS_DIAGONAL_ON = require('../../assets/images/settings/diagonal-on.png');
 const SETTINGS_DIAGONAL_OFF = require('../../assets/images/settings/diagonal-off.png');
+const SETTINGS_DUTCH_ITEMS_ON = require('../../assets/images/settings/dutch-items-on.png');
+const SETTINGS_DUTCH_ITEMS_OFF = require('../../assets/images/settings/dutch-items-off.png');
+const SETTINGS_DUTCH_ITEMS_TITLE = require('../../assets/images/settings/dutch-items-title.png');
+const SETTINGS_CARD_LAYOUT_SAME = require('../../assets/images/settings/card-layout-same.png');
+const SETTINGS_CARD_LAYOUT_DIFFERENT = require('../../assets/images/settings/card-layout-different.png');
 const SCREEN_HORIZONTAL_PADDING = 24;
 const THEME_CARD_WIDTH = 194;
 const THEME_CARD_HEIGHT = Math.round(THEME_CARD_WIDTH * 1.5);
@@ -85,10 +121,17 @@ const SETTINGS_DIAGONAL_OPTIONS = [
   { id: true, label: 'Wel', image: SETTINGS_DIAGONAL_ON },
   { id: false, label: 'Niet', image: SETTINGS_DIAGONAL_OFF },
 ];
+const SETTINGS_DUTCH_OPTIONS = [
+  { id: true, label: 'Wel Nederlandse items', image: SETTINGS_DUTCH_ITEMS_ON },
+  { id: false, label: 'Geen Nederlandse items', image: SETTINGS_DUTCH_ITEMS_OFF },
+];
+const SETTINGS_CARD_LAYOUT_OPTIONS = [
+  { id: 'zelfde', label: 'Zelfde kaart', image: SETTINGS_CARD_LAYOUT_SAME },
+  { id: 'anders', label: 'Andere kaarten', image: SETTINGS_CARD_LAYOUT_DIFFERENT },
+];
 const GAME_SETTINGS_KLAP_IN_SOUND = 'gameSettingsKlapIn';
 const GAME_SETTINGS_KLAP_UIT_SOUND = 'gameSettingsKlapUit';
-const SETUP_THEME_CARD_IMAGE_COUNT = Object.keys(THEME_CARD_IMAGES).length;
-const SETUP_CRITICAL_IMAGE_COUNT = 2 + SETUP_THEME_CARD_IMAGE_COUNT;
+const SETUP_CRITICAL_IMAGE_COUNT = 3;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -106,6 +149,10 @@ function withAlpha(hexColor, alpha) {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
+function isTranslatedDefaultPlayerName(value = '') {
+  return /^(Speler|Player|Spieler|Joueur)\s+\d+$/i.test(String(value).trim());
+}
+
 function isEmbeddedThemeCard(themeId) {
   return (
     themeId === 'snelweg'
@@ -114,32 +161,15 @@ function isEmbeddedThemeCard(themeId) {
     || themeId === 'vakantie'
     || themeId === 'voertuigen'
     || themeId === 'winter'
+    || themeId === 'bergen'
     || themeId === 'verkeersborden'
   );
 }
 
 function getEmbeddedThemeTitleStyle(themeId) {
-  const compactTitleStyle = themeId === 'verkeersborden'
-    ? {
-        fontSize: 18,
-        lineHeight: 25,
-      }
-    : themeId === 'voertuigen'
-    ? {
-        fontSize: 22,
-        lineHeight: 30,
-      }
-    : themeId === 'platteland'
-    ? {
-        fontSize: 26,
-        lineHeight: 36,
-      }
-    : null;
-
   if (themeId === 'verkeersborden') {
     return {
       color: '#111111',
-      ...compactTitleStyle,
       letterSpacing: 0.5,
       textShadowColor: 'rgba(255, 255, 255, 0.52)',
       textShadowOffset: { width: 0, height: 1 },
@@ -149,7 +179,6 @@ function getEmbeddedThemeTitleStyle(themeId) {
 
   return {
     color: '#FFFFFF',
-    ...compactTitleStyle,
     letterSpacing: 0.5,
     textShadowColor: '#15539D',
     textShadowOffset: { width: 0, height: 1 },
@@ -157,22 +186,45 @@ function getEmbeddedThemeTitleStyle(themeId) {
   };
 }
 
-export default function SingleDeviceSetupTestScreen({ navigation, route }) {
+function getEmbeddedThemeTitleScale(themeId) {
+  if (themeId === 'verkeersborden') {
+    return 0.48;
+  }
+
+  if (themeId === 'voertuigen') {
+    return 0.8;
+  }
+
+  return themeId === 'platteland' ? 0.93 : 1;
+}
+
+export default function SingleDeviceSetupTestScreen({
+  navigation,
+  route,
+  tutorialActive = false,
+  tutorialStep = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
+}) {
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
-  const { isPremium } = usePremium();
+  const { isPremium, ownedPaidSkins } = usePremium();
   const { settings } = useAppSettings();
+  const { language, t } = useTranslation();
   const initialConfig = route?.params?.initialConfig ?? null;
-  const initialThemeIndex = Math.max(
-    0,
-    THEME_CARDS.findIndex((theme) => theme.id === initialConfig?.thema)
-  );
+  const preserveInitialRuleSettings = route?.params?.preserveInitialRuleSettings === true;
+  const tutorialMode = route?.params?.tutorialMode === true;
+  const localizedThemeCards = useMemo(() => THEME_CARDS.map((theme) => ({
+    ...theme,
+    title: getThemeLabel(language, theme.id, theme.title),
+  })), [language]);
+  const initialThemeIndex = Math.max(0, localizedThemeCards.findIndex((theme) => theme.id === initialConfig?.thema));
   const initialPlayers = initialConfig?.spelers?.length
     ? initialConfig.spelers.map((player, index) => ({
-        ...createPlayer({ skin: player.skin ?? (index === 0 ? 'geel' : 'blauw') }),
+        ...createPlayer({ skin: player.skin ?? (index === 0 ? 'rood' : 'blauw') }),
         ...player,
-        naam: player.naam ?? `Speler ${index + 1}`,
+        naam: player.naam ?? getDefaultPlayerNameForLanguage(language, index),
       })).slice(0, MAX_LOCAL_PLAYERS)
-    : [{ ...createPlayer({ skin: 'geel' }), naam: 'Speler 1' }];
+    : [{ ...createPlayer({ skin: 'rood' }), naam: getDefaultPlayerNameForLanguage(language, 0) }];
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(initialThemeIndex);
   const [spelers, setSpelers] = useState(initialPlayers);
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState(null);
@@ -180,23 +232,34 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const [skinPickerMounted, setSkinPickerMounted] = useState(false);
   const [heroTop, setHeroTop] = useState(234);
   const [transitionSourceLeft, setTransitionSourceLeft] = useState(0);
-  const [transitionSkin, setTransitionSkin] = useState('geel');
+  const [transitionSkin, setTransitionSkin] = useState('rood');
   const [transitionCarSize, setTransitionCarSize] = useState(STAGE_SINGLE_CAR_SIZE);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPanelVisible, setSettingsPanelVisible] = useState(false);
   const [wincondition, setWincondition] = useState(initialConfig?.wincondition ?? '1rij');
   const [diagonaal, setDiagonaal] = useState(initialConfig?.diagonaal ?? true);
   const [kaartOpzet, setKaartOpzet] = useState(initialConfig?.kaartOpzet ?? 'zelfde');
+  const [nederlands, setNederlands] = useState(initialConfig?.nederlands !== false);
+  const [gameRulePreferencesLoaded, setGameRulePreferencesLoaded] = useState(preserveInitialRuleSettings);
   const [pendingGameStart, setPendingGameStart] = useState(null);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [setupLayoutReady, setSetupLayoutReady] = useState(false);
   const [setupImagesReady, setSetupImagesReady] = useState(false);
+  const [settingsScrollMetrics, setSettingsScrollMetrics] = useState({ contentHeight: 0, viewportHeight: 0 });
+  const [activeInfoPopover, setActiveInfoPopover] = useState(null);
 
-  const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.88, 1.18);
-  const collapsedPanelHeight = Math.round(clamp(screenHeight * 0.078, 66, 88));
-  const expandedPanelHeight = Math.round(clamp(screenHeight * 0.74, 560, screenHeight * 0.82));
+  const responsiveMetrics = getResponsiveMetrics(screenWidth, screenHeight);
+  const rulesPanelMetrics = getRulesPanelMetrics(screenWidth, screenHeight);
+  const scale = responsiveMetrics.scale;
+  const compactSetupLift = screenHeight > screenWidth
+    ? Math.round(clamp((932 - screenHeight) * 0.46, 0, 42)) + Math.round(clamp(screenHeight * 0.018, 14, 22))
+    : 0;
+  const collapsedPanelHeight = rulesPanelMetrics.collapsedPanelHeight;
+  const expandedPanelHeight = rulesPanelMetrics.expandedPanelHeight;
   const setupMetrics = useMemo(() => ({
     scale,
+    titleMarginTop: Math.round(clamp(screenHeight * 0.011, 8, 14)),
+    titleMarginBottom: Math.round(clamp(screenHeight * 0.006, 5, 8)),
     panelContentPaddingHorizontal: Math.round(clamp(screenWidth * 0.052, 20, 48)),
     panelContentPaddingTop: Math.round(clamp(screenHeight * 0.013, 10, 18)),
     panelContentPaddingBottom: Math.round(clamp(screenHeight * 0.024, 20, 34)),
@@ -206,17 +269,19 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     settingsDiagonalTileSize: Math.round(clamp(screenWidth * 0.23, 84, 124)),
     settingsDiagonalImageSize: Math.round(clamp(screenWidth * 0.17, 64, 92)),
     settingsLabelFontSize: Math.round(clamp(screenWidth * 0.045, 17, 24)),
-    settingsTitleIconSize: Math.round(clamp(screenWidth * 0.118, 46, 66)),
-    settingsSliderHeight: Math.round(clamp(screenHeight * 0.156, 126, 156)),
-    settingsSliderImageSize: Math.round(clamp(screenWidth * 0.155, 58, 78)),
-    settingsSliderDiagonalImageSize: Math.round(clamp(screenWidth * 0.178, 68, 92)),
+    settingsTitleIconSize: rulesPanelMetrics.settingsTitleIconSize,
+    settingsSliderHeight: rulesPanelMetrics.settingsSliderHeight,
+    settingsSliderImageSize: rulesPanelMetrics.settingsSliderImageSize,
+    settingsSliderDiagonalImageSize: rulesPanelMetrics.settingsSliderDiagonalImageSize,
     settingsPillFontSize: Math.round(clamp(screenWidth * 0.035, 14, 19)),
-    settingsSectionGap: Math.round(clamp(screenHeight * 0.038, 28, 42)),
+    settingsSectionGap: rulesPanelMetrics.settingsSectionGap,
     settingsOptionGap: Math.round(clamp(screenWidth * 0.05, 18, 34)),
-  }), [scale, screenHeight, screenWidth]);
+  }), [rulesPanelMetrics, scale, screenHeight, screenWidth]);
   const panelHeight = useRef(new Animated.Value(collapsedPanelHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const settingsProgress = useRef(new Animated.Value(0)).current;
+  const settingsScrollY = useRef(new Animated.Value(0)).current;
+  const infoPopoverProgress = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const carouselOpacity = useRef(new Animated.Value(0)).current;
   const transitionOpacity = useRef(new Animated.Value(0)).current;
@@ -224,16 +289,65 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   const keyboardLift = useRef(new Animated.Value(0)).current;
   const nameFocusDimOpacity = useRef(new Animated.Value(0)).current;
   const addPlayerFocusOpacity = useRef(new Animated.Value(1)).current;
+  const themeTargetRef = useRef(null);
+  const addPlayerTargetRef = useRef(null);
+  const rulesTargetRef = useRef(null);
+  const rulesPanelTargetRef = useRef(null);
+  const rulesDiagonalTargetRef = useRef(null);
+  const startTargetRef = useRef(null);
+  const skinSelectTargetRef = useRef(null);
   const firstPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 0 ? 1 : 0)).current;
   const secondPlayerFocusProgress = useRef(new Animated.Value(focusedNameIndex === 1 ? 1 : 0)).current;
   const playRevealRef = useRef(null);
+  const playStartLockedRef = useRef(false);
+  const playRevealStartedKeyRef = useRef(null);
   const latestPlayPressPointRef = useRef(null);
   const loadedSetupCriticalImagesRef = useRef(new Set());
   const playerLayoutProgress = useState(() => new Animated.Value(spelers.length >= 2 ? 1 : 0))[0];
   const carRefs = useRef([]);
-  const selectedTheme = THEME_CARDS[selectedThemeIndex] ?? THEME_CARDS[0];
-  const selectedThemeAvailable = !selectedTheme?.premium || isPremium;
+  const localizedWinOptions = useMemo(() => SETTINGS_WIN_OPTIONS.map((option) => ({
+    ...option,
+    label: getWinOptionLabel(language, option.id, option.label),
+  })), [language]);
+  const localizedDiagonalOptions = useMemo(() => SETTINGS_DIAGONAL_OPTIONS.map((option) => ({
+    ...option,
+    label: option.id ? t('game.options.yes') : t('game.options.no'),
+  })), [t]);
+  const localizedDutchOptions = useMemo(() => SETTINGS_DUTCH_OPTIONS.map((option) => ({
+    ...option,
+    label: option.id ? t('game.options.withDutchItems') : t('game.options.noDutchItems'),
+  })), [t]);
+  const localizedCardLayoutOptions = useMemo(() => SETTINGS_CARD_LAYOUT_OPTIONS.map((option) => ({
+    ...option,
+    label: getCardLayoutOptionLabel(language, option.id, option.label),
+  })), [language]);
+  const localizedRuleInfo = useMemo(() => ({
+    wincondition: {
+      title: t('game.rules.winCondition'),
+      body: t('game.rules.winConditionInfo'),
+    },
+    diagonal: {
+      title: t('game.rules.diagonal'),
+      body: t('game.rules.diagonalInfo'),
+    },
+    dutch: {
+      title: t('game.rules.dutchItems'),
+      body: t('game.rules.dutchItemsInfo'),
+    },
+    cardLayout: {
+      title: t('game.rules.cards'),
+      body: t('game.rules.cardsInfo'),
+    },
+  }), [t]);
+  const selectedTheme = localizedThemeCards[selectedThemeIndex] ?? localizedThemeCards[0];
+  const selectedThemeLocked = Boolean(selectedTheme?.id && PREMIUM_THEME_IDS.has(selectedTheme.id) && !isPremium);
+  const selectedThemeAvailable = !selectedThemeLocked;
   const playerCount = spelers.length;
+  const showCardLayoutRuleSettings = playerCount >= 2;
+  const secondPlayerRemovalLockedByTutorial = tutorialActive && (
+    tutorialStep?.target === 'setup.secondPlayerCar'
+    || tutorialStep?.target === 'setup.secondPlayerName'
+  );
   const selectedPlayer = selectedPlayerIndex === null ? null : spelers[selectedPlayerIndex];
   const stageCarSize = playerCount >= 2 ? STAGE_MULTI_CAR_SIZE : STAGE_SINGLE_CAR_SIZE;
   const takenSkins = useMemo(
@@ -242,9 +356,21 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   );
 
   const canStart = useMemo(
-    () => Boolean(selectedTheme?.id && playerCount),
-    [playerCount, selectedTheme?.id]
+    () => Boolean(selectedTheme?.id && selectedThemeAvailable && playerCount),
+    [playerCount, selectedTheme?.id, selectedThemeAvailable]
   );
+
+  const reportTutorialTarget = useCallback((key, targetRef) => {
+    if (!tutorialActive || !onTutorialTargetLayout || !targetRef?.current?.measureInWindow) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      targetRef.current?.measureInWindow?.((x, y, width, height) => {
+        onTutorialTargetLayout(key, { x, y, width, height });
+      });
+    });
+  }, [onTutorialTargetLayout, tutorialActive]);
   const markSetupCriticalImageLoaded = useCallback((key) => {
     loadedSetupCriticalImagesRef.current.add(key);
 
@@ -252,6 +378,9 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       setSetupImagesReady(true);
     }
   }, []);
+  const markThemeCardImageLoaded = useCallback(() => {
+    markSetupCriticalImageLoaded('theme');
+  }, [markSetupCriticalImageLoaded]);
   const handleSetupWarmupReady = useCallback(() => {
     setSetupImagesReady(true);
   }, []);
@@ -263,6 +392,111 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     inputRange: [0, 1],
     outputRange: [30, 0],
   });
+  const settingsScrollbarVisible = settingsScrollMetrics.contentHeight > settingsScrollMetrics.viewportHeight + 10;
+  const settingsScrollbarTrackHeight = Math.max(0, settingsScrollMetrics.viewportHeight - Math.round(22 * scale));
+  const settingsScrollbarThumbHeight = settingsScrollbarVisible
+    ? Math.max(
+        Math.round(34 * scale),
+        (settingsScrollbarTrackHeight * settingsScrollMetrics.viewportHeight) / settingsScrollMetrics.contentHeight
+      )
+    : 0;
+  const settingsScrollbarTranslateY = settingsScrollY.interpolate({
+    inputRange: [0, Math.max(1, settingsScrollMetrics.contentHeight - settingsScrollMetrics.viewportHeight)],
+    outputRange: [0, Math.max(0, settingsScrollbarTrackHeight - settingsScrollbarThumbHeight)],
+    extrapolate: 'clamp',
+  });
+
+  const closeInfoPopover = useCallback(() => {
+    if (!activeInfoPopover) {
+      return;
+    }
+
+    Animated.timing(infoPopoverProgress, {
+      toValue: 0,
+      duration: 130,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setActiveInfoPopover(null);
+      }
+    });
+  }, [activeInfoPopover, infoPopoverProgress]);
+
+  const showInfoPopover = useCallback((info, targetRef) => {
+    if (!info || !targetRef?.current?.measureInWindow) {
+      return;
+    }
+
+    targetRef.current.measureInWindow((x, y, width, height) => {
+      if (activeInfoPopover?.id === info.id) {
+        closeInfoPopover();
+        return;
+      }
+
+      infoPopoverProgress.stopAnimation();
+      infoPopoverProgress.setValue(0);
+      setActiveInfoPopover({
+        ...info,
+        anchor: { x, y, width, height },
+      });
+      Animated.spring(infoPopoverProgress, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 22,
+        bounciness: 7,
+      }).start();
+    });
+  }, [activeInfoPopover?.id, closeInfoPopover, infoPopoverProgress]);
+
+  useEffect(() => {
+    setSpelers((current) => current.map((player, index) => (
+      isTranslatedDefaultPlayerName(player.naam)
+        ? { ...player, naam: getDefaultPlayerNameForLanguage(language, index) }
+        : player
+    )));
+  }, [language]);
+
+  useEffect(() => {
+    if (preserveInitialRuleSettings) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    AsyncStorage.getItem(GAME_RULE_PREFERENCES_STORAGE_KEY).then((storedValue) => {
+      if (cancelled) {
+        return;
+      }
+
+      const preferences = parseStoredGameRulePreferences(storedValue);
+      setWincondition(preferences.wincondition);
+      setDiagonaal(preferences.diagonaal);
+      setKaartOpzet(preferences.kaartOpzet);
+      setNederlands(preferences.nederlands);
+      setGameRulePreferencesLoaded(true);
+    }).catch(() => {
+      if (!cancelled) {
+        setGameRulePreferencesLoaded(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [preserveInitialRuleSettings]);
+
+  useEffect(() => {
+    if (!gameRulePreferencesLoaded) {
+      return;
+    }
+
+    void AsyncStorage.setItem(
+      GAME_RULE_PREFERENCES_STORAGE_KEY,
+      serializeGameRulePreferences({ wincondition, diagonaal, kaartOpzet, nederlands })
+    );
+  }, [diagonaal, gameRulePreferencesLoaded, kaartOpzet, nederlands, wincondition]);
+
   const playerStageWidth = Math.max(0, screenWidth - SCREEN_HORIZONTAL_PADDING * 2);
   const laneOffset = playerStageWidth / 4;
   const hasTwoLocalPlayers = spelers.length >= 2;
@@ -288,7 +522,13 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     outputRange: [10, 0],
   });
   const isEditingPlayerName = focusedNameIndex !== null;
-  const fallbackKeyboardLift = -Math.round(clamp(screenHeight * 0.14, 112, 155));
+  const estimatedKeyboardTop = screenHeight - Math.round(clamp(screenHeight * 0.38, 300, 430));
+  const focusedNamePlateRefs = useRef([]);
+  const keyboardTopRef = useRef(estimatedKeyboardTop);
+  const reportNameTutorialTarget = useCallback((index) => {
+    const targetKey = index === 0 ? 'setup.playerName' : 'setup.secondPlayerName';
+    reportTutorialTarget(targetKey, { current: focusedNamePlateRefs.current[index] });
+  }, [reportTutorialTarget]);
   const firstPlayerStageTranslateX = Animated.add(
     firstPlayerTranslateX,
     firstPlayerFocusProgress.interpolate({
@@ -321,6 +561,68 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     inputRange: [0, 1],
     outputRange: [1, 0.82],
   });
+
+  const animateKeyboardLiftToFocusedName = useCallback((index, keyboardTop = keyboardTopRef.current, duration = 320) => {
+    const node = focusedNamePlateRefs.current[index];
+
+    if (!node?.measureInWindow) {
+      const fallbackLift = -Math.round(clamp(screenHeight * 0.2, 150, 250));
+      Animated.timing(keyboardLift, {
+        toValue: fallbackLift,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+
+    node.measureInWindow((_x, y, _width, height) => {
+      const currentCenterY = y + height / 2;
+      const targetCenterY = screenHeight / 2;
+
+      const lift = Math.round(clamp(targetCenterY - currentCenterY, -screenHeight * 0.38, 0));
+
+      Animated.timing(keyboardLift, {
+        toValue: lift,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [keyboardLift, screenHeight]);
+
+  const handlePlayerNameFocus = useCallback((index) => {
+    setFocusedNameIndex(index);
+    if (index === 0 && tutorialStep?.target === 'setup.playerName') {
+      onTutorialAction?.('setup.playerNameFocused');
+      requestAnimationFrame(() => reportNameTutorialTarget(0));
+      setTimeout(() => reportNameTutorialTarget(0), 120);
+      setTimeout(() => reportNameTutorialTarget(0), 260);
+    } else if (index === 1 && tutorialStep?.target === 'setup.secondPlayerName') {
+      onTutorialAction?.('setup.secondPlayerNameFocused');
+      requestAnimationFrame(() => reportNameTutorialTarget(1));
+      setTimeout(() => reportNameTutorialTarget(1), 120);
+      setTimeout(() => reportNameTutorialTarget(1), 260);
+    }
+    requestAnimationFrame(() => {
+      animateKeyboardLiftToFocusedName(index, keyboardTopRef.current, 340);
+    });
+  }, [animateKeyboardLiftToFocusedName, onTutorialAction, reportNameTutorialTarget, tutorialStep?.target]);
+
+  const handlePlayerNameBlur = useCallback((index) => {
+    setFocusedNameIndex(null);
+    const actionName = index === 0 && tutorialStep?.target === 'setup.playerName'
+      ? 'setup.playerNameDone'
+      : index === 1 && tutorialStep?.target === 'setup.secondPlayerName'
+        ? 'setup.secondPlayerNameDone'
+        : null;
+
+    if (actionName) {
+      setTimeout(() => {
+        onTutorialAction?.(actionName);
+      }, 360);
+    }
+  }, [onTutorialAction, tutorialStep?.target]);
 
   useEffect(() => {
     if (!route?.params?.openSettings) {
@@ -355,6 +657,79 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }, [navigation, setupImagesReady, setupLayoutReady]);
 
   useEffect(() => {
+    if (!tutorialActive) {
+      return;
+    }
+
+    if (tutorialStep?.target === 'setup.theme') {
+      reportTutorialTarget('setup.theme', themeTargetRef);
+    } else if (tutorialStep?.target === 'setup.playerCar') {
+      reportTutorialTarget('setup.playerCar', { current: carRefs.current[0] });
+    } else if (tutorialStep?.target === 'setup.playerName') {
+      reportTutorialTarget('setup.playerName', { current: focusedNamePlateRefs.current[0] });
+    } else if (tutorialStep?.target === 'setup.secondPlayerCar') {
+      const firstCarNode = carRefs.current[0];
+      const secondCarNode = carRefs.current[1];
+      if (firstCarNode?.measureInWindow && secondCarNode?.measureInWindow) {
+        requestAnimationFrame(() => {
+          firstCarNode.measureInWindow((_firstX, _firstY, firstWidth, firstHeight) => {
+            secondCarNode.measureInWindow((secondX, secondY, secondWidth, secondHeight) => {
+              const normalizedWidth = firstWidth || secondWidth;
+              const normalizedHeight = firstHeight || secondHeight;
+
+              onTutorialTargetLayout?.('setup.secondPlayerCar', {
+                x: secondX + (secondWidth - normalizedWidth) / 2,
+                y: secondY + (secondHeight - normalizedHeight) / 2,
+                width: normalizedWidth,
+                height: normalizedHeight,
+              });
+            });
+          });
+        });
+      } else {
+        reportTutorialTarget('setup.secondPlayerCar', { current: secondCarNode });
+      }
+    } else if (tutorialStep?.target === 'setup.secondPlayerName') {
+      reportTutorialTarget('setup.secondPlayerName', { current: focusedNamePlateRefs.current[1] });
+    } else if (tutorialStep?.target === 'setup.addPlayer') {
+      reportTutorialTarget('setup.addPlayer', addPlayerTargetRef);
+    } else if (tutorialStep?.target === 'setup.skinSelect') {
+      reportTutorialTarget('setup.skinSelect', skinSelectTargetRef);
+    } else if (tutorialStep?.target === 'setup.rules') {
+      reportTutorialTarget('setup.rules', rulesTargetRef);
+    } else if (tutorialStep?.target === 'setup.rulesPanel') {
+      reportTutorialTarget('setup.rulesPanel', rulesPanelTargetRef);
+    } else if (tutorialStep?.target === 'setup.rulesDiagonal') {
+      reportTutorialTarget('setup.rulesDiagonal', rulesDiagonalTargetRef);
+    } else if (tutorialStep?.target === 'setup.start') {
+      reportTutorialTarget('setup.start', startTargetRef);
+    }
+
+    if (
+      (tutorialStep?.target === 'setup.playerName' && focusedNameIndex === 0)
+      || (tutorialStep?.target === 'setup.secondPlayerName' && focusedNameIndex === 1)
+    ) {
+      const timers = [60, 160, 300, 460].map((delay) => (
+        setTimeout(() => reportNameTutorialTarget(focusedNameIndex), delay)
+      ));
+
+      return () => timers.forEach(clearTimeout);
+    }
+  }, [
+    focusedNameIndex,
+    onTutorialTargetLayout,
+    playerCount,
+    reportNameTutorialTarget,
+    reportTutorialTarget,
+    screenHeight,
+    screenWidth,
+    skinPickerMounted,
+    settingsPanelVisible,
+    tutorialActive,
+    tutorialStep?.target,
+  ]);
+
+  useEffect(() => {
     Animated.timing(playerLayoutProgress, {
       toValue: spelers.length >= 2 ? 1 : 0,
       duration: 320,
@@ -385,6 +760,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       return;
     }
 
+    if (playRevealStartedKeyRef.current === pendingGameStart.transitionKey) {
+      return;
+    }
+
+    playRevealStartedKeyRef.current = pendingGameStart.transitionKey;
     playRevealRef.current?.reveal();
   }, [pendingGameStart]);
 
@@ -399,6 +779,34 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }, []);
 
   useEffect(() => {
+    if (initialConfig?.spelers?.length) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY).then((storedSkin) => {
+      if (
+        cancelled
+        || !SKIN_OPTIONS.includes(storedSkin)
+        || !isSkinAvailableForPlayer(storedSkin, { isPremium, ownedPaidSkins })
+      ) {
+        return;
+      }
+
+      setSpelers((current) => current.map((player, index) => (
+        index === 0 ? { ...player, skin: storedSkin } : player
+      )));
+    }).catch(() => {
+      // Rood blijft de standaard als de opgeslagen keuze niet leesbaar is.
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialConfig?.spelers?.length, isPremium, ownedPaidSkins]);
+
+  useEffect(() => {
     Animated.timing(addPlayerFocusOpacity, {
       toValue: isEditingPlayerName ? 0 : 1,
       duration: isEditingPlayerName ? 160 : 220,
@@ -408,13 +816,18 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }, [addPlayerFocusOpacity, isEditingPlayerName]);
 
   useEffect(() => {
-    Animated.timing(keyboardLift, {
-      toValue: isEditingPlayerName ? fallbackKeyboardLift : 0,
-      duration: isEditingPlayerName ? 360 : 460,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [fallbackKeyboardLift, isEditingPlayerName, keyboardLift]);
+    if (!isEditingPlayerName) {
+      Animated.timing(keyboardLift, {
+        toValue: 0,
+        duration: 460,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+
+    animateKeyboardLiftToFocusedName(focusedNameIndex, keyboardTopRef.current, 360);
+  }, [animateKeyboardLiftToFocusedName, focusedNameIndex, isEditingPlayerName, keyboardLift]);
 
   useEffect(() => {
     Animated.timing(nameFocusDimOpacity, {
@@ -426,31 +839,46 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }, [isEditingPlayerName, nameFocusDimOpacity]);
 
   useEffect(() => {
-    const showSubscription = Keyboard.addListener('keyboardWillShow', (event) => {
-      const keyboardHeight = event.endCoordinates?.height ?? 0;
-      const lift = -Math.round(clamp(keyboardHeight * 0.34, 104, 155));
+    const handleKeyboardShow = (event) => {
+      const keyboardTop = event.endCoordinates?.screenY ?? (screenHeight - (event.endCoordinates?.height ?? 0));
+      keyboardTopRef.current = keyboardTop;
 
-      Animated.timing(keyboardLift, {
-        toValue: lift,
-        duration: event.duration ?? 250,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    });
-    const hideSubscription = Keyboard.addListener('keyboardWillHide', (event) => {
+      if (focusedNameIndex !== null) {
+        requestAnimationFrame(() => {
+          animateKeyboardLiftToFocusedName(focusedNameIndex, keyboardTop, event.duration ?? 250);
+          reportNameTutorialTarget(focusedNameIndex);
+        });
+        setTimeout(() => reportNameTutorialTarget(focusedNameIndex), 120);
+        setTimeout(() => reportNameTutorialTarget(focusedNameIndex), 260);
+      }
+    };
+    const handleKeyboardHide = (event) => {
+      keyboardTopRef.current = estimatedKeyboardTop;
       Animated.timing(keyboardLift, {
         toValue: 0,
         duration: Math.max(event.duration ?? 380, 380),
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
-    });
+      if (focusedNameIndex !== null) {
+        setTimeout(() => reportNameTutorialTarget(focusedNameIndex), 120);
+        setTimeout(() => reportNameTutorialTarget(focusedNameIndex), 300);
+        setTimeout(() => reportNameTutorialTarget(focusedNameIndex), 460);
+      }
+    };
+
+    const willShowSubscription = Keyboard.addListener('keyboardWillShow', handleKeyboardShow);
+    const didShowSubscription = Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
+    const willHideSubscription = Keyboard.addListener('keyboardWillHide', handleKeyboardHide);
+    const didHideSubscription = Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
 
     return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
+      willShowSubscription.remove();
+      didShowSubscription.remove();
+      willHideSubscription.remove();
+      didHideSubscription.remove();
     };
-  }, [keyboardLift]);
+  }, [animateKeyboardLiftToFocusedName, estimatedKeyboardTop, focusedNameIndex, keyboardLift, reportNameTutorialTarget, screenHeight]);
 
   function animateSettings(open) {
     if (open) {
@@ -475,6 +903,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       }),
     ]).start(({ finished }) => {
       if (finished && !open) {
+        settingsProgress.setValue(0);
+        backdropOpacity.setValue(0);
         setSettingsPanelVisible(false);
       }
     });
@@ -484,11 +914,13 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     void Haptics.selectionAsync();
     void playSoundEffect(GAME_SETTINGS_KLAP_UIT_SOUND, settings);
     animateSettings(true);
+    onTutorialAction?.('setup.rulesOpened');
   }
 
   function closeSettings() {
     void playSoundEffect(GAME_SETTINGS_KLAP_IN_SOUND, settings);
     animateSettings(false);
+    onTutorialAction?.('setup.rulesClosed');
   }
 
   function dismissNameEditing() {
@@ -505,12 +937,17 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
     const preferredSkin = SKIN_OPTIONS.find((skin) => !spelers.some((player) => player.skin === skin)) ?? 'blauw';
     setSpelers((current) => [
       ...current,
-      { ...createPlayer({ skin: preferredSkin }), naam: `Speler ${current.length + 1}` },
+      { ...createPlayer({ skin: preferredSkin }), naam: getDefaultPlayerNameForLanguage(language, current.length) },
     ]);
+    onTutorialAction?.('setup.playerAdded');
   }
 
   function handleRemovePlayer(index) {
     if (index === 0) {
+      return;
+    }
+
+    if (secondPlayerRemovalLockedByTutorial) {
       return;
     }
 
@@ -527,6 +964,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }
 
   function animatePickerOpen(index) {
+    onTutorialAction?.('setup.skinPickerOpened');
     const targetRef = carRefs.current[index];
     targetRef?.measureInWindow?.((x, y, width) => {
       const sourceSize = spelers.length >= 2 ? STAGE_MULTI_CAR_SIZE : STAGE_SINGLE_CAR_SIZE;
@@ -536,7 +974,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
 
       setHeroTop(y);
       setTransitionSourceLeft(sourceLeft);
-      setTransitionSkin(spelers[index]?.skin ?? 'geel');
+      setTransitionSkin(spelers[index]?.skin ?? 'rood');
       setTransitionCarSize(sourceSize);
       setSelectedPlayerIndex(index);
       setSkinPickerMounted(true);
@@ -618,6 +1056,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }
 
   function handlePlayPressIn(event) {
+    if (selectedThemeLocked || !canStart) {
+      latestPlayPressPointRef.current = null;
+      return;
+    }
+
     latestPlayPressPointRef.current = {
       x: event.nativeEvent.pageX,
       y: event.nativeEvent.pageY,
@@ -625,7 +1068,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
   }
 
   function handleStart() {
-    if (!selectedThemeAvailable) {
+    if (playStartLockedRef.current || pendingGameStart) {
+      return;
+    }
+
+    if (selectedThemeLocked) {
       setPremiumModalVisible(true);
       return;
     }
@@ -634,16 +1081,29 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       return;
     }
 
+    playStartLockedRef.current = true;
+    dismissNameEditing();
+
     const config = createGameConfig({
       thema: selectedTheme.id,
       wincondition,
       diagonaal,
       kaartOpzet: playerCount === 2 ? kaartOpzet : 'zelfde',
+      nederlands,
       modus: 'solo',
       syncType: 'geen',
       aantalSpelersOpDitApparaat: playerCount,
       spelers,
     });
+    void AsyncStorage.setItem(
+      GAME_RULE_PREFERENCES_STORAGE_KEY,
+      serializeGameRulePreferences({
+        wincondition,
+        diagonaal,
+        kaartOpzet,
+        nederlands,
+      })
+    );
 
     const origin = latestPlayPressPointRef.current ?? {
       x: screenWidth / 2,
@@ -656,6 +1116,14 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
       originY: origin.y,
       transitionKey: `singleplayer-spel-${Date.now()}`,
     });
+  }
+
+  function handleThemeSnap(index) {
+    if (index !== selectedThemeIndex) {
+      onTutorialAction?.('setup.themeChanged');
+    }
+
+    setSelectedThemeIndex(index);
   }
 
   return (
@@ -677,43 +1145,50 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
         fadeDuration={0}
         onLoadEnd={() => markSetupCriticalImageLoaded('background')}
       >
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.nameFocusTopScrim,
-            { opacity: nameFocusDimOpacity },
-          ]}
-        />
         <SafeAreaView style={styles.safeAreaContent}>
-          <View pointerEvents={isEditingPlayerName ? 'none' : 'auto'} style={styles.backButton}>
+          <View
+            pointerEvents={isEditingPlayerName ? 'none' : 'auto'}
+            style={[
+              styles.backButton,
+              isEditingPlayerName && styles.backButtonDimmed,
+            ]}
+          >
             <AnimatedRouteBackButton
               navigation={navigation}
               size={66}
             />
           </View>
-          <Pressable
-            style={styles.content}
-            onPress={isEditingPlayerName ? dismissNameEditing : undefined}
+          <View
+            style={[
+              styles.content,
+              compactSetupLift > 0 && {
+                transform: [{ translateY: -compactSetupLift }],
+              },
+            ]}
           >
-            <View style={styles.topBlock}>
+            <SetupTitleBlock label={t('game.bingoTheme')} metrics={setupMetrics} />
+            <View ref={themeTargetRef} collapsable={false} style={styles.topBlock}>
               <ThemeCarousel
-                items={THEME_CARDS}
+                items={localizedThemeCards}
                 itemSpacing={10}
                 itemWidth={THEME_CARD_WIDTH}
                 keyExtractor={(item) => item.id}
-                onSnapToItem={setSelectedThemeIndex}
+                loop={Platform.OS !== 'android'}
+                focusedIndex={selectedThemeIndex}
+                onSnapToItem={handleThemeSnap}
                 flatListProps={{ scrollEnabled: !isEditingPlayerName }}
                 renderCard={({ item }) => (
                   <ThemeCard
                     item={item}
                     isPremium={isPremium}
                     onLockedPress={() => setPremiumModalVisible(true)}
-                    onImageLoadEnd={() => markSetupCriticalImageLoaded(`theme-${item.id}`)}
+                    onImageLoadEnd={markThemeCardImageLoaded}
                   />
                 )}
               />
             </View>
 
+            <SetupTitleBlock label={t('home.players')} metrics={setupMetrics} style={styles.playerTitleBlock} />
             <Animated.View
               pointerEvents={isEditingPlayerName ? 'auto' : 'none'}
               style={[
@@ -751,12 +1226,13 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                   />
                 </View>
                 <PlayerNameInput
+                  outerRef={(node) => { focusedNamePlateRefs.current[0] = node; }}
                   value={spelers[0]?.naam ?? ''}
-                  skin={spelers[0]?.skin ?? 'geel'}
-                  defaultName="Speler 1"
+                  skin={spelers[0]?.skin ?? 'rood'}
+                  defaultName={getDefaultPlayerNameForLanguage(language, 0)}
                   onChangeText={(naam) => updatePlayerName(0, naam)}
-                  onFocus={() => setFocusedNameIndex(0)}
-                  onBlur={() => setFocusedNameIndex(null)}
+                  onFocus={() => handlePlayerNameFocus(0)}
+                  onBlur={() => handlePlayerNameBlur(0)}
                   hidden={skinPickerMounted && selectedPlayerIndex === 0}
                 />
               </Animated.View>
@@ -784,7 +1260,7 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                     },
                   ]}
                 >
-                  <AddPlayerButton visible={spelers.length < 2} onPress={handleAddPlayer} />
+                  <AddPlayerButton visible={spelers.length < 2} onPress={handleAddPlayer} outerRef={addPlayerTargetRef} />
                 </Animated.View>
 
                 {spelers[1] ? (
@@ -813,17 +1289,18 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                         />
                       </View>
                       <PlayerNameInput
+                        outerRef={(node) => { focusedNamePlateRefs.current[1] = node; }}
                         value={spelers[1]?.naam ?? ''}
                         skin={spelers[1]?.skin ?? 'blauw'}
-                        defaultName="Speler 2"
+                        defaultName={getDefaultPlayerNameForLanguage(language, 1)}
                         onChangeText={(naam) => updatePlayerName(1, naam)}
-                        onFocus={() => setFocusedNameIndex(1)}
-                        onBlur={() => setFocusedNameIndex(null)}
+                        onFocus={() => handlePlayerNameFocus(1)}
+                        onBlur={() => handlePlayerNameBlur(1)}
                         hidden={skinPickerMounted && selectedPlayerIndex === 1}
                       />
                       {skinPickerMounted && selectedPlayerIndex === 1 ? null : (
                         <Animated.View
-                          pointerEvents={focusedNameIndex === 1 ? 'none' : 'auto'}
+                          pointerEvents={focusedNameIndex === 1 || secondPlayerRemovalLockedByTutorial ? 'none' : 'auto'}
                           style={[
                             styles.removeButton,
                             {
@@ -832,7 +1309,11 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                             },
                           ]}
                         >
-                          <Pressable style={styles.removeButtonPressable} onPress={() => handleRemovePlayer(1)}>
+                          <Pressable
+                            disabled={secondPlayerRemovalLockedByTutorial}
+                            style={styles.removeButtonPressable}
+                            onPress={() => handleRemovePlayer(1)}
+                          >
                             <RemovePlayerIcon size={34} />
                           </Pressable>
                         </Animated.View>
@@ -843,34 +1324,44 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
               </Animated.View>
             </Animated.View>
 
-            <View style={styles.actionStack}>
+            <View ref={startTargetRef} collapsable={false} style={styles.actionStack}>
               <GlossyButton
-                label="Play"
+                label={t('home.play')}
                 variant="blue"
                 size="large"
                 onPressIn={handlePlayPressIn}
                 onPress={handleStart}
-                disabled={!canStart || !selectedThemeAvailable}
+                disabled={!canStart || Boolean(pendingGameStart)}
               />
             </View>
-          </Pressable>
-
-          <View pointerEvents={settingsOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
-            <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
-            </Animated.View>
           </View>
+
+          {settingsPanelVisible ? (
+            <View
+              pointerEvents={settingsOpen ? 'auto' : 'none'}
+              style={styles.settingsBackdropLayer}
+            >
+              <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
+              </Animated.View>
+            </View>
+          ) : null}
         </SafeAreaView>
 
         <SkinCarouselModal
           visible={skinPickerMounted && selectedPlayer !== null}
-          selectedSkin={selectedPlayer?.skin ?? 'geel'}
+          selectedSkin={selectedPlayer?.skin ?? 'rood'}
           takenSkins={takenSkins}
           heroTop={heroTop}
           overlayOpacity={overlayOpacity}
           carouselOpacity={carouselOpacity}
           onClose={() => animatePickerClose()}
-          onSelectSkin={(skin) => animatePickerClose(skin)}
+          onSelectSkin={(skin) => {
+            onTutorialAction?.('setup.skinSelected');
+            animatePickerClose(skin);
+          }}
+          selectTargetRef={skinSelectTargetRef}
+          tutorialStep={tutorialStep?.id === 'setup-skin-picker' || tutorialStep?.id === 'setup-second-skin-picker' ? tutorialStep : null}
         />
 
         {skinPickerMounted && selectedPlayer !== null ? (
@@ -895,6 +1386,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
           style={styles.bottomDock}
         >
           <Animated.View
+            ref={rulesPanelTargetRef}
+            collapsable={false}
             pointerEvents={settingsPanelVisible ? 'auto' : 'none'}
             style={[
               styles.panelShell,
@@ -913,6 +1406,8 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
               imageStyle={styles.rulesPanelImageAsset}
             />
             <Pressable
+              ref={rulesTargetRef}
+              collapsable={false}
               onPress={settingsOpen ? closeSettings : openSettings}
               style={[
                 styles.panelHeader,
@@ -920,7 +1415,14 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 settingsPanelVisible ? styles.panelHeaderOpen : styles.panelHeaderClosed,
               ]}
             >
-              <Text style={styles.panelHeaderText}>Spelregels</Text>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={styles.panelHeaderText}
+              >
+                {t('game.gameRules')}
+              </Text>
             </Pressable>
 
             <Animated.View
@@ -936,32 +1438,103 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
                 },
               ]}
             >
-              <View style={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}>
+              <Animated.ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.settingsMenuScroll}
+                contentContainerStyle={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}
+                scrollEventThrottle={Platform.OS === 'android' ? 32 : 16}
+                removeClippedSubviews={Platform.OS === 'android'}
+                onLayout={(event) => {
+                  const viewportHeight = event.nativeEvent.layout.height;
+                  setSettingsScrollMetrics((current) => (
+                    current.viewportHeight === viewportHeight
+                      ? current
+                      : { ...current, viewportHeight }
+                  ));
+                }}
+                onContentSizeChange={(_, contentHeight) => {
+                  setSettingsScrollMetrics((current) => (
+                    current.contentHeight === contentHeight
+                      ? current
+                      : { ...current, contentHeight }
+                  ));
+                }}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { y: settingsScrollY } } }],
+                  { useNativeDriver: true }
+                )}
+              >
                 <SettingsRuleSlider
-                  title="Winconditie"
+                  title={t('game.rules.winCondition')}
                   titleIcon={SETTINGS_WIN_CONDITION_TITLE_ICON}
                   value={wincondition}
-                  options={SETTINGS_WIN_OPTIONS}
+                  options={localizedWinOptions}
                   onChange={setWincondition}
                   metrics={setupMetrics}
+                  info={{ id: 'single-rule-wincondition', ...localizedRuleInfo.wincondition }}
+                  onInfoPress={showInfoPopover}
                 />
 
                 <SettingsRuleSlider
-                  title="Diagonaal"
+                  title={t('game.rules.diagonal')}
                   titleIcon={SETTINGS_DIAGONAL_TITLE_ICON}
                   value={diagonaal}
-                  options={SETTINGS_DIAGONAL_OPTIONS}
+                  options={localizedDiagonalOptions}
                   onChange={setDiagonaal}
                   metrics={setupMetrics}
                   variant="diagonal"
+                  targetRef={rulesDiagonalTargetRef}
+                  tutorialActionName={tutorialStep?.target === 'setup.rulesDiagonal' ? 'setup.diagonalChanged' : null}
+                  onTutorialAction={onTutorialAction}
+                  info={{ id: 'single-rule-diagonal', ...localizedRuleInfo.diagonal }}
+                  onInfoPress={showInfoPopover}
                 />
-              </View>
+
+                <SettingsRuleSlider
+                  title={t('game.rules.dutchItems')}
+                  titleIcon={SETTINGS_DUTCH_ITEMS_TITLE}
+                  value={nederlands}
+                  options={localizedDutchOptions}
+                  onChange={setNederlands}
+                  metrics={setupMetrics}
+                  variant="dutch"
+                  info={{ id: 'single-rule-dutch', ...localizedRuleInfo.dutch }}
+                  onInfoPress={showInfoPopover}
+                />
+
+                {showCardLayoutRuleSettings ? (
+                  <SettingsRuleSlider
+                    title={t('game.rules.cards')}
+                    titleIcon={SETTINGS_CARD_LAYOUT_TITLE_ICON}
+                    value={kaartOpzet}
+                    options={localizedCardLayoutOptions}
+                    onChange={setKaartOpzet}
+                    metrics={setupMetrics}
+                    variant="cardLayout"
+                    info={{ id: 'single-rule-card-layout', ...localizedRuleInfo.cardLayout }}
+                    onInfoPress={showInfoPopover}
+                  />
+                ) : null}
+              </Animated.ScrollView>
+              {settingsScrollbarVisible ? (
+                <View pointerEvents="none" style={styles.settingsScrollbarTrack}>
+                  <Animated.View
+                    style={[
+                      styles.settingsScrollbarThumb,
+                      {
+                        height: settingsScrollbarThumbHeight,
+                        transform: [{ translateY: settingsScrollbarTranslateY }],
+                      },
+                    ]}
+                  />
+                </View>
+              ) : null}
             </Animated.View>
           </Animated.View>
           {!settingsPanelVisible ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Open spelregels"
+              accessibilityLabel={t('game.gameRules')}
               onPress={openSettings}
               style={[
                 styles.collapsedPanelPressTarget,
@@ -970,6 +1543,13 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
             />
           ) : null}
         </View>
+        <InfoPopoverOverlay
+          popover={activeInfoPopover}
+          progress={infoPopoverProgress}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
+          onClose={closeInfoPopover}
+        />
       </ImageBackground>
       {pendingGameStart ? (
         <CircularReveal
@@ -981,19 +1561,19 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
           onComplete={() => {
             navigation.navigate('Spel', {
               config: pendingGameStart.config,
+              tutorialMode,
               transition: {
                 color: PLAY_TRANSITION_BLUE,
                 originX: screenWidth / 2,
                 originY: screenHeight / 2,
                 routeName: 'Spel',
                 pauseMs: 80,
-                minSolidMs: 420,
-                settleMs: 120,
-                routeReadySettleMs: 160,
+                minSolidMs: 560,
+                settleMs: 220,
+                routeReadySettleMs: 520,
                 transitionKey: pendingGameStart.transitionKey,
               },
             });
-            setPendingGameStart(null);
           }}
         />
       ) : null}
@@ -1001,15 +1581,15 @@ export default function SingleDeviceSetupTestScreen({ navigation, route }) {
         visible={premiumModalVisible}
         onClose={() => setPremiumModalVisible(false)}
         onUnlocked={() => setPremiumModalVisible(false)}
-        title="Premium thema"
-        message="Dit thema hoort bij Premium. Hosten en premium thema’s zijn daarna meteen vrij."
+        title={t('game.premiumTheme')}
+        message={t('game.premiumThemeMessage')}
       />
     </View>
   );
 }
 
-function PlayerAvatar({ skin = 'geel', size = 96, style, onImageLoadEnd }) {
-  const source = PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.geel;
+function PlayerAvatar({ skin = 'rood', size = 96, style, onImageLoadEnd }) {
+  const source = PLAYER_IMAGES[skin] ?? PLAYER_IMAGES.rood;
   const shadowWidth = size * 0.76;
   const shadowHeight = size * 0.18;
 
@@ -1030,11 +1610,13 @@ function PlayerAvatar({ skin = 'geel', size = 96, style, onImageLoadEnd }) {
         </Defs>
         <Ellipse cx={shadowWidth / 2} cy={shadowHeight / 2} rx={shadowWidth / 2} ry={shadowHeight / 2} fill="url(#setupCarShadowGradient)" />
       </Svg>
-      <Image
+      <ExpoImage
         source={source}
-        resizeMode="contain"
-        fadeDuration={0}
-        onLoadEnd={onImageLoadEnd}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        transition={0}
+        onLoad={onImageLoadEnd}
+        onError={onImageLoadEnd}
         style={{ width: size, height: size }}
       />
     </View>
@@ -1045,7 +1627,7 @@ function AttentionCarButton({ skin, size, onPress, active = true, style, attenti
   const attention = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!active) {
+    if (!active || ANDROID_DISABLE_SETUP_IDLE_MOTION) {
       attention.stopAnimation();
       attention.setValue(0);
       return undefined;
@@ -1106,15 +1688,16 @@ function AttentionCarButton({ skin, size, onPress, active = true, style, attenti
 }
 
 function PlayerNameInput({
+  outerRef,
   value,
-  skin = 'geel',
+  skin = 'rood',
   defaultName = 'Speler',
   onChangeText,
   onFocus,
   onBlur,
   hidden = false,
 }) {
-  const carColor = PLAYER_HEX[skin] ?? PLAYER_HEX.geel ?? '#F5C400';
+  const carColor = PLAYER_HEX[skin] ?? PLAYER_HEX.rood ?? '#E03030';
   const handleFocus = () => {
     onFocus?.();
     if (value === defaultName) {
@@ -1130,6 +1713,8 @@ function PlayerNameInput({
 
   return (
     <Pressable
+      ref={outerRef}
+      collapsable={false}
       onPress={(event) => event.stopPropagation()}
       style={[
         styles.playerNamePlate,
@@ -1167,13 +1752,13 @@ function PlayerNameInput({
   );
 }
 
-function AddPlayerButton({ visible, onPress }) {
+function AddPlayerButton({ visible, onPress, outerRef }) {
   if (!visible) {
     return null;
   }
 
   return (
-    <Pressable style={styles.addPlayerButton} onPress={onPress}>
+    <Pressable ref={outerRef} collapsable={false} style={styles.addPlayerButton} onPress={onPress}>
       <Image source={PLAYER_SILHOUETTE_IMAGE} style={styles.addPlayerButtonImage} resizeMode="contain" />
     </Pressable>
   );
@@ -1188,24 +1773,83 @@ function SkinCarouselModal({
   carouselOpacity,
   onClose,
   onSelectSkin,
+  selectTargetRef,
+  tutorialStep,
 }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { language, t } = useTranslation();
+  const { isPremium, ownedPaidSkins } = usePremium();
   const [challengeProgress, setChallengeProgress] = useState(null);
-  const orderedSkins = useMemo(
-    () => [selectedSkin, ...SKIN_OPTIONS.filter((skin) => skin !== selectedSkin)],
-    [selectedSkin]
-  );
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [challengeProgressReady, setChallengeProgressReady] = useState(false);
+  const [selectRect, setSelectRect] = useState(null);
+  const tutorialHandProgress = useRef(new Animated.Value(0)).current;
+  const selectedSkinIndex = Math.max(0, SKIN_OPTIONS.indexOf(selectedSkin));
+  const [activeIndex, setActiveIndex] = useState(selectedSkinIndex);
 
   useEffect(() => {
     if (visible) {
-      setActiveIndex(0);
-      void loadSkinChallengeProgress().then(setChallengeProgress);
+      setActiveIndex(selectedSkinIndex);
+      setChallengeProgressReady(false);
+      void loadSkinChallengeProgress().then((progress) => {
+        setChallengeProgress(progress);
+      }).finally(() => {
+        setChallengeProgressReady(true);
+      });
     }
-  }, [visible]);
+  }, [selectedSkinIndex, visible]);
 
-  const activeSkin = orderedSkins[activeIndex] ?? selectedSkin;
+  useEffect(() => {
+    if (!visible || !tutorialStep) {
+      setSelectRect(null);
+      return;
+    }
+
+    const measureTimer = setTimeout(() => {
+      selectTargetRef?.current?.measureInWindow?.((x, y, width, height) => {
+        setSelectRect({ x, y, width, height });
+      });
+    }, 80);
+
+    return () => clearTimeout(measureTimer);
+  }, [selectTargetRef, tutorialStep, visible]);
+
+  useEffect(() => {
+    tutorialHandProgress.stopAnimation();
+    tutorialHandProgress.setValue(0);
+
+    if (!visible || !tutorialStep) {
+      return undefined;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(tutorialHandProgress, {
+          toValue: 1,
+          duration: 620,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(tutorialHandProgress, {
+          toValue: 0,
+          duration: 520,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(260),
+      ])
+    );
+
+    animation.start();
+
+    return () => animation.stop();
+  }, [tutorialHandProgress, tutorialStep, visible]);
+
+  const activeSkin = SKIN_OPTIONS[activeIndex] ?? selectedSkin;
   const activeSkinTaken = takenSkins.includes(activeSkin) && activeSkin !== selectedSkin;
-  const activeSkinLocked = isChallengeSkin(activeSkin) && !isSkinUnlocked(challengeProgress, activeSkin);
+  const activeSkinLocked = (
+    (isChallengeSkin(activeSkin) && (!challengeProgressReady || !isSkinUnlocked(challengeProgress, activeSkin)))
+    || !isSkinAvailableForPlayer(activeSkin, { isPremium, ownedPaidSkins })
+  );
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -1229,23 +1873,34 @@ function SkinCarouselModal({
           ]}
         >
           <ThemeCarousel
-            items={orderedSkins}
+            items={SKIN_OPTIONS}
             itemWidth={224}
             itemSpacing={0}
+            loop={Platform.OS !== 'android'}
+            decelerationRate={Platform.OS === 'ios' ? 0.94 : 0.88}
+            focusSwitchThreshold={0.2}
+            scrollSoundStepIntervalMs={34}
             onSnapToItem={setActiveIndex}
             keyExtractor={(item) => item}
             containerStyle={styles.carouselWrap}
-            flatListProps={{ initialScrollIndex: 0 }}
-            renderCard={({ item, isFocused }) => (
+            flatListProps={{ initialScrollIndex: selectedSkinIndex }}
+            renderCard={({ item }) => (
               (() => {
-                const itemLocked = isChallengeSkin(item) && !isSkinUnlocked(challengeProgress, item);
+                const itemChallengeLocked = isChallengeSkin(item)
+                  && challengeProgressReady
+                  && !isSkinUnlocked(challengeProgress, item);
+                const itemLocked = itemChallengeLocked || !isSkinAvailableForPlayer(item, { isPremium, ownedPaidSkins });
+                const itemLockImage = isPremiumChallengeSkin(item) && !isPremium
+                  ? PREMIUM_SKIN_LOCK_IMAGE
+                  : itemChallengeLocked
+                  ? CHALLENGE_SKIN_LOCK_IMAGE
+                  : PREMIUM_SKIN_LOCK_IMAGE;
 
                 return (
               <View
                 style={[
                   styles.carouselCardShellPicker,
                   { shadowColor: PLAYER_HEX[item] ?? PLAYER_HEX.geel },
-                  !isFocused && styles.carouselCardShellMuted,
                 ]}
               >
                 <View
@@ -1259,7 +1914,7 @@ function SkinCarouselModal({
                   </View>
                   {itemLocked ? (
                     <Image
-                      source={CHALLENGE_SKIN_LOCK_IMAGE}
+                      source={itemLockImage}
                       style={styles.challengeSkinLock}
                       resizeMode="contain"
                     />
@@ -1271,9 +1926,9 @@ function SkinCarouselModal({
             )}
           />
 
-          <View style={styles.selectButtonWrap}>
+          <View ref={selectTargetRef} collapsable={false} style={styles.selectButtonWrap}>
             <GlossyButton
-              label="Selecteer"
+              label={t('common.select')}
               variant="green"
               size="normal"
               heightOverride={62}
@@ -1286,40 +1941,148 @@ function SkinCarouselModal({
           <SkinChallengeProgressPanel
             skin={activeSkin}
             progress={challengeProgress}
+            language={language}
+            isPremium={isPremium}
           />
         </Animated.View>
+        {tutorialStep ? (
+          (() => {
+            const tutorialBubbleWidth = Math.min(screenWidth * 0.9, 430);
+            const tutorialBubbleHeight = tutorialBubbleWidth * 0.74;
+            const tutorialBubbleLeft = Math.max(10, (screenWidth - tutorialBubbleWidth) / 2);
+            const tutorialBubbleTop = Math.max(42, screenHeight * 0.07);
+            const tutorialCarSize = Math.min(screenWidth * 0.34, 172);
+            const tutorialCarLeft = Math.min(
+              screenWidth - tutorialCarSize * 0.72,
+              tutorialBubbleLeft + tutorialBubbleWidth * 0.68
+            );
+            const tutorialCarTop = tutorialBubbleTop + tutorialBubbleHeight * 0.72;
+
+            return (
+              <View pointerEvents="none" style={styles.skinTutorialCoachLayer}>
+                <TutorialCoachContent
+                  step={tutorialStep}
+                  fontFamily="FredokaOne_400Regular"
+                  bubbleWidth={tutorialBubbleWidth}
+                  bubbleHeight={tutorialBubbleHeight}
+                  bubbleLeft={tutorialBubbleLeft}
+                  bubbleTop={tutorialBubbleTop}
+                  carSize={tutorialCarSize}
+                  carLeft={tutorialCarLeft}
+                  carTop={tutorialCarTop}
+                />
+                {selectRect ? (
+                  <Animated.Image
+                    source={TUTORIAL_HAND_IMAGE}
+                    resizeMode="contain"
+                    style={[
+                      styles.skinTutorialHand,
+                      {
+                        left: selectRect.x + selectRect.width * 0.66,
+                        top: selectRect.y + 18,
+                        transform: [
+                          {
+                            translateY: tutorialHandProgress.interpolate({
+                              inputRange: [0, 0.55, 1],
+                              outputRange: [-12, 14, -12],
+                            }),
+                          },
+                          {
+                            scale: tutorialHandProgress.interpolate({
+                              inputRange: [0, 0.55, 1],
+                              outputRange: [1, 0.84, 1],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                ) : null}
+              </View>
+            );
+          })()
+        ) : null}
       </Animated.View>
     </Modal>
   );
 }
 
-function SkinChallengeProgressPanel({ skin, progress }) {
+function SkinChallengeProgressPanel({ skin, progress, language, isPremium }) {
   const challenge = SKIN_CHALLENGES[skin];
 
   if (!challenge) {
     return <View style={styles.challengePanelPlaceholder} />;
   }
 
+  const premiumChallengeLocked = isPremiumChallengeSkin(skin) && !isPremium;
   const progressValue = getChallengeProgressValue(progress, skin);
   const ratio = progressValue.target > 0 ? progressValue.current / progressValue.target : 1;
 
   return (
     <View style={styles.challengePanel}>
-      <Text style={styles.challengeTitle}>{challenge.title}</Text>
-      <Text style={styles.challengeDescription}>{challenge.description}</Text>
-      <View style={styles.challengeProgressRow}>
-        <View style={styles.challengeProgressTrack}>
-          <View
-            style={[
-              styles.challengeProgressFill,
-              { width: `${Math.max(0, Math.min(1, ratio)) * 100}%` },
-            ]}
-          />
+      <Text style={styles.challengeTitle}>{getSkinLabel(language, skin, challenge.title)}</Text>
+      <Text style={styles.challengeDescription}>
+        {premiumChallengeLocked
+          ? translate(language, 'home.premiumChallengeLocked')
+          : getSkinChallengeDescription(language, skin, challenge.description)}
+      </Text>
+      {premiumChallengeLocked ? null : (
+        <View style={styles.challengeProgressRow}>
+          <View style={styles.challengeProgressTrack}>
+            <View
+              style={[
+                styles.challengeProgressFill,
+                { width: `${Math.max(0, Math.min(1, ratio)) * 100}%` },
+              ]}
+            />
+          </View>
+          <Text style={styles.challengeProgressText}>
+            {progressValue.current} / {progressValue.target}
+          </Text>
         </View>
-        <Text style={styles.challengeProgressText}>
-          {progressValue.current} / {progressValue.target}
-        </Text>
-      </View>
+      )}
+    </View>
+  );
+}
+
+function SetupTitleBlock({ label, metrics, style }) {
+  const titleScale = metrics?.scale ?? 1;
+  const blockStyle = metrics ? {
+    minWidth: Math.round(222 * titleScale),
+    minHeight: Math.round(46 * titleScale),
+    paddingHorizontal: Math.round(20 * titleScale),
+    marginTop: metrics.titleMarginTop,
+    marginBottom: metrics.titleMarginBottom,
+  } : null;
+  const textStyle = metrics ? {
+    fontSize: Math.round(22 * titleScale),
+    lineHeight: Math.round(27 * titleScale),
+  } : null;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.titleBlock,
+        blockStyle,
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={['rgba(255,255,255,0.74)', 'rgba(255,255,255,0.34)', 'rgba(232,247,255,0.2)']}
+        locations={[0, 0.58, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.titleBlockGloss}
+      />
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
+        style={[styles.titleBlockText, textStyle]}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -1329,6 +2092,26 @@ function ThemeCard({ item, isPremium = false, onLockedPress, onImageLoadEnd }) {
   const isLocked = item.premium && !isPremium;
   const usesEmbeddedFrame = isEmbeddedThemeCard(item.id);
   const cardBorderColor = item.outline ?? item.border;
+  const titleStyle = usesEmbeddedFrame
+    ? [
+        styles.carouselCardTitleWrapEmbedded,
+        item.id === 'verkeersborden' && styles.carouselCardTitleWrapEmbeddedWide,
+      ]
+    : {
+        top: 26,
+        left: 12,
+        right: 12,
+      };
+  const titleScale = getEmbeddedThemeTitleScale(item.id);
+  const isTrafficSignsTitle = item.id === 'verkeersborden';
+  const shouldAutoFitTitle = !usesEmbeddedFrame || isTrafficSignsTitle;
+  const minimumTitleScale = isTrafficSignsTitle ? 0.58 : usesEmbeddedFrame ? 0.88 : 0.58;
+  const titleTextStyle = {
+    fontSize: Math.round((usesEmbeddedFrame ? 32 : 28) * titleScale),
+    lineHeight: Math.round((isTrafficSignsTitle ? 34 : usesEmbeddedFrame ? 42 : 34) * titleScale),
+    ...(usesEmbeddedFrame ? { width: '100%' } : null),
+    ...(usesEmbeddedFrame ? getEmbeddedThemeTitleStyle(item.id) : { color: '#ffffff' }),
+  };
 
   return (
     <View style={styles.carouselCardShell}>
@@ -1341,48 +2124,66 @@ function ThemeCard({ item, isPremium = false, onLockedPress, onImageLoadEnd }) {
         ]}
       >
         {themeImage ? (
-          <ImageBackground
-            source={themeImage}
-            resizeMode={usesEmbeddedFrame ? 'contain' : 'cover'}
-            fadeDuration={0}
-            onLoadEnd={onImageLoadEnd}
-            imageStyle={[
-              styles.carouselCardImage,
-              usesEmbeddedFrame && styles.carouselCardImageEmbedded,
-            ]}
+          <View
             style={[
               styles.carouselCardBody,
               usesEmbeddedFrame && styles.carouselCardBodyEmbedded,
             ]}
           >
+            <ExpoImage
+              source={themeImage}
+              contentFit={usesEmbeddedFrame ? 'contain' : 'cover'}
+              cachePolicy="memory-disk"
+              transition={0}
+              onLoad={onImageLoadEnd}
+              onError={onImageLoadEnd}
+              style={[
+                styles.carouselCardImageFill,
+                styles.carouselCardImage,
+                usesEmbeddedFrame && styles.carouselCardImageEmbedded,
+              ]}
+            />
             {usesEmbeddedFrame ? null : <View style={styles.carouselCardOverlay} />}
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
-            <View style={[styles.carouselCardTitleWrap, usesEmbeddedFrame && styles.carouselCardTitleWrapEmbedded]}>
+            <View style={[styles.carouselCardTitleWrap, titleStyle]}>
               <Text
+                allowFontScaling={false}
+                numberOfLines={1}
+                adjustsFontSizeToFit={shouldAutoFitTitle}
+                minimumFontScale={minimumTitleScale}
+                maxFontSizeMultiplier={1}
                 style={[
                   styles.carouselCardTitle,
-                  usesEmbeddedFrame && getEmbeddedThemeTitleStyle(item.id),
+                  titleTextStyle,
+                  item.id === 'verkeersborden' && styles.carouselCardTitleNoWrap,
                 ]}
               >
                 {item.title}
               </Text>
             </View>
-          </ImageBackground>
+          </View>
         ) : (
           <View style={[styles.carouselCardBody, { backgroundColor: item.surface }]}>
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
-            <View style={styles.carouselCardTitleWrap}>
-              <Text style={styles.carouselCardTitle}>{item.title}</Text>
+            <View style={[styles.carouselCardTitleWrap, titleStyle]}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit={shouldAutoFitTitle}
+                minimumFontScale={minimumTitleScale}
+                style={[styles.carouselCardTitle, titleTextStyle]}
+              >
+                {item.title}
+              </Text>
             </View>
           </View>
         )}
@@ -1391,26 +2192,197 @@ function ThemeCard({ item, isPremium = false, onLockedPress, onImageLoadEnd }) {
   );
 }
 
-function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metrics, variant = 'win' }) {
+function InfoButton({ info, onInfoPress, style }) {
+  const buttonRef = useRef(null);
+
+  if (!info || !onInfoPress) {
+    return null;
+  }
+
+  return (
+    <Pressable
+      ref={buttonRef}
+      collapsable={false}
+      accessibilityRole="button"
+      accessibilityLabel={`Info: ${info.title}`}
+      hitSlop={10}
+      onPress={(event) => {
+        event?.stopPropagation?.();
+        void Haptics.selectionAsync();
+        onInfoPress(info, buttonRef);
+      }}
+      onStartShouldSetResponder={() => true}
+      style={[styles.infoButton, style]}
+    >
+      <Image
+        source={INFO_BUTTON_IMAGE}
+        resizeMode="contain"
+        fadeDuration={0}
+        style={styles.infoButtonImage}
+      />
+    </Pressable>
+  );
+}
+
+function InfoPopoverOverlay({ popover, progress, screenWidth, screenHeight, onClose }) {
+  if (!popover?.anchor) {
+    return null;
+  }
+
+  const bubbleWidth = Math.round(clamp(screenWidth * 0.78, 248, 330));
+  const bubbleEstimatedHeight = popover.body.length > 110 ? 144 : popover.body.length > 85 ? 132 : 116;
+  const anchorCenterX = popover.anchor.x + popover.anchor.width / 2;
+  const anchorCenterY = popover.anchor.y + popover.anchor.height / 2;
+  const showAbove = anchorCenterY > screenHeight * 0.52;
+  const gap = showAbove ? 22 : 16;
+  const bubbleLeft = Math.round(clamp(anchorCenterX - bubbleWidth * 0.5, 14, screenWidth - bubbleWidth - 14));
+  const bubbleTop = showAbove
+    ? Math.round(Math.max(72, popover.anchor.y - bubbleEstimatedHeight - gap))
+    : Math.round(Math.min(screenHeight - bubbleEstimatedHeight - 32, popover.anchor.y + popover.anchor.height + gap));
+  const arrowLeft = Math.round(clamp(anchorCenterX - bubbleLeft - 14, 22, bubbleWidth - 38));
+  const anchorSize = Math.max(popover.anchor.width, popover.anchor.height) + 10;
+
+  return (
+    <Animated.View
+      pointerEvents="auto"
+      style={[
+        styles.infoOverlay,
+        {
+          opacity: progress,
+        },
+      ]}
+    >
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.infoAnchorGlow,
+          {
+            left: anchorCenterX - anchorSize / 2,
+            top: anchorCenterY - anchorSize / 2,
+            width: anchorSize,
+            height: anchorSize,
+            borderRadius: anchorSize / 2,
+            transform: [
+              {
+                scale: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.72, 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Sluit uitleg: ${popover.title}`}
+        onPress={onClose}
+        style={[
+          styles.infoAnchorButtonClone,
+          {
+            left: popover.anchor.x,
+            top: popover.anchor.y,
+            width: popover.anchor.width,
+            height: popover.anchor.height,
+          },
+        ]}
+      >
+        <Image
+          source={INFO_BUTTON_IMAGE}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={styles.infoButtonImage}
+        />
+      </Pressable>
+      <Animated.View
+        style={[
+          styles.infoBubble,
+          {
+            width: bubbleWidth,
+            left: bubbleLeft,
+            top: bubbleTop,
+            transform: [
+              {
+                translateY: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [showAbove ? 8 : -8, 0],
+                }),
+              },
+              {
+                scale: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.94, 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.infoBubbleArrow,
+            showAbove ? styles.infoBubbleArrowBottom : styles.infoBubbleArrowTop,
+            { left: arrowLeft },
+          ]}
+        />
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+          style={styles.infoBubbleTitle}
+        >
+          {popover.title}
+        </Text>
+        <Text style={styles.infoBubbleBody}>{popover.body}</Text>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+function SettingsRuleSlider({
+  title,
+  titleIcon,
+  value,
+  options,
+  onChange,
+  metrics,
+  variant = 'win',
+  targetRef = null,
+  tutorialActionName = null,
+  onTutorialAction = null,
+  info = null,
+  onInfoPress = null,
+}) {
   const isDiagonal = variant === 'diagonal';
+  const isDutch = variant === 'dutch';
+  const isCardLayout = variant === 'cardLayout';
   const [railWidth, setRailWidth] = useState(0);
   const selectorTranslateX = useRef(new Animated.Value(0)).current;
   const selectorScale = useRef(new Animated.Value(1)).current;
   const selectedIndex = Math.max(0, options.findIndex((option) => option.id === value));
   const optionCount = options.length;
   const selectorWidth = railWidth > 0 ? railWidth / optionCount : 0;
-  const frameSource = isDiagonal
-    ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
-    : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
-  const frameAspectRatio = isDiagonal ? (919 / 1475) : (935 / 1490);
-  const selectorColors = isDiagonal
-    ? ['#A553FF', '#7B24D8', '#4F1196']
-    : ['#62D629', '#2EAA0F', '#146E06'];
-  const titleShadowColor = isDiagonal ? '#4A0A83' : '#155F04';
+  const frameSource = isDutch
+    ? SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS
+    : isCardLayout
+      ? SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT
+      : isDiagonal
+        ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
+        : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
+  const frameAspectRatio = isDutch ? (992 / 1586) : isCardLayout ? (1024 / 1536) : isDiagonal ? (919 / 1475) : (935 / 1490);
+  const selectorColors = isDutch
+    ? ['#FFB02A', '#FF7A00', '#C84A00']
+    : isCardLayout
+      ? ['#40B8FF', '#1086E8', '#0050B5']
+      : isDiagonal
+        ? ['#A553FF', '#7B24D8', '#4F1196']
+        : ['#62D629', '#2EAA0F', '#146E06'];
+  const titleShadowColor = isDutch ? '#A64000' : isCardLayout ? '#004C9F' : isDiagonal ? '#4A0A83' : '#155F04';
   const frameWidth = Math.round(clamp(metrics.scale * 346, 314, 382));
   const frameHeight = Math.round(frameWidth * frameAspectRatio);
-  const selectorVisualWidth = isDiagonal ? selectorWidth : selectorWidth * 1.06;
-  const selectorVisualOffset = isDiagonal ? 0 : selectorWidth * -0.03;
+  const selectorVisualWidth = isDiagonal || isDutch || isCardLayout ? selectorWidth : selectorWidth * 1.06;
+  const selectorVisualOffset = isDiagonal || isDutch || isCardLayout ? 0 : selectorWidth * -0.03;
 
   function animateSelectorToIndex(index) {
     if (!selectorWidth) {
@@ -1453,6 +2425,9 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       animateSelectorToIndex(index);
       popSelector(1.035);
+      if (tutorialActionName) {
+        onTutorialAction?.(tutorialActionName);
+      }
       return;
     }
 
@@ -1460,6 +2435,9 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
     onChange(option.id);
     animateSelectorToIndex(index);
     popSelector(1.055);
+    if (tutorialActionName) {
+      onTutorialAction?.(tutorialActionName);
+    }
   }
 
   useEffect(() => {
@@ -1467,7 +2445,7 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
   }, [selectedIndex, selectorWidth]);
 
   return (
-    <View style={styles.settingsRuleSection}>
+    <View ref={targetRef} collapsable={false} style={styles.settingsRuleSection}>
       <ImageBackground
         source={frameSource}
         resizeMode="stretch"
@@ -1480,15 +2458,18 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
         ]}
         imageStyle={styles.settingsRuleFrameImage}
       >
-        <View style={styles.settingsRuleTitleOverlay}>
+        <View style={[
+          styles.settingsRuleTitleOverlay,
+          isCardLayout && styles.settingsRuleTitleOverlayCardLayout,
+        ]}>
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.95}
+            minimumFontScale={0.58}
             style={[
               styles.settingsRuleTitle,
               {
-                fontSize: Math.round(29 * metrics.scale),
+                fontSize: Math.round((isDutch || isCardLayout ? 27 : 29) * metrics.scale),
                 textShadowColor: titleShadowColor,
               },
             ]}
@@ -1502,12 +2483,34 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             style={[
               styles.settingsRuleTitleIcon,
               {
-                width: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 1.14) : Math.round(metrics.settingsTitleIconSize * 0.92),
-                height: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 0.92) : Math.round(metrics.settingsTitleIconSize * 0.92),
+                width: isDiagonal
+                  ? Math.round(metrics.settingsTitleIconSize * 1.14)
+                  : isDutch
+                    ? Math.round(metrics.settingsTitleIconSize * 1.18)
+                    : isCardLayout
+                      ? Math.round(metrics.settingsTitleIconSize * 0.96)
+                    : Math.round(metrics.settingsTitleIconSize * 0.92),
+                height: isDiagonal
+                  ? Math.round(metrics.settingsTitleIconSize * 0.92)
+                  : isDutch
+                    ? Math.round(metrics.settingsTitleIconSize * 0.98)
+                    : isCardLayout
+                      ? Math.round(metrics.settingsTitleIconSize * 0.96)
+                    : Math.round(metrics.settingsTitleIconSize * 0.92),
               },
             ]}
           />
         </View>
+        <InfoButton
+          info={info}
+          onInfoPress={onInfoPress}
+          style={[
+            styles.settingsRuleInfoButton,
+            isDiagonal && styles.settingsRuleInfoButtonDiagonal,
+            isDutch && styles.settingsRuleInfoButtonDutch,
+            isCardLayout && styles.settingsRuleInfoButtonCardLayout,
+          ]}
+        />
 
         <View
           onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
@@ -1545,13 +2548,19 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             {options.map((option, index) => {
               const selected = option.id === value;
               const isLongLabel = option.label.length >= 9;
-              const baseLabelSize = isDiagonal ? 25 : 20;
-              const labelSize = option.label.length >= 9
-                ? 17
+              const isFullCardLabel = option.id === 'heel-blok';
+              const hasImage = Boolean(option.image);
+              const baseLabelSize = isDiagonal ? 25 : isDutch ? 18 : isCardLayout ? 18 : 20;
+              const labelSize = isLongLabel && !isFullCardLabel
+                ? (isDutch || isCardLayout ? 15 : 17)
                 : baseLabelSize;
               const optionImageSize = isDiagonal
                 ? Math.round(metrics.settingsSliderDiagonalImageSize * 0.84)
-                : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
+                : isDutch
+                  ? Math.round(metrics.settingsSliderImageSize * 1.02)
+                  : isCardLayout
+                    ? Math.round(metrics.settingsSliderImageSize * 1.04)
+                  : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
 
               return (
                 <Pressable
@@ -1560,27 +2569,29 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
                   style={styles.settingsRuleOption}
                 >
                   <View style={styles.settingsRuleOptionContent}>
-                    <Image
-                      source={option.image}
-                      resizeMode="contain"
-                      fadeDuration={0}
-                      style={[
-                        styles.settingsRuleOptionImage,
-                        {
-                          width: optionImageSize,
-                          height: optionImageSize,
-                        },
-                      ]}
-                    />
+                    {hasImage ? (
+                      <Image
+                        source={option.image}
+                        resizeMode="contain"
+                        fadeDuration={0}
+                        style={[
+                          styles.settingsRuleOptionImage,
+                          {
+                            width: optionImageSize,
+                            height: optionImageSize,
+                          },
+                        ]}
+                      />
+                    ) : null}
                     <Text
-                      numberOfLines={1}
+                      numberOfLines={isDutch || isCardLayout || isFullCardLabel ? 2 : 1}
                       adjustsFontSizeToFit
-                      minimumFontScale={0.58}
+                      minimumFontScale={isFullCardLabel ? 0.82 : 0.7}
                       style={[
                         styles.settingsRuleOptionLabel,
                         {
                           fontSize: Math.round(labelSize * metrics.scale),
-                          lineHeight: Math.round((labelSize + 9) * metrics.scale),
+                          lineHeight: Math.round((labelSize + (isDutch || isCardLayout || isFullCardLabel ? 5 : 9)) * metrics.scale),
                         },
                         selected && styles.settingsRuleOptionLabelSelected,
                       ]}
@@ -1594,6 +2605,51 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
           </View>
         </View>
       </ImageBackground>
+    </View>
+  );
+}
+
+function SettingsTextSegment({ title, value, options, onChange, metrics }) {
+  return (
+    <View style={styles.settingsTextSection}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.76}
+        style={[
+          styles.settingsTextTitle,
+          { fontSize: Math.round(21 * metrics.scale) },
+        ]}
+      >
+        {title}
+      </Text>
+      <View style={styles.settingsTextOptionsRow}>
+        {options.map((option) => {
+          const selected = option.id === value;
+          return (
+            <Pressable
+              key={String(option.id)}
+              onPress={() => onChange(option.id)}
+              style={[
+                styles.settingsTextOption,
+                selected && styles.settingsTextOptionSelected,
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={[
+                  styles.settingsTextOptionLabel,
+                  selected && styles.settingsTextOptionLabelSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -1612,7 +2668,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 4,
+    paddingTop: 12,
     paddingBottom: 152,
     position: 'relative',
   },
@@ -1623,39 +2679,71 @@ const styles = StyleSheet.create({
     zIndex: 20,
     elevation: 20,
   },
+  backButtonDimmed: {
+    zIndex: 2,
+    elevation: 2,
+  },
   topBlock: {
-    marginTop: 32,
+    marginTop: 4,
     marginHorizontal: -24,
     zIndex: 1,
   },
+  titleBlock: {
+    alignSelf: 'center',
+    minWidth: 184,
+    minHeight: 46,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(20, 71, 102, 0.34)',
+    backgroundColor: 'rgba(238, 249, 255, 0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    overflow: 'hidden',
+    shadowColor: '#09283B',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    marginTop: 10,
+    marginBottom: 6,
+    zIndex: 2,
+  },
+  titleBlockGloss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  titleBlockText: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 22,
+    lineHeight: 27,
+    color: '#144766',
+    textAlign: 'center',
+    letterSpacing: 0,
+    includeFontPadding: false,
+  },
   actionStack: {
     gap: 20,
-    marginTop: -2,
+    marginTop: -8,
     zIndex: 1,
   },
   nameFocusShield: {
     position: 'absolute',
-    top: 0,
+    top: -220,
     left: -24,
     right: -24,
-    bottom: 0,
+    bottom: -260,
     zIndex: 3,
-    backgroundColor: 'rgba(5, 12, 22, 0.42)',
-  },
-  nameFocusTopScrim: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 130,
     backgroundColor: 'rgba(5, 12, 22, 0.42)',
   },
   playerStageSection: {
     height: 252,
     position: 'relative',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 0,
     zIndex: 4,
+  },
+  playerTitleBlock: {
+    marginTop: 18,
   },
   playerStageSlot: {
     ...StyleSheet.absoluteFillObject,
@@ -1710,13 +2798,20 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(8, 18, 31, 0.32)',
+    backgroundColor: 'rgba(8, 18, 31, 0.54)',
+  },
+  settingsBackdropLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
   },
   bottomDock: {
     position: 'absolute',
     left: -8,
     right: -8,
     bottom: 0,
+    zIndex: 40,
+    elevation: 40,
   },
   collapsedPanelPressTarget: {
     position: 'absolute',
@@ -1728,11 +2823,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'transparent',
     borderWidth: 0,
-    shadowColor: '#3B0504',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 14,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   rulesPanelImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1754,6 +2848,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   panelHeader: {
     minHeight: 74,
@@ -1764,6 +2862,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 68,
     paddingTop: 4,
     paddingBottom: 10,
+    zIndex: 4,
+    elevation: 0,
   },
   panelHeaderClosed: {
     borderTopLeftRadius: 26,
@@ -1823,9 +2923,15 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
     backgroundColor: 'transparent',
+    zIndex: 1,
   },
   panelContentGloss: {
     ...StyleSheet.absoluteFillObject,
+  },
+  settingsMenuScroll: {
+    flex: 1,
+    marginTop: 18,
+    marginBottom: 52,
   },
   settingsMenuBody: {
     alignItems: 'center',
@@ -1833,10 +2939,68 @@ const styles = StyleSheet.create({
     paddingTop: 36,
     paddingBottom: 28,
   },
+  settingsScrollbarTrack: {
+    position: 'absolute',
+    top: 28,
+    right: 34,
+    bottom: 82,
+    width: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.12)',
+    overflow: 'hidden',
+  },
+  settingsScrollbarThumb: {
+    width: '100%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.34)',
+  },
   settingsRuleSection: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  settingsTextSection: {
+    width: '86%',
+    maxWidth: 382,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 2,
+    borderColor: 'rgba(45, 127, 178, 0.3)',
+  },
+  settingsTextTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  settingsTextOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  settingsTextOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: '#E8F5FF',
+    borderWidth: 2,
+    borderColor: '#B7D8EF',
+  },
+  settingsTextOptionSelected: {
+    backgroundColor: '#159B3B',
+    borderColor: '#0B6B27',
+  },
+  settingsTextOptionLabel: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  settingsTextOptionLabelSelected: {
+    color: '#FFFFFF',
   },
   settingsRuleFrame: {
     alignItems: 'center',
@@ -1857,6 +3021,10 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 6,
     zIndex: 4,
+  },
+  settingsRuleTitleOverlayCardLayout: {
+    top: '1.15%',
+    height: '23%',
   },
   settingsRuleTitleRow: {
     width: '92%',
@@ -1923,6 +3091,106 @@ const styles = StyleSheet.create({
   settingsRuleTitleIcon: {
     marginTop: 1,
     zIndex: 2,
+  },
+  settingsRuleInfoButton: {
+    position: 'absolute',
+    top: '15%',
+    right: '2.4%',
+    width: 28,
+    height: 28,
+  },
+  settingsRuleInfoButtonDiagonal: {
+    top: '16%',
+    right: '2.8%',
+  },
+  settingsRuleInfoButtonDutch: {
+    top: '16%',
+    right: '2.8%',
+  },
+  settingsRuleInfoButtonCardLayout: {
+    top: '14.6%',
+    right: '3%',
+  },
+  infoButton: {
+    width: 34,
+    height: 34,
+    zIndex: 12,
+  },
+  infoButtonImage: {
+    width: '100%',
+    height: '100%',
+  },
+  infoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 60,
+    elevation: 60,
+    backgroundColor: 'rgba(6, 14, 25, 0.48)',
+  },
+  infoAnchorGlow: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255, 214, 54, 0.18)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 223, 79, 0.72)',
+  },
+  infoAnchorButtonClone: {
+    position: 'absolute',
+    zIndex: 64,
+    elevation: 64,
+  },
+  infoBubble: {
+    position: 'absolute',
+    minHeight: 106,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: '#D7E8F5',
+    backgroundColor: '#F8FDFF',
+    paddingHorizontal: 16,
+    paddingTop: 13,
+    paddingBottom: 14,
+    shadowColor: '#05182A',
+    shadowOpacity: 0.34,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 65,
+    zIndex: 65,
+  },
+  infoBubbleArrow: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRightWidth: 3,
+    borderBottomWidth: 3,
+    borderColor: '#D7E8F5',
+    backgroundColor: '#F8FDFF',
+    transform: [{ rotate: '45deg' }],
+  },
+  infoBubbleArrowTop: {
+    top: -12,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+  },
+  infoBubbleArrowBottom: {
+    bottom: -12,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+  },
+  infoBubbleTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 21,
+    lineHeight: 25,
+    color: '#183D56',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(255,255,255,0.72)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  infoBubbleBody: {
+    marginTop: 5,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#34536A',
+    letterSpacing: 0,
   },
   settingsRuleSlider: {
     position: 'absolute',
@@ -2030,6 +3298,11 @@ const styles = StyleSheet.create({
   carouselCardImage: {
     borderRadius: 22,
   },
+  carouselCardImageFill: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   carouselCardImageEmbedded: {
     borderRadius: 0,
   },
@@ -2061,10 +3334,14 @@ const styles = StyleSheet.create({
   },
   carouselCardTitleWrapEmbedded: {
     top: '1.5%',
-    left: '10%',
-    right: '10%',
+    left: '6%',
+    right: '6%',
     minHeight: 46,
     justifyContent: 'center',
+  },
+  carouselCardTitleWrapEmbeddedWide: {
+    left: '-5%',
+    right: '-5%',
   },
   carouselCardTitle: {
     fontFamily: 'FredokaOne_400Regular',
@@ -2075,6 +3352,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.38)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 5,
+  },
+  carouselCardTitleNoWrap: {
+    width: '100%',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
   modalBackdrop: {
     flex: 1,
@@ -2087,6 +3369,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 20,
+  },
+  skinTutorialCoachLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
+  },
+  skinTutorialHand: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
   },
   carouselWrap: {
     width: '100%',

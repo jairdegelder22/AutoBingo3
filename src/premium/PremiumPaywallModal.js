@@ -1,11 +1,13 @@
-import { Alert, Animated, Image, ImageBackground, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Image, ImageBackground, Linking, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePremium } from './PremiumContext';
 import { hasPremiumEntitlement } from './revenueCatClient';
 import * as Haptics from '../settings/haptics';
-import { getResponsiveMetrics } from '../utils/responsive';
+import { getAssetPanelWidth } from '../utils/responsive';
 import WarmupImages from '../components/WarmupImages';
 import { PREMIUM_MODAL_ASSETS } from '../assets/preloadManifest';
+import { LEGAL_URLS } from '../legal/legalConfig';
+import { useTranslation } from '../i18n/useTranslation';
 
 const PREMIUM_MENU_IMAGE = require('../../assets/images/premium/premium-menu.png');
 const NO_ADS_IMAGE = require('../../assets/images/premium/benefits/no-ads-user.png');
@@ -16,6 +18,8 @@ const TAKE_PREMIUM_BUTTON_IMAGE = require('../../assets/images/premium/take-prem
 const TAKE_PREMIUM_BUTTON_PRESSED_IMAGE = require('../../assets/images/premium/take-premium-button-pressed.png');
 const RADIO_UNSELECTED_IMAGE = require('../../assets/images/premium/radio-unselected.png');
 const RADIO_SELECTED_IMAGE = require('../../assets/images/premium/radio-selected.png');
+const PREMIUM_SKIN_PLUS_BADGE_IMAGE = require('../../assets/images/premium/premium-skin-plus-badge.png');
+const PREMIUM_RACER_IMAGE = require('../../assets/images/players/player-premium-racer.png');
 
 const MENU_ASPECT_RATIO = 400 / 690;
 const BENEFITS = [
@@ -26,7 +30,7 @@ const BENEFITS = [
   },
   {
     key: 'themes',
-    label: 'Extra thema’s',
+    label: '5 extra thema’s',
     image: EXTRA_THEMES_IMAGE,
   },
   {
@@ -41,7 +45,7 @@ function formatPremiumPrice(priceString) {
     return null;
   }
 
-  return priceString.replace(/\$/g, '€');
+  return priceString;
 }
 
 function formatPackagePrice(packageOption, fallbackLabel) {
@@ -53,7 +57,7 @@ export default function PremiumPaywallModal({
   visible,
   onClose,
   onUnlocked,
-  title = 'Auto Bingo Premium',
+  title = 'AutoBingo Premium',
   message = 'Host lobby’s en speel alle premium thema’s vrij voor het hele gezin.',
 }) {
   const {
@@ -65,16 +69,17 @@ export default function PremiumPaywallModal({
     purchasePremiumPackage,
     restorePremiumPurchases,
   } = usePremium();
+  const { t } = useTranslation();
   const { width, height } = useWindowDimensions();
   const [selectedPackageKey, setSelectedPackageKey] = useState('lifetime');
   const [busyPackageId, setBusyPackageId] = useState(null);
+  const [purchaseStatus, setPurchaseStatus] = useState(null);
   const [ctaPressed, setCtaPressed] = useState(false);
+  const [menuImageReady, setMenuImageReady] = useState(false);
   const benefitPulseScales = useRef(BENEFITS.map(() => new Animated.Value(1))).current;
-  const { isTablet } = getResponsiveMetrics(width, height);
-
-  const menuWidth = isTablet
-    ? Math.min(width - 18, height * MENU_ASPECT_RATIO * 0.92, 560)
-    : Math.min(width - 6, height * MENU_ASPECT_RATIO * 0.9, 430);
+  const skinPlusPulse = useRef(new Animated.Value(1)).current;
+  const skinPlusTilt = useRef(new Animated.Value(0)).current;
+  const menuWidth = getAssetPanelWidth(width, height, MENU_ASPECT_RATIO, 430, 560);
   const menuHeight = menuWidth / MENU_ASPECT_RATIO;
   const menuScale = menuWidth / 400;
   const scaled = (value) => value * menuScale;
@@ -106,10 +111,16 @@ export default function PremiumPaywallModal({
 
   useEffect(() => {
     if (!visible) {
+      setMenuImageReady(false);
+      setPurchaseStatus(null);
       benefitPulseScales.forEach((pulseScale) => {
         pulseScale.stopAnimation();
         pulseScale.setValue(1);
       });
+      skinPlusPulse.stopAnimation();
+      skinPlusPulse.setValue(1);
+      skinPlusTilt.stopAnimation();
+      skinPlusTilt.setValue(0);
       return undefined;
     }
 
@@ -132,15 +143,59 @@ export default function PremiumPaywallModal({
     );
 
     pulseAnimation.start();
+    const skinPlusAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skinPlusPulse, {
+          toValue: 1.07,
+          duration: 720,
+          useNativeDriver: true,
+        }),
+        Animated.timing(skinPlusPulse, {
+          toValue: 1,
+          duration: 760,
+          useNativeDriver: true,
+        }),
+        Animated.delay(420),
+      ])
+    );
+
+    skinPlusAnimation.start();
+    const skinPlusTiltAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skinPlusTilt, {
+          toValue: 1,
+          duration: 880,
+          useNativeDriver: true,
+        }),
+        Animated.timing(skinPlusTilt, {
+          toValue: -1,
+          duration: 1120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(skinPlusTilt, {
+          toValue: 0,
+          duration: 680,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    skinPlusTiltAnimation.start();
 
     return () => {
       pulseAnimation.stop();
+      skinPlusAnimation.stop();
+      skinPlusTiltAnimation.stop();
       benefitPulseScales.forEach((pulseScale) => {
         pulseScale.stopAnimation();
         pulseScale.setValue(1);
       });
+      skinPlusPulse.stopAnimation();
+      skinPlusPulse.setValue(1);
+      skinPlusTilt.stopAnimation();
+      skinPlusTilt.setValue(0);
     };
-  }, [benefitPulseScales, visible]);
+  }, [benefitPulseScales, skinPlusPulse, skinPlusTilt, visible]);
 
   function showPurchaseMessage(messageToShow) {
     Alert.alert('Premium', messageToShow);
@@ -155,9 +210,11 @@ export default function PremiumPaywallModal({
     }
 
     setBusyPackageId(packageOption.key);
+    setPurchaseStatus('Apple betaling openen...');
 
     try {
       const result = await purchasePremiumPackage(packageOption.package);
+      setPurchaseStatus('Premium activeren...');
       const activePremium = hasPremiumEntitlement(result?.customerInfo);
 
       if (activePremium || isPremium) {
@@ -167,6 +224,7 @@ export default function PremiumPaywallModal({
 
       showPurchaseMessage('Aankoop verwerkt, maar premium is nog niet actief.');
     } catch (error) {
+      setPurchaseStatus(null);
       if (error?.userCancelled) {
         showPurchaseMessage('Aankoop geannuleerd.');
       } else {
@@ -174,6 +232,7 @@ export default function PremiumPaywallModal({
       }
     } finally {
       setBusyPackageId(null);
+      setPurchaseStatus(null);
     }
   }
 
@@ -183,9 +242,11 @@ export default function PremiumPaywallModal({
     }
 
     setBusyPackageId('restore');
+    setPurchaseStatus('Aankoop herstellen...');
 
     try {
       const info = await restorePremiumPurchases();
+      setPurchaseStatus('Premium activeren...');
       const activePremium = hasPremiumEntitlement(info);
 
       if (activePremium) {
@@ -196,9 +257,19 @@ export default function PremiumPaywallModal({
 
       showPurchaseMessage('Geen actieve premium aankoop gevonden.');
     } catch (_error) {
+      setPurchaseStatus(null);
       showPurchaseMessage('Herstellen lukt nu niet. Probeer het zo opnieuw.');
     } finally {
       setBusyPackageId(null);
+      setPurchaseStatus(null);
+    }
+  }
+
+  async function openLegalUrl(url) {
+    try {
+      await Linking.openURL(url);
+    } catch (_error) {
+      Alert.alert('Link openen lukt niet', 'Probeer het later opnieuw.');
     }
   }
 
@@ -216,8 +287,10 @@ export default function PremiumPaywallModal({
           source={PREMIUM_MENU_IMAGE}
           resizeMode="stretch"
           fadeDuration={0}
+          onLoadEnd={() => setMenuImageReady(true)}
           style={[
             styles.menu,
+            !menuImageReady && styles.menuHidden,
             {
               width: menuWidth,
               height: menuHeight,
@@ -225,6 +298,69 @@ export default function PremiumPaywallModal({
           ]}
           imageStyle={styles.menuImage}
         >
+          {menuImageReady ? (
+            <>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.skinPlusBadgeWrap,
+              {
+                top: scaled(512),
+                left: scaled(2),
+                width: scaled(112),
+                height: scaled(112),
+                transform: [
+                  { scale: skinPlusPulse },
+                  {
+                    rotate: skinPlusTilt.interpolate({
+                      inputRange: [-1, 0, 1],
+                      outputRange: ['7deg', '12deg', '17deg'],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <ImageBackground
+              source={PREMIUM_SKIN_PLUS_BADGE_IMAGE}
+              resizeMode="contain"
+              fadeDuration={0}
+              style={styles.skinPlusBadge}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+                style={[
+                  styles.skinPlusText,
+                  {
+                    top: scaled(31),
+                    left: scaled(27),
+                    right: scaled(27),
+                    fontSize: scaled(12),
+                    lineHeight: scaled(15),
+                  },
+                ]}
+              >
+                BONUS
+              </Text>
+              <Image
+                source={PREMIUM_RACER_IMAGE}
+                resizeMode="contain"
+                fadeDuration={0}
+                style={[
+                  styles.skinPlusCar,
+                  {
+                    left: scaled(31),
+                    top: scaled(49),
+                    width: scaled(54),
+                    height: scaled(42),
+                  },
+                ]}
+              />
+            </ImageBackground>
+          </Animated.View>
+
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Sluit Premium"
@@ -373,15 +509,50 @@ export default function PremiumPaywallModal({
             fadeDuration={0}
           />
 
+          {purchaseStatus ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.purchaseStatus,
+                {
+                  top: scaled(501),
+                  left: scaled(69),
+                  right: scaled(69),
+                  minHeight: scaled(28),
+                  borderRadius: scaled(14),
+                  gap: scaled(6),
+                  paddingHorizontal: scaled(10),
+                  paddingVertical: scaled(5),
+                },
+              ]}
+            >
+              <ActivityIndicator size="small" color="#7A3200" />
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={[
+                  styles.purchaseStatusText,
+                  {
+                    fontSize: scaled(11),
+                    lineHeight: scaled(14),
+                  },
+                ]}
+              >
+                {purchaseStatus}
+              </Text>
+            </View>
+          ) : null}
+
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Neem Premium"
+            accessibilityLabel={t('premiumModal.takePremium')}
             style={[
               styles.ctaButton,
               {
                 top: scaled(532),
-                left: scaled(96),
-                right: scaled(96),
+                left: scaled(56),
+                right: scaled(56),
                 height: scaled(76),
               },
             ]}
@@ -392,14 +563,29 @@ export default function PremiumPaywallModal({
               handlePurchase();
             }}
             disabled={!available || Boolean(busyPackageId) || !selectedPackage?.package}
-          />
+          >
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.62}
+              style={[
+                styles.ctaButtonText,
+                {
+                  fontSize: scaled(20),
+                  lineHeight: scaled(24),
+                },
+              ]}
+            >
+              {purchaseInProgress ? 'Even wachten...' : t('premiumModal.takePremium')}
+            </Text>
+          </Pressable>
 
           <Pressable
             accessibilityRole="button"
             style={({ pressed }) => [
               styles.restoreButton,
               {
-                top: scaled(620),
+                top: scaled(610),
                 left: scaled(106),
                 right: scaled(106),
                 paddingHorizontal: scaled(12),
@@ -414,6 +600,40 @@ export default function PremiumPaywallModal({
               {busyPackageId === 'restore' ? 'Laden...' : 'Aankoop herstellen'}
             </Text>
           </Pressable>
+
+          <View
+            style={[
+              styles.legalLinks,
+              {
+                top: scaled(636),
+                left: scaled(82),
+                right: scaled(82),
+                gap: scaled(8),
+              },
+            ]}
+          >
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                void openLegalUrl(LEGAL_URLS.terms);
+              }}
+              hitSlop={6}
+            >
+              <Text style={[styles.legalLinkText, { fontSize: scaled(8) }]}>Voorwaarden</Text>
+            </Pressable>
+            <Text style={[styles.legalLinkSeparator, { fontSize: scaled(8) }]}>•</Text>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                void openLegalUrl(LEGAL_URLS.privacy);
+              }}
+              hitSlop={6}
+            >
+              <Text style={[styles.legalLinkText, { fontSize: scaled(8) }]}>Privacybeleid</Text>
+            </Pressable>
+          </View>
+            </>
+          ) : null}
         </ImageBackground>
       </View>
     </Modal>
@@ -439,6 +659,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  menuHidden: {
+    opacity: 0,
+  },
   closeButton: {
     position: 'absolute',
     alignItems: 'center',
@@ -448,6 +671,30 @@ const styles = StyleSheet.create({
   closeImage: {
     width: '100%',
     height: '100%',
+  },
+  skinPlusBadgeWrap: {
+    position: 'absolute',
+    zIndex: 8,
+  },
+  skinPlusBadge: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+  },
+  skinPlusText: {
+    position: 'absolute',
+    color: '#7A3200',
+    fontFamily: 'FredokaOne_400Regular',
+    letterSpacing: 0,
+    textAlign: 'center',
+    textShadowColor: 'rgba(255, 247, 194, 0.95)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+    zIndex: 2,
+  },
+  skinPlusCar: {
+    position: 'absolute',
+    zIndex: 1,
   },
   benefits: {
     position: 'absolute',
@@ -552,10 +799,59 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 1,
   },
+  legalLinks: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legalLinkText: {
+    color: '#8C3A00',
+    fontFamily: 'FredokaOne_400Regular',
+    letterSpacing: 0,
+    textDecorationLine: 'underline',
+    textShadowColor: 'rgba(255, 238, 185, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  legalLinkSeparator: {
+    color: '#8C3A00',
+    fontFamily: 'FredokaOne_400Regular',
+  },
   ctaButton: {
     position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaButtonImage: {
     position: 'absolute',
+  },
+  purchaseStatus: {
+    position: 'absolute',
+    zIndex: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 239, 182, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(134, 59, 0, 0.18)',
+  },
+  purchaseStatusText: {
+    flexShrink: 1,
+    color: '#7A3200',
+    fontFamily: 'FredokaOne_400Regular',
+    letterSpacing: 0,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  ctaButtonText: {
+    color: '#FFE34A',
+    fontFamily: 'FredokaOne_400Regular',
+    letterSpacing: 0,
+    textAlign: 'center',
+    includeFontPadding: false,
+    textShadowColor: 'rgba(111, 47, 0, 0.82)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 2,
   },
 });

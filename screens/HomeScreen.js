@@ -1,7 +1,8 @@
-import { BackHandler, Animated, Easing, Image, ImageBackground, InteractionManager, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Alert, BackHandler, Animated, Easing, FlatList, Image, ImageBackground, InteractionManager, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Asset } from 'expo-asset';
+import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from '../src/settings/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
@@ -13,17 +14,25 @@ import ThemeCarousel from '../src/components/ThemeCarousel';
 import WarmupImages from '../src/components/WarmupImages';
 import { PLAYER_FUTURE_SKIN_IMAGE, PLAYER_HEX, PLAYER_IMAGES } from '../assets/images/players/playerImages';
 import { getThemeCardImage, getThemeDetailBackgroundImage, THEME_LOCK_OVERLAY_OVERVIEW_IMAGE } from '../assets/images/theme-cards/themeCardImages';
-import { createGameConfig, DEFAULT_ZICHTBAARHEID, SKIN_OPTIONS } from './gameFlowConfig';
+import { createGameConfig, createPlayer, DEFAULT_ZICHTBAARHEID, EQUIPPED_SKIN_STORAGE_KEY, SKIN_OPTIONS } from './gameFlowConfig';
 import { THEMES } from './themeCatalog';
 import { getThemeIcons } from './themeIcons';
 import { decodeLobbyCode, normalizeLobbyCode } from '../src/utils/lobbyCode';
 import { checkOnlineConnection, getLobbySnapshot } from '../src/services/liveLobbyService';
-import { submitBugReportToSupabase } from '../src/services/bugReportService';
 import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { usePremium } from '../src/premium/PremiumContext';
-import { getResponsiveMetrics } from '../src/utils/responsive';
+import { getDriverWarningMetrics, getResponsiveMetrics } from '../src/utils/responsive';
 import { preloadSoundEffect, playSoundEffect } from '../src/audio/soundEffects';
+import { recoverAudioPlaybackMode } from '../src/audio/audioSession';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
+import { useTranslation } from '../src/i18n/useTranslation';
+import {
+  getDefaultPlayerNameForLanguage,
+  getSkinChallengeDescription,
+  getSkinLabel,
+  getThemeLabel,
+  translate,
+} from '../src/i18n/languages';
 import {
   SKIN_CHALLENGES,
   getChallengeProgressValue,
@@ -32,15 +41,72 @@ import {
   loadSkinChallengeProgress,
 } from '../src/challenges/skinChallenges';
 import {
-  BUG_REPORT_MODAL_ASSETS,
+  PAID_SKIN_OPTIONS,
+  PAID_SKIN_PRODUCT_IDS,
+  FREE_EPIC_CHALLENGE_SKIN_OPTIONS,
+  PREMIUM_CHALLENGE_SKIN_OPTIONS,
+  PREMIUM_SKIN_OPTIONS,
+  STANDARD_CHALLENGE_SKIN_OPTIONS,
+  isPaidSkin,
+  isPremiumChallengeSkin,
+  isPremiumSkin,
+  isSkinAvailableForPlayer,
+} from '../src/skins/skinCatalog';
+import {
   HOME_ASSETS,
   HOME_CRITICAL_ASSETS,
   PREMIUM_MODAL_ASSETS,
+  getAssetKey,
   getThemeDetailAssets,
 } from '../src/assets/preloadManifest';
 import { preloadImageAssets } from '../src/assets/preloadImages';
 
 const PLAY_BUTTON_IMAGE = require('../assets/images/home-online-button.png');
+const STATE_ON_IMAGE = require('../assets/images/settings/toggles/state-on.png');
+const PLAY_BUTTON_CAR_IMAGES = {
+  rood: PLAY_BUTTON_IMAGE,
+  blauw: require('../assets/images/play-button-cars/play-car-blauw.png'),
+  groen: require('../assets/images/play-button-cars/play-car-groen.png'),
+  geel: require('../assets/images/play-button-cars/play-car-geel.png'),
+  oranje: require('../assets/images/play-button-cars/play-car-oranje.png'),
+  paars: require('../assets/images/play-button-cars/play-car-paars.png'),
+  roze: require('../assets/images/play-button-cars/play-car-roze.png'),
+  lichtblauw: require('../assets/images/play-button-cars/play-car-lichtblauw.png'),
+  zwart: require('../assets/images/play-button-cars/play-car-zwart.png'),
+  wit: require('../assets/images/play-button-cars/play-car-wit.png'),
+  regenboog: require('../assets/images/play-button-cars/play-car-regenboog.png'),
+  koe: require('../assets/images/play-button-cars/play-car-koe.png'),
+  kerst: require('../assets/images/play-button-cars/play-car-kerst.png'),
+  politie: require('../assets/images/play-button-cars/play-car-politie.png'),
+  ambulance: require('../assets/images/play-button-cars/play-car-ambulance.png'),
+  brandweer: require('../assets/images/play-button-cars/play-car-brandweer.png'),
+  brons: require('../assets/images/play-button-cars/play-car-brons.png'),
+  zilver: require('../assets/images/play-button-cars/play-car-zilver.png'),
+  goud: require('../assets/images/play-button-cars/play-car-goud.png'),
+  kat: require('../assets/images/play-button-cars/play-car-kat.png'),
+  hond: require('../assets/images/play-button-cars/play-car-hond.png'),
+  hartjes: require('../assets/images/play-button-cars/play-car-hartjes.png'),
+  taxi: require('../assets/images/play-button-cars/play-car-taxi.png'),
+  vlammen: require('../assets/images/play-button-cars/play-car-vlammen.png'),
+  premium_racer: require('../assets/images/play-button-cars/play-car-premium-racer.png'),
+  eend: require('../assets/images/play-button-cars/play-car-eend.png'),
+  sport_coupe: require('../assets/images/play-button-cars/play-car-sport-coupe.png'),
+  neon_nacht: require('../assets/images/play-button-cars/play-car-neon-nacht.png'),
+  maanrijder: require('../assets/images/play-button-cars/play-car-maanrijder.png'),
+  hot_rod: require('../assets/images/play-button-cars/play-car-hot-rod.png'),
+  monstertruck: require('../assets/images/play-button-cars/play-car-monstertruck.png'),
+  carbon_supercar: require('../assets/images/play-button-cars/play-car-carbon-supercar.png'),
+  ijsco_wagen: require('../assets/images/play-button-cars/play-car-ijsco-wagen.png'),
+  piraten_wagen: require('../assets/images/play-button-cars/play-car-piraten-wagen.png'),
+  safari_jeep: require('../assets/images/play-button-cars/play-car-safari-jeep.png'),
+  koninklijke_racer: require('../assets/images/play-button-cars/play-car-koninklijke-racer.png'),
+  klassieke_brandweer: require('../assets/images/play-button-cars/play-car-klassieke-brandweer.png'),
+  supercar_racer: require('../assets/images/play-button-cars/play-car-supercar-racer.png'),
+  locomotief: require('../assets/images/play-button-cars/play-car-locomotief.png'),
+  strand_buggy: require('../assets/images/play-button-cars/play-car-strand-buggy.png'),
+  sneeuwschuiver: require('../assets/images/play-button-cars/play-car-sneeuwschuiver.png'),
+  ridder: require('../assets/images/play-button-cars/play-car-ridder.png'),
+};
 const ONLINE_YELLOW_CAR = require('../assets/images/online-car-yellow.png');
 const ONLINE_BLUE_CAR = require('../assets/images/online-car-blue.png');
 const ONLINE_GREEN_CAR = require('../assets/images/online-car-green.png');
@@ -48,9 +114,6 @@ const HOST_LOCK_CHAINS_IMAGE = require('../assets/images/host-lock-chains.png');
 const HOST_LOCK_PADLOCK_IMAGE = require('../assets/images/host-lock-padlock.png');
 const JOIN_LICENSE_PLATE_IMAGE = require('../assets/images/license-plates/dutch-join-plate-cropped.png');
 const MAIN_MENU_PREMIUM_CROWN_IMAGE = require('../assets/images/premium/main-menu-premium-crown.png');
-const BUG_REPORT_BUTTON_IMAGE = require('../assets/images/ui/bug-report-button.png');
-const BUG_REPORT_MENU_IMAGE = require('../assets/images/ui/bug-report-menu.png');
-const BUG_REPORT_CLOSE_IMAGE = require('../assets/images/ui/bug-report-close.png');
 const PREMIUM_MENU_IMAGE = require('../assets/images/premium/premium-menu.png');
 const PREMIUM_NO_ADS_IMAGE = require('../assets/images/premium/benefits/no-ads-user.png');
 const PREMIUM_EXTRA_THEMES_IMAGE = require('../assets/images/premium/benefits/extra-themes-user.png');
@@ -65,6 +128,9 @@ const DRIVER_WARNING_ICON_IMAGE = require('../assets/images/ui/driver-warning-ic
 const SKIN_ROAD_BACKGROUND = require('../assets/images/backgrounds/skin-road-background.png');
 const THEME_ROAD_BACKGROUND = require('../assets/images/backgrounds/theme-road-scroll-background-v4.png');
 const CHALLENGE_SKIN_LOCK_IMAGE = require('../assets/images/players/challenge-skin-lock.png');
+const PREMIUM_SKIN_LOCK_IMAGE = require('../assets/images/host-lock-padlock.png');
+const CHALLENGE_SKIN_LOCK_OPEN_IMAGE = require('../assets/images/players/challenge-skin-lock-swing-open.png');
+const CHALLENGE_UNLOCK_STAR_IMAGE = require('../assets/images/players/challenge-unlock-star-blue.png');
 const NAV_ICON_IMAGES = {
   palette: {
     selected: require('../assets/images/nav-icons/nav-palette.png'),
@@ -79,6 +145,10 @@ const NAV_ICON_IMAGES = {
     unselected: require('../assets/images/nav-icons/nav-cards.png'),
   },
 };
+const THEME_DETAIL_ROUTE_ASSETS = [
+  require('../assets/images/navigation/back-button.png'),
+  require('../assets/images/navigation/back-button-pressed.png'),
+];
 const SKIN_ROAD_IMAGE_RATIO = 1920 / 819;
 const SKIN_ROAD_REPEAT_COUNT = 2;
 const SKIN_ROAD_ZOOM = 1.28;
@@ -92,31 +162,925 @@ const HOME_ACTION_COLLAPSED_HEIGHT = 122;
 const HOME_ACTION_EXPANDED_HEIGHT = 236;
 const ONLINE_CAR_HORN_JUMP_DELAYS = [0, 295, 465];
 const PRESS_THEN_HORN_DELAY_MS = 300;
-const PLAY_HORN_JUMP_DELAYS = [60, 420];
 const GLOSSY_BUTTON_CLICK_SOUND = 'glossyButtonClick';
 const NAV_TAB_SWITCH_SOUND = 'navTabSwitchClick';
 const NAV_TAB_SWITCH_VOLUME_MULTIPLIER = 0.65;
 const SETTINGS_GEAR_SOUND = 'settingsGearClick';
 const ONLINE_CARS_HORN_SOUND = 'onlineHornMode';
 const PLAY_HORN_SOUND = 'playHornHonk';
-const BUG_REPORT_STORAGE_KEY = 'autoBingo.pendingBugReports';
-const BUG_REPORT_APP_VERSION = '1.0.0';
-const BUG_REPORT_SEVERITIES = [
-  { value: 'low', label: 'Klein' },
-  { value: 'medium', label: 'Vervelend' },
-  { value: 'high', label: 'Blokkeert' },
+const PLAY_CAR_DEFAULT_FEEDBACK = {
+  kind: 'classicHornJump',
+  soundName: PLAY_HORN_SOUND,
+  duration: 506,
+  keyframes: [0, 0.115, 0.217, 0.407, 0.593, 0.708, 0.81, 1],
+  translateX: [0, 0, 0, 0, 0, 0, 0, 0],
+  translateY: [0, -13, 2, 0, 0, -10, 2, 0],
+  rotate: ['0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg'],
+  scale: [1, 1, 1, 1, 1, 1, 1, 1],
+  hapticDelays: [0, 300],
+};
+
+const roundFeedbackValue = (value, decimals = 3) => {
+  const multiplier = 10 ** decimals;
+  return Math.round(value * multiplier) / multiplier;
+};
+
+const clampFeedbackTime = (time, duration) => Math.min(duration, Math.max(0, Math.round(time)));
+const clampFeedbackValue = (value, min, max) => Math.max(min, Math.min(max, value));
+const easeOutFeedback = (value) => 1 - (1 - clampFeedbackValue(value, 0, 1)) ** 3;
+const easeInOutFeedback = (value) => {
+  const clampedValue = clampFeedbackValue(value, 0, 1);
+  return clampedValue < 0.5
+    ? 2 * clampedValue * clampedValue
+    : 1 - ((-2 * clampedValue + 2) ** 2) / 2;
+};
+const getFeedbackEnvelope = (phase, decay) => {
+  const attack = 0.16;
+  const attackValue = phase < attack ? easeOutFeedback(phase / attack) : 1;
+  const decayValue = (1 - phase) ** (0.35 + decay * 1.8);
+  return attackValue * decayValue;
+};
+
+const getJumpOffsetAtTime = (event, time) => {
+  const local = time - event.at;
+
+  if (local < 0 || local > event.duration) {
+    return 0;
+  }
+
+  const phase = clampFeedbackValue(local / Math.max(1, event.duration), 0, 1);
+  const upEnd = event.upMs / event.duration;
+  const downEnd = (event.upMs + event.downMs) / event.duration;
+
+  if (phase <= upEnd) {
+    return -event.height * easeOutFeedback(phase / Math.max(0.001, upEnd));
+  }
+
+  if (phase <= downEnd) {
+    const progress = (phase - upEnd) / Math.max(0.001, downEnd - upEnd);
+    return -event.height + (event.height + event.overshoot) * easeInOutFeedback(progress);
+  }
+
+  const progress = (phase - downEnd) / Math.max(0.001, 1 - downEnd);
+  return event.overshoot * (1 - easeOutFeedback(progress));
+};
+
+const getPulseScaleAtTime = (event, time) => {
+  const local = time - event.at;
+
+  if (local < 0 || local > event.duration) {
+    return 1;
+  }
+
+  const phase = clampFeedbackValue(local / Math.max(1, event.duration), 0, 1);
+  const envelope = getFeedbackEnvelope(phase, event.decay ?? 0.65);
+  return 1 + ((event.scale ?? 1) - 1) * envelope;
+};
+
+const getShakeRotationAtTime = (event, time) => {
+  const local = time - event.at;
+
+  if (local < 0 || local > event.duration) {
+    return 0;
+  }
+
+  const phase = clampFeedbackValue(local / Math.max(1, event.duration), 0, 1);
+  const envelope = getFeedbackEnvelope(phase, event.decay ?? 0.55);
+  return Math.sin(phase * Math.PI * 2 * Math.max(0.5, event.hits || 1)) * event.degrees * envelope;
+};
+
+const addFeedbackTimelinePoints = (points, duration, event) => {
+  points.add(clampFeedbackTime(event.at, duration));
+  points.add(clampFeedbackTime(event.at + event.duration, duration));
+
+  if (event.type === 'jump') {
+    [
+      event.at + event.upMs,
+      event.at + event.upMs + event.downMs,
+    ].forEach((time) => points.add(clampFeedbackTime(time, duration)));
+    return;
+  }
+
+  const segments = Math.max(4, Math.ceil((event.hits || 2) * 4));
+  for (let index = 1; index < segments; index += 1) {
+    points.add(clampFeedbackTime(event.at + event.duration * (index / segments), duration));
+  }
+};
+
+const createTunedPlayCarFeedback = ({ soundName, durationMs, events }) => {
+  const duration = durationMs;
+  const points = new Set([0, duration]);
+
+  events.forEach((event) => addFeedbackTimelinePoints(points, duration, event));
+
+  const times = Array.from(points)
+    .filter((time) => time >= 0 && time <= duration)
+    .sort((a, b) => a - b);
+  const keyframes = times.map((time) => roundFeedbackValue(time / duration));
+
+  return {
+    kind: 'linearTimeline',
+    soundName,
+    duration,
+    keyframes,
+    translateX: keyframes.map(() => 0),
+    translateY: times.map((time) => Math.round(events.reduce((sum, event) => (
+      event.type === 'jump' ? sum + getJumpOffsetAtTime(event, time) : sum
+    ), 0))),
+    rotate: times.map((time) => `${roundFeedbackValue(events.reduce((sum, event) => (
+      event.type === 'shake' ? sum + getShakeRotationAtTime(event, time) : sum
+    ), 0), 1)}deg`),
+    scale: times.map((time) => roundFeedbackValue(events.reduce((scale, event) => (
+      event.type === 'pulse' ? scale + (getPulseScaleAtTime(event, time) - 1) : scale
+    ), 1))),
+    timelineSteps: times.slice(1).map((time, index) => ({
+      at: times[index],
+      toValue: keyframes[index + 1],
+      duration: Math.max(1, time - times[index]),
+    })),
+    hapticDelays: Array.from(new Set(events
+      .filter((event) => event.type === 'jump')
+      .map((event) => clampFeedbackTime(event.at, duration))))
+      .sort((a, b) => a - b),
+  };
+};
+
+const PLAY_CAR_FEEDBACK_PRESETS = {
+  softHorn: {
+    soundName: 'skinHorn2',
+    duration: 720,
+    keyframes: [0, 0.18, 0.3, 0.49, 0.63, 0.82, 1],
+    translateX: [0, -2, 2, -3, 2, -1, 0],
+    translateY: [0, -4, 1, -11, 2, -5, 0],
+    rotate: ['0deg', '-2deg', '2deg', '-3deg', '2deg', '-1deg', '0deg'],
+    scale: [1, 1.012, 1, 1.035, 0.992, 1.01, 1],
+    hapticDelays: [140, 350, 455],
+  },
+  brightHorn: {
+    soundName: 'skinHorn3',
+    duration: 650,
+    keyframes: [0, 0.08, 0.28, 0.43, 0.6, 0.78, 1],
+    translateX: [0, 3, -1, -4, 3, -1, 0],
+    translateY: [0, -8, 1, -14, 2, -5, 0],
+    rotate: ['0deg', '3deg', '-1deg', '-5deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.03, 0.995, 1.045, 0.99, 1.01, 1],
+    hapticDelays: [0, 280],
+  },
+  siren: {
+    soundName: 'skinPolice',
+    duration: 760,
+    keyframes: [0, 0.05, 0.2, 0.46, 0.58, 0.65, 0.82, 1],
+    translateX: [0, -4, 3, -5, 4, -3, 1, 0],
+    translateY: [0, -12, 1, -15, 2, -9, 0, 0],
+    rotate: ['0deg', '-5deg', '2deg', '5deg', '-4deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.04, 0.995, 1.045, 0.992, 1.025, 1, 1],
+    hapticDelays: [35, 350, 490],
+  },
+  ambulanceBeatTilt: {
+    kind: 'snapTimeline',
+    soundName: 'skinAmbulance',
+    duration: 1675,
+    keyframes: [0, 0.024, 0.059, 0.223, 0.247, 0.411, 0.435, 0.621, 0.645, 1],
+    translateX: [0, 1, 0, -1, 0, 1, 0, -1, 0, 0],
+    translateY: [0, -1, 0, -1, 0, -1, 0, -1, 0, 0],
+    rotate: ['0deg', '9deg', '1deg', '-9deg', '-1deg', '9deg', '1deg', '-9deg', '-1deg', '0deg'],
+    scale: [1, 1.045, 1.006, 1.045, 1.006, 1.045, 1.006, 1.045, 1.006, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.024, duration: 40 },
+      { at: 40, toValue: 0.059, duration: 58 },
+      { at: 333, toValue: 0.223, duration: 40 },
+      { at: 373, toValue: 0.247, duration: 58 },
+      { at: 649, toValue: 0.411, duration: 40 },
+      { at: 689, toValue: 0.435, duration: 58 },
+      { at: 1000, toValue: 0.621, duration: 40 },
+      { at: 1040, toValue: 0.645, duration: 58 },
+      { at: 1495, toValue: 1, duration: 180 },
+    ],
+    hapticDelays: [0, 373, 689, 1040],
+  },
+  fastTaxiJump: {
+    kind: 'snapTimeline',
+    soundName: 'skinTaxi',
+    duration: 380,
+    keyframes: [0, 0.12, 0.23, 0.36, 0.48, 0.59, 0.72, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -14, 2, 0, -11, 2, 0, 0],
+    rotate: ['0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg'],
+    scale: [1, 1, 1, 1, 1, 1, 1, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.12, duration: 38 },
+      { at: 38, toValue: 0.23, duration: 38 },
+      { at: 76, toValue: 0.36, duration: 44 },
+      { at: 170, toValue: 0.48, duration: 38 },
+      { at: 208, toValue: 0.59, duration: 38 },
+      { at: 246, toValue: 0.72, duration: 44 },
+      { at: 300, toValue: 1, duration: 70 },
+    ],
+    hapticDelays: [0, 170],
+  },
+  instantRainbowJump: {
+    kind: 'snapTimeline',
+    soundName: 'skinRainbow',
+    duration: 520,
+    keyframes: [0, 0.12, 0.24, 0.36, 0.5, 0.62, 0.76, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -14, 2, 0, -11, 2, 0, 0],
+    rotate: ['0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg', '0deg'],
+    scale: [1, 1, 1, 1, 1, 1, 1, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.12, duration: 18 },
+      { at: 18, toValue: 0.24, duration: 54 },
+      { at: 72, toValue: 0.36, duration: 78 },
+      { at: 250, toValue: 0.5, duration: 42 },
+      { at: 292, toValue: 0.62, duration: 54 },
+      { at: 346, toValue: 0.76, duration: 78 },
+      { at: 424, toValue: 1, duration: 88 },
+    ],
+    hapticDelays: [0, 250],
+  },
+  loveHopTilt: {
+    kind: 'snapTimeline',
+    soundName: 'skinLove',
+    duration: 980,
+    keyframes: [0, 0.08, 0.16, 0.24, 0.32, 0.4, 0.48, 0.58, 0.68, 0.78, 0.88, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -14, 2, 0, -11, 2, 0, -2, -1, -2, -1, 0],
+    rotate: ['0deg', '0deg', '0deg', '0deg', '-2deg', '2deg', '-1deg', '-3deg', '3deg', '-1.6deg', '1deg', '0deg'],
+    scale: [1, 1, 1, 1, 1.012, 1.024, 1.01, 1.026, 1.016, 1.012, 1.005, 1],
+    timelineSteps: [
+      { at: 0, toValue: 0.08, duration: 38 },
+      { at: 38, toValue: 0.16, duration: 38 },
+      { at: 76, toValue: 0.24, duration: 44 },
+      { at: 150, toValue: 0.32, duration: 38 },
+      { at: 188, toValue: 0.4, duration: 38 },
+      { at: 226, toValue: 0.48, duration: 44 },
+      { at: 292, toValue: 0.58, duration: 78 },
+      { at: 410, toValue: 0.68, duration: 86 },
+      { at: 548, toValue: 0.78, duration: 104 },
+      { at: 704, toValue: 0.88, duration: 128 },
+      { at: 860, toValue: 1, duration: 120 },
+    ],
+    hapticDelays: [0, 170, 430],
+  },
+  heavyRumble: {
+    soundName: 'skinMonstertruck',
+    duration: 1260,
+    keyframes: [0, 0.11, 0.21, 0.44, 0.53, 0.78, 0.87, 1],
+    translateX: [0, -1, 1, -1, 1, -1, 0, 0],
+    translateY: [0, -3, 1, -3, 1, -2, 0, 0],
+    rotate: ['0deg', '-7deg', '6deg', '-6deg', '5deg', '-4deg', '2deg', '0deg'],
+    scale: [1, 1.07, 0.98, 1.06, 0.985, 1.04, 1.005, 1],
+    hapticDelays: [140, 560, 980],
+  },
+  longRumble: {
+    soundName: 'skinSupercar',
+    duration: 1700,
+    keyframes: [0, 0.06, 0.14, 0.23, 0.34, 0.48, 0.64, 0.82, 1],
+    translateX: [0, -1, 1, -1, 1, 0, 0, 0, 0],
+    translateY: [0, -2, 1, -2, 1, -1, 0, 0, 0],
+    rotate: ['0deg', '-6deg', '5deg', '-4deg', '3deg', '-2deg', '1deg', '-0.5deg', '0deg'],
+    scale: [1, 1.06, 0.985, 1.045, 0.995, 1.025, 1.012, 1.004, 1],
+    hapticDelays: [105, 245, 385, 760],
+  },
+  playfulWobble: {
+    soundName: 'skinIceCream',
+    duration: 1500,
+    keyframes: [0, 0.05, 0.19, 0.28, 0.35, 0.56, 0.76, 0.96, 1],
+    translateX: [0, -2, 3, -4, 3, -2, 2, -1, 0],
+    translateY: [0, -6, -2, -12, 2, -7, -3, -4, 0],
+    rotate: ['0deg', '-4deg', '3deg', '-5deg', '4deg', '-3deg', '2deg', '-1deg', '0deg'],
+    scale: [1, 1.02, 1.01, 1.04, 0.995, 1.022, 1.005, 1.01, 1],
+    hapticDelays: [70, 280, 420, 840],
+  },
+  animalShake: {
+    soundName: 'skinCow',
+    duration: 2200,
+    keyframes: [0, 0.16, 0.29, 0.41, 0.53, 0.67, 0.74, 0.9, 1],
+    translateX: [0, -1, 2, -5, 5, -4, 4, -1, 0],
+    translateY: [0, -1, 0, -5, -2, -6, 0, -2, 0],
+    rotate: ['0deg', '-1deg', '2deg', '-6deg', '6deg', '-4deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.004, 1.008, 1.025, 1.014, 1.028, 1.006, 1.004, 1],
+    hapticDelays: [910, 1155, 1470, 1610],
+  },
+  cowMooTiltBuild: {
+    soundName: 'skinCow',
+    duration: 2300,
+    keyframes: [0, 0.18, 0.3, 0.4, 0.5, 0.63, 0.7, 0.82, 0.93, 1],
+    translateX: [0, -1, 1, -1, 1, -1, 1, 0, 0, 0],
+    translateY: [0, -1, 0, -1, 0, -3, 1, -2, 0, 0],
+    rotate: ['0deg', '-2deg', '2deg', '-3deg', '3deg', '-7deg', '7deg', '-4deg', '2deg', '0deg'],
+    scale: [1, 1.006, 1.004, 1.012, 1.01, 1.045, 0.99, 1.025, 1.006, 1],
+    hapticDelays: [910, 1155, 1470, 1610],
+  },
+  trainChug: {
+    soundName: 'skinTrain',
+    duration: 1220,
+    keyframes: [0, 0.09, 0.24, 0.46, 0.55, 0.66, 0.77, 0.88, 1],
+    translateX: [0, -3, 2, -5, 5, -4, 4, -2, 0],
+    translateY: [0, -7, 1, -9, 2, -8, 1, -5, 0],
+    rotate: ['0deg', '-2deg', '1deg', '-3deg', '3deg', '-2deg', '2deg', '-1deg', '0deg'],
+    scale: [1, 1.032, 0.997, 1.042, 0.99, 1.035, 0.995, 1.015, 1],
+    hapticDelays: [105, 560, 805, 945],
+  },
+  revDecay: {
+    soundName: 'skinSupercar',
+    duration: 1850,
+    keyframes: [0, 0.04, 0.09, 0.14, 0.21, 0.32, 0.48, 0.68, 0.86, 1],
+    translateX: [0, -1, 1, -1, 1, -1, 0, 0, 0, 0],
+    translateY: [0, -2, 1, -2, 1, -1, 0, 0, 0, 0],
+    rotate: ['0deg', '-7deg', '6deg', '-5deg', '4deg', '-3deg', '2deg', '-1deg', '0.5deg', '0deg'],
+    scale: [1, 1.07, 0.985, 1.055, 0.992, 1.035, 1.018, 1.008, 1.002, 1],
+    hapticDelays: [90, 210, 350, 620],
+  },
+  flamesDoubleRev: {
+    soundName: 'skinFlames',
+    duration: 1500,
+    keyframes: [0, 0.08, 0.16, 0.27, 0.38, 0.48, 0.6, 0.74, 0.88, 1],
+    translateX: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -1, 0, -1, -2, 1, -1, 0, 0, 0],
+    rotate: ['0deg', '-4deg', '3deg', '-2deg', '-8deg', '7deg', '-4deg', '2deg', '-0.8deg', '0deg'],
+    scale: [1, 1.035, 0.997, 1.012, 1.085, 0.985, 1.045, 1.022, 1.008, 1],
+    hapticDelays: [115, 570, 760],
+  },
+  lateRevKick: {
+    soundName: 'skinHotRod',
+    duration: 1550,
+    keyframes: [0, 0.27, 0.34, 0.5, 0.63, 0.72, 0.86, 1],
+    translateX: [0, 0, 1, -1, -1, 1, 0, 0],
+    translateY: [0, -1, 0, -2, -4, 1, -1, 0],
+    rotate: ['0deg', '-1deg', '2deg', '-3deg', '-8deg', '6deg', '-2deg', '0deg'],
+    scale: [1, 1.012, 1.002, 1.025, 1.075, 0.985, 1.012, 1],
+    hapticDelays: [525, 770, 980],
+  },
+  delayedHop: {
+    soundName: 'skinSneeuwschuiver',
+    duration: 1050,
+    keyframes: [0, 0.08, 0.27, 0.48, 0.63, 0.73, 0.88, 1],
+    translateX: [0, -1, 1, -3, -5, 4, -1, 0],
+    translateY: [0, -2, -1, -4, -13, 2, -4, 0],
+    rotate: ['0deg', '-1deg', '1deg', '-2deg', '-4deg', '3deg', '-1deg', '0deg'],
+    scale: [1, 1.006, 1, 1.012, 1.04, 0.992, 1.01, 1],
+    hapticDelays: [70, 280, 665],
+  },
+  knightTiltTripleHop: {
+    soundName: 'skinRidder',
+    duration: 1320,
+    keyframes: [0, 0.08, 0.16, 0.25, 0.34, 0.45, 0.54, 0.66, 0.75, 0.88, 1],
+    translateX: [0, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+    translateY: [0, -1, 0, 0, -7, 1, -6, 1, -5, 1, 0],
+    rotate: ['0deg', '-5deg', '4deg', '0deg', '-1deg', '1deg', '-1deg', '1deg', '-1deg', '0.5deg', '0deg'],
+    scale: [1, 1.018, 1.004, 1, 1.025, 0.997, 1.02, 0.998, 1.016, 1, 1],
+    hapticDelays: [105, 450, 710, 990],
+  },
+};
+const TUNED_STANDARD_JUMPS = [
+  {
+    id: 'j1',
+    type: 'jump',
+    at: 0,
+    duration: 206,
+    height: 13,
+    upMs: 58,
+    downMs: 52,
+    settleMs: 96,
+    overshoot: 2,
+  },
+  {
+    id: 'j2',
+    type: 'jump',
+    at: 300,
+    duration: 206,
+    height: 10,
+    upMs: 58,
+    downMs: 52,
+    settleMs: 96,
+    overshoot: 2,
+  },
 ];
-const DRIVER_WARNING_ICON_WIDTH_RATIO = 0.532;
-const DRIVER_WARNING_ICON_MAX_SIZE = 224;
+const TUNED_FAST_DOUBLE_JUMPS = [
+  {
+    id: 'j1',
+    type: 'jump',
+    at: 0,
+    duration: 150,
+    height: 14,
+    upMs: 18,
+    downMs: 54,
+    settleMs: 78,
+    overshoot: 2,
+  },
+  {
+    id: 'j2',
+    type: 'jump',
+    at: 250,
+    duration: 170,
+    height: 11,
+    upMs: 42,
+    downMs: 54,
+    settleMs: 74,
+    overshoot: 2,
+  },
+];
+const TUNED_SOFT_TILT_AFTER_JUMPS = [
+  {
+    id: 's1',
+    type: 'shake',
+    at: 570,
+    duration: 690,
+    degrees: 3,
+    hits: 3,
+    decay: 0.8,
+  },
+  {
+    id: 'p1',
+    type: 'pulse',
+    at: 570,
+    duration: 690,
+    scale: 1.026,
+    decay: 0.78,
+  },
+];
+const TUNED_PREMIUM_REV_EVENTS = [
+  {
+    id: 's1',
+    type: 'shake',
+    at: 0,
+    duration: 700,
+    degrees: 7,
+    hits: 5,
+    decay: 0.48,
+  },
+  {
+    id: 'p1',
+    type: 'pulse',
+    at: 0,
+    duration: 860,
+    scale: 1.07,
+    decay: 0.55,
+  },
+  {
+    id: 'p2',
+    type: 'pulse',
+    at: 860,
+    duration: 780,
+    scale: 1.018,
+    decay: 0.9,
+  },
+];
+const TUNED_SUPERCAR_REV_EVENTS = [
+  {
+    id: 's1',
+    type: 'shake',
+    at: 0,
+    duration: 360,
+    degrees: 4,
+    hits: 2,
+    decay: 0.35,
+  },
+  {
+    id: 'p1',
+    type: 'pulse',
+    at: 0,
+    duration: 360,
+    scale: 1.035,
+    decay: 0.35,
+  },
+  {
+    id: 's2',
+    type: 'shake',
+    at: 460,
+    duration: 760,
+    degrees: 8,
+    hits: 3,
+    decay: 0.72,
+  },
+  {
+    id: 'p2',
+    type: 'pulse',
+    at: 460,
+    duration: 880,
+    scale: 1.085,
+    decay: 0.78,
+  },
+];
+const PLAY_CAR_TUNED_FEEDBACK_PRESETS = {
+  regenboog: createTunedPlayCarFeedback({
+    soundName: 'skinRainbow',
+    durationMs: 1740,
+    events: [
+      ...TUNED_FAST_DOUBLE_JUMPS,
+      {
+        id: 'shake_mqsbqo',
+        type: 'shake',
+        at: 580,
+        duration: 700,
+        degrees: 2.5,
+        hits: 2,
+        decay: 0.63,
+      },
+    ],
+  }),
+  eend: createTunedPlayCarFeedback({
+    soundName: 'skinHorn2',
+    durationMs: 1120,
+    events: TUNED_STANDARD_JUMPS,
+  }),
+  koninklijkeRacer: createTunedPlayCarFeedback({
+    soundName: 'skinOldSupercar',
+    durationMs: 1850,
+    events: TUNED_PREMIUM_REV_EVENTS,
+  }),
+  kerst: createTunedPlayCarFeedback({
+    soundName: 'skinKerst',
+    durationMs: 1540,
+    events: [
+      ...TUNED_STANDARD_JUMPS,
+      {
+        id: 'pulse_vyzma8',
+        type: 'pulse',
+        at: 600,
+        duration: 320,
+        scale: 1.04,
+        decay: 0.65,
+      },
+      {
+        id: 'shake_67a7nl',
+        type: 'shake',
+        at: 510,
+        duration: 500,
+        degrees: 5,
+        hits: 2,
+        decay: 0.55,
+      },
+    ],
+  }),
+  neonNacht: createTunedPlayCarFeedback({
+    soundName: 'skinNeonCar',
+    durationMs: 1850,
+    events: TUNED_PREMIUM_REV_EVENTS,
+  }),
+  premiumRacer: createTunedPlayCarFeedback({
+    soundName: 'skinSupercar',
+    durationMs: 2390,
+    events: [
+      {
+        id: 's1',
+        type: 'shake',
+        at: 0,
+        duration: 890,
+        degrees: 7,
+        hits: 6,
+        decay: 0.48,
+      },
+      {
+        id: 'p1',
+        type: 'pulse',
+        at: 0,
+        duration: 950,
+        scale: 1.07,
+        decay: 0.55,
+      },
+      {
+        id: 'pulse_hhz2bp',
+        type: 'pulse',
+        at: 730,
+        duration: 500,
+        scale: 1.04,
+        decay: 0.65,
+      },
+    ],
+  }),
+  maanrijder: createTunedPlayCarFeedback({
+    soundName: 'skinMaanrijder',
+    durationMs: 1890,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 240,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      ...TUNED_SOFT_TILT_AFTER_JUMPS,
+    ],
+  }),
+  monstertruck: createTunedPlayCarFeedback({
+    soundName: 'skinMonstertruck',
+    durationMs: 2080,
+    events: [
+      TUNED_STANDARD_JUMPS[0],
+      {
+        id: 'jump_13qmza',
+        type: 'jump',
+        at: 360,
+        duration: 190,
+        height: 13,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 90,
+        overshoot: 2,
+      },
+      {
+        id: 'jump_wa7hdr',
+        type: 'jump',
+        at: 800,
+        duration: 190,
+        height: 15,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 90,
+        overshoot: 2,
+      },
+      {
+        id: 'shake_4xgrct',
+        type: 'shake',
+        at: 10,
+        duration: 240,
+        degrees: 5,
+        hits: 2,
+        decay: 0.55,
+      },
+      {
+        id: 'shake_g0jiu8',
+        type: 'shake',
+        at: 370,
+        duration: 210,
+        degrees: 5,
+        hits: 2,
+        decay: 0.55,
+      },
+      {
+        id: 'shake_j9tax9',
+        type: 'shake',
+        at: 910,
+        duration: 400,
+        degrees: 7,
+        hits: 4,
+        decay: 0.99,
+      },
+    ],
+  }),
+  ijscoWagen: createTunedPlayCarFeedback({
+    soundName: 'skinIceCream',
+    durationMs: 2030,
+    events: [
+      {
+        ...TUNED_STANDARD_JUMPS[0],
+        at: 1500,
+      },
+      {
+        id: 'shake_oev7op',
+        type: 'shake',
+        at: 0,
+        duration: 1700,
+        degrees: 6,
+        hits: 7,
+        decay: 0.38,
+      },
+    ],
+  }),
+  piraat: createTunedPlayCarFeedback({
+    soundName: 'skinPirate',
+    durationMs: 1790,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 200,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[0],
+        at: 590,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[1],
+        at: 590,
+      },
+    ],
+  }),
+  safariJeep: createTunedPlayCarFeedback({
+    soundName: 'skinSafari',
+    durationMs: 2520,
+    events: [
+      {
+        ...TUNED_STANDARD_JUMPS[1],
+        at: 1190,
+        height: 15,
+      },
+      {
+        id: 'shake_cwfcu4',
+        type: 'shake',
+        at: 0,
+        duration: 500,
+        degrees: 5,
+        hits: 7,
+        decay: 1,
+      },
+      {
+        id: 'pulse_7b1k50',
+        type: 'pulse',
+        at: 0,
+        duration: 500,
+        scale: 1.04,
+        decay: 0.65,
+      },
+    ],
+  }),
+  strandBuggy: createTunedPlayCarFeedback({
+    soundName: 'skinBeach',
+    durationMs: 2040,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 150,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[0],
+        at: 450,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[1],
+        at: 450,
+      },
+    ],
+  }),
+  sneeuwschuiver: createTunedPlayCarFeedback({
+    soundName: 'skinSneeuwschuiver',
+    durationMs: 1580,
+    events: [
+      TUNED_FAST_DOUBLE_JUMPS[0],
+      {
+        ...TUNED_FAST_DOUBLE_JUMPS[1],
+        at: 150,
+        upMs: 38,
+        downMs: 38,
+        settleMs: 94,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[0],
+        at: 530,
+        degrees: 6,
+      },
+      {
+        ...TUNED_SOFT_TILT_AFTER_JUMPS[1],
+        at: 530,
+        scale: 1.04,
+      },
+    ],
+  }),
+  ridder: createTunedPlayCarFeedback({
+    soundName: 'skinRidder',
+    durationMs: 2570,
+    events: [
+      {
+        id: 's1',
+        type: 'shake',
+        at: 0,
+        duration: 330,
+        degrees: 5,
+        hits: 1,
+        decay: 0.4,
+      },
+      {
+        id: 'j1',
+        type: 'jump',
+        at: 430,
+        duration: 160,
+        height: 12,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 60,
+        overshoot: 1,
+      },
+      {
+        id: 'j2',
+        type: 'jump',
+        at: 690,
+        duration: 160,
+        height: 6,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 60,
+        overshoot: 1,
+      },
+      {
+        id: 'j3',
+        type: 'jump',
+        at: 960,
+        duration: 160,
+        height: 5,
+        upMs: 45,
+        downMs: 55,
+        settleMs: 60,
+        overshoot: 1,
+      },
+      {
+        id: 'pulse_vitdto',
+        type: 'pulse',
+        at: 0,
+        duration: 330,
+        scale: 1.04,
+        decay: 0.65,
+      },
+    ],
+  }),
+  supercarRacer: createTunedPlayCarFeedback({
+    soundName: 'skinSupercar2',
+    durationMs: 1850,
+    events: TUNED_SUPERCAR_REV_EVENTS,
+  }),
+  carbonSupercar: createTunedPlayCarFeedback({
+    soundName: 'skinSupercar',
+    durationMs: 2630,
+    events: [
+      {
+        id: 's1',
+        type: 'shake',
+        at: 0,
+        duration: 700,
+        degrees: 10,
+        hits: 5,
+        decay: 0.92,
+      },
+      {
+        id: 'p1',
+        type: 'pulse',
+        at: 0,
+        duration: 860,
+        scale: 1.07,
+        decay: 0.55,
+      },
+      {
+        id: 'p2',
+        type: 'pulse',
+        at: 1030,
+        duration: 780,
+        scale: 1.018,
+        decay: 0.9,
+      },
+      {
+        id: 'shake_9eykyc',
+        type: 'shake',
+        at: 1090,
+        duration: 900,
+        degrees: 5,
+        hits: 2.5,
+        decay: 0.55,
+      },
+    ],
+  }),
+};
+const PLAY_CAR_SKIN_FEEDBACK = {
+  regenboog: PLAY_CAR_TUNED_FEEDBACK_PRESETS.regenboog,
+  koe: PLAY_CAR_FEEDBACK_PRESETS.cowMooTiltBuild,
+  kerst: PLAY_CAR_TUNED_FEEDBACK_PRESETS.kerst,
+  politie: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinPolice' },
+  ambulance: PLAY_CAR_FEEDBACK_PRESETS.ambulanceBeatTilt,
+  brandweer: PLAY_CAR_FEEDBACK_PRESETS.ambulanceBeatTilt,
+  brons: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinMedal' },
+  zilver: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinMedal' },
+  goud: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinMedal' },
+  kat: { ...PLAY_CAR_FEEDBACK_PRESETS.animalShake, soundName: 'skinCat' },
+  hond: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinDog' },
+  hartjes: {
+    ...PLAY_CAR_FEEDBACK_PRESETS.loveHopTilt,
+  },
+  taxi: PLAY_CAR_FEEDBACK_PRESETS.fastTaxiJump,
+  vlammen: PLAY_CAR_FEEDBACK_PRESETS.flamesDoubleRev,
+  premium_racer: PLAY_CAR_TUNED_FEEDBACK_PRESETS.premiumRacer,
+  eend: PLAY_CAR_TUNED_FEEDBACK_PRESETS.eend,
+  sport_coupe: PLAY_CAR_TUNED_FEEDBACK_PRESETS.supercarRacer,
+  neon_nacht: PLAY_CAR_TUNED_FEEDBACK_PRESETS.neonNacht,
+  maanrijder: PLAY_CAR_TUNED_FEEDBACK_PRESETS.maanrijder,
+  hot_rod: PLAY_CAR_FEEDBACK_PRESETS.lateRevKick,
+  monstertruck: PLAY_CAR_TUNED_FEEDBACK_PRESETS.monstertruck,
+  carbon_supercar: PLAY_CAR_TUNED_FEEDBACK_PRESETS.carbonSupercar,
+  ijsco_wagen: PLAY_CAR_TUNED_FEEDBACK_PRESETS.ijscoWagen,
+  piraten_wagen: PLAY_CAR_TUNED_FEEDBACK_PRESETS.piraat,
+  safari_jeep: PLAY_CAR_TUNED_FEEDBACK_PRESETS.safariJeep,
+  koninklijke_racer: PLAY_CAR_TUNED_FEEDBACK_PRESETS.koninklijkeRacer,
+  klassieke_brandweer: PLAY_CAR_FEEDBACK_PRESETS.ambulanceBeatTilt,
+  supercar_racer: PLAY_CAR_TUNED_FEEDBACK_PRESETS.supercarRacer,
+  locomotief: { ...PLAY_CAR_DEFAULT_FEEDBACK, soundName: 'skinTrain' },
+  strand_buggy: PLAY_CAR_TUNED_FEEDBACK_PRESETS.strandBuggy,
+  sneeuwschuiver: PLAY_CAR_TUNED_FEEDBACK_PRESETS.sneeuwschuiver,
+  ridder: PLAY_CAR_TUNED_FEEDBACK_PRESETS.ridder,
+};
+const PLAY_CAR_SOUND_NAMES = Array.from(new Set([
+  PLAY_CAR_DEFAULT_FEEDBACK.soundName,
+  ...Object.values(PLAY_CAR_SKIN_FEEDBACK).map((feedback) => feedback.soundName),
+]));
+const AnimatedExpoImage = Animated.createAnimatedComponent(ExpoImage);
 const DRIVER_WARNING_ICON_MARGIN_TOP = 10;
 const DRIVER_WARNING_ICON_MARGIN_BOTTOM = 5;
-const EMPTY_BUG_REPORT_FORM = {
-  location: '',
-  summary: '',
-  steps: '',
-  severity: 'medium',
-  screenshot: null,
-};
 const SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO = 1.38;
 const SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO = 1.32;
 const SKIN_SHOP_TILE_IMAGE_HEIGHT = 140;
@@ -141,13 +1105,36 @@ const SKIN_LABELS = {
   wit: 'Wit',
 };
 
+const PREMIUM_SKIN_SHOP_ITEMS = PREMIUM_SKIN_OPTIONS.map((skin) => ({
+  id: skin,
+  label: skin,
+  color: PLAYER_HEX[skin] ?? '#FFFFFF',
+  image: PLAYER_IMAGES[skin],
+  premium: true,
+  unlockType: 'premium',
+}));
+
+const PAID_SKIN_SHOP_ITEMS = PAID_SKIN_OPTIONS.map((skin) => ({
+  id: skin,
+  label: skin,
+  color: PLAYER_HEX[skin] ?? '#FFFFFF',
+  image: PLAYER_IMAGES[skin],
+  premium: false,
+  unlockType: 'paid',
+  productId: PAID_SKIN_PRODUCT_IDS[skin],
+}));
+
 const NAV_ITEMS = [
   { key: HOME_TAB_SKINSHOP, label: 'Skinshop', icon: 'palette', accent: '#FF8C42' },
   { key: HOME_TAB_HOME, label: 'Home', icon: 'house', accent: '#C8F122', center: true },
   { key: HOME_TAB_THEMECARDS, label: 'Kaarten', icon: 'checkerboard', accent: '#F2C94C' },
 ];
 
-const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.filter((skin) => !isChallengeSkin(skin)).map((skin) => ({
+const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.filter((skin) => (
+  !isChallengeSkin(skin)
+  && !isPremiumSkin(skin)
+  && !isPaidSkin(skin)
+)).map((skin) => ({
   id: skin,
   label: SKIN_LABELS[skin] ?? skin,
   color: PLAYER_HEX[skin] ?? '#FFFFFF',
@@ -156,34 +1143,55 @@ const STANDARD_SKIN_SHOP_ITEMS = SKIN_OPTIONS.filter((skin) => !isChallengeSkin(
   unlockType: 'free',
 }));
 
-function buildSkinShopItems(challengeProgress) {
-  const challengeItems = Object.values(SKIN_CHALLENGES).map((challenge) => {
+function buildSkinShopItems(challengeProgress, language, isPremium = false, ownedPaidSkins = []) {
+  const buildChallengeItems = (challengeOrder) => challengeOrder
+    .map((skin) => SKIN_CHALLENGES[skin])
+    .filter(Boolean)
+    .map((challenge) => {
     const progressValue = getChallengeProgressValue(challengeProgress, challenge.skin);
+    const premiumChallenge = isPremiumChallengeSkin(challenge.skin);
+    const challengeCompleted = isSkinUnlocked(challengeProgress, challenge.skin);
 
     return {
       id: challenge.skin,
-      label: challenge.title,
+      label: getSkinLabel(language, challenge.skin, challenge.title),
       color: PLAYER_HEX[challenge.skin] ?? '#FFFFFF',
       image: PLAYER_IMAGES[challenge.skin],
-      premium: false,
+      premium: premiumChallenge,
+      premiumLocked: premiumChallenge && !isPremium,
       unlockType: 'challenge',
-      unlocked: isSkinUnlocked(challengeProgress, challenge.skin),
-      challenge: challenge.description,
+      unlocked: challengeCompleted && isSkinAvailableForPlayer(challenge.skin, { isPremium, ownedPaidSkins }),
+      challenge: premiumChallenge && !isPremium
+        ? translate(language, 'home.premiumChallengeLocked')
+        : getSkinChallengeDescription(language, challenge.skin, challenge.description),
       challengeProgress: progressValue,
     };
   });
 
+  const standardChallengeItems = buildChallengeItems(STANDARD_CHALLENGE_SKIN_OPTIONS);
+  const freeEpicChallengeItems = buildChallengeItems(FREE_EPIC_CHALLENGE_SKIN_OPTIONS);
+  const premiumChallengeItems = buildChallengeItems(PREMIUM_CHALLENGE_SKIN_OPTIONS);
+
   return [
-    ...STANDARD_SKIN_SHOP_ITEMS,
-    ...challengeItems,
-    {
-      id: 'future-skin',
-      label: 'Binnenkort',
-      color: '#A8ADB4',
-      image: PLAYER_FUTURE_SKIN_IMAGE,
-      premium: false,
-      unlockType: 'future',
-    },
+    ...STANDARD_SKIN_SHOP_ITEMS.map((skin) => ({
+      ...skin,
+      label: getSkinLabel(language, skin.id, skin.label),
+    })),
+    ...standardChallengeItems,
+    ...freeEpicChallengeItems,
+    ...PREMIUM_SKIN_SHOP_ITEMS.map((skin) => ({
+      ...skin,
+      label: getSkinLabel(language, skin.id, skin.label),
+      unlocked: isSkinAvailableForPlayer(skin.id, { isPremium, ownedPaidSkins }),
+      challenge: translate(language, 'home.skinLockedPremium'),
+    })),
+    ...premiumChallengeItems,
+    ...PAID_SKIN_SHOP_ITEMS.map((skin) => ({
+      ...skin,
+      label: getSkinLabel(language, skin.id, skin.label),
+      unlocked: isSkinAvailableForPlayer(skin.id, { isPremium, ownedPaidSkins }),
+      challenge: translate(language, 'home.skinLockedPaid'),
+    })),
   ];
 }
 
@@ -192,7 +1200,11 @@ function isSkinShopItemUnlocked(item) {
     return false;
   }
 
-  return item.unlockType !== 'challenge' || Boolean(item.unlocked);
+  return (
+    item.unlockType !== 'challenge'
+    && item.unlockType !== 'premium'
+    && item.unlockType !== 'paid'
+  ) || Boolean(item.unlocked);
 }
 
 function getSkinShopAnimationPhase(item, animationSeed, cycleMs) {
@@ -209,8 +1221,8 @@ function getSkinShopAnimationPhase(item, animationSeed, cycleMs) {
 const THEME_SHOWCASE_ITEMS = THEMES.map((theme) => ({
   ...theme,
   previewImage: getThemeCardImage(theme.id),
-  previewItems: theme.id === 'winter' ? [] : getThemeIcons(theme.id).slice(0, 10),
-  itemCount: theme.id === 'winter' ? 0 : getThemeIcons(theme.id).length,
+  previewItems: getThemeIcons(theme.id).slice(0, 10),
+  itemCount: getThemeIcons(theme.id).length,
 }));
 const THEME_ROAD_ITEMS_PER_SEGMENT = 1;
 const THEME_ROAD_NEXT_CARD_PEEK_RATIO = 0.07;
@@ -225,6 +1237,72 @@ const THEME_ROAD_TITLE_OUTLINE_OFFSETS = [
   [-1.5, 1.5],
   [1.5, 1.5],
 ];
+const THEME_REVEAL_COLOR_OVERRIDES = {
+  platteland: '#1F6F34',
+};
+const THEME_REVEAL_PRELOAD_TIMEOUT_MS = 650;
+const THEME_DETAIL_READY_TIMEOUT_MS = 4000;
+const LICENSE_PLATE_DASH_SLOT_WEIGHT = 0.44;
+const LICENSE_PLATE_TOTAL_SLOT_UNITS = 8 + LICENSE_PLATE_DASH_SLOT_WEIGHT * 2;
+
+function getThemeRevealColor(theme) {
+  return THEME_REVEAL_COLOR_OVERRIDES[theme?.id]
+    ?? theme?.cardOutline
+    ?? theme?.cardBorder
+    ?? theme?.bg
+    ?? '#1A5EA8';
+}
+
+function getLicensePlateSlots(rawCode = '') {
+  const chars = normalizeLobbyCode(rawCode).split('');
+  return [
+    { key: 'char-0', type: 'char', value: chars[0] ?? '' },
+    { key: 'char-1', type: 'char', value: chars[1] ?? '' },
+    { key: 'dash-0', type: 'dash', value: chars.length >= 2 ? '-' : '' },
+    { key: 'char-2', type: 'char', value: chars[2] ?? '' },
+    { key: 'char-3', type: 'char', value: chars[3] ?? '' },
+    { key: 'char-4', type: 'char', value: chars[4] ?? '' },
+    { key: 'dash-1', type: 'dash', value: chars.length >= 5 ? '-' : '' },
+    { key: 'char-5', type: 'char', value: chars[5] ?? '' },
+    { key: 'char-6', type: 'char', value: chars[6] ?? '' },
+    { key: 'char-7', type: 'char', value: chars[7] ?? '' },
+  ];
+}
+
+function normalizeTutorialJoinCode(value = '') {
+  return value
+    .toUpperCase()
+    .replace(/[\r\n\s·.-]+/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+}
+
+function getTutorialLicensePlateSlots(rawCode = '') {
+  const chars = normalizeTutorialJoinCode(rawCode).split('');
+  return [
+    { key: 'char-0', type: 'char', value: chars[0] ?? '' },
+    { key: 'char-1', type: 'char', value: chars[1] ?? '' },
+    { key: 'dash-0', type: 'dash', value: chars.length >= 2 ? '-' : '' },
+    { key: 'char-2', type: 'char', value: chars[2] ?? '' },
+    { key: 'char-3', type: 'char', value: chars[3] ?? '' },
+    { key: 'char-4', type: 'char', value: chars[4] ?? '' },
+    { key: 'dash-1', type: 'dash', value: chars.length >= 5 ? '-' : '' },
+    { key: 'char-5', type: 'char', value: chars[5] ?? '' },
+    { key: 'char-6', type: 'char', value: chars[6] ?? '' },
+    { key: 'char-7', type: 'char', value: chars[7] ?? '' },
+  ];
+}
+
+function getLicensePlateCursorUnits(rawLength) {
+  if (rawLength >= 8) {
+    return LICENSE_PLATE_TOTAL_SLOT_UNITS;
+  }
+
+  return rawLength
+    + (rawLength >= 2 ? LICENSE_PLATE_DASH_SLOT_WEIGHT : 0)
+    + (rawLength >= 5 ? LICENSE_PLATE_DASH_SLOT_WEIGHT : 0)
+    + 0.5;
+}
 
 function hasEmbeddedThemeFrame(themeId) {
   return (
@@ -234,25 +1312,37 @@ function hasEmbeddedThemeFrame(themeId) {
     || themeId === 'vakantie'
     || themeId === 'voertuigen'
     || themeId === 'winter'
+    || themeId === 'bergen'
     || themeId === 'verkeersborden'
   );
 }
 
 function getEmbeddedThemeTitleStyle(themeId) {
+  const titleTop = themeId === 'verkeersborden'
+    ? '6.8%'
+    : themeId === 'voertuigen' || themeId === 'platteland'
+    ? '6.2%'
+    : '5.1%';
   const compactTitleStyle = themeId === 'verkeersborden'
     ? {
-        fontSize: 18,
-        lineHeight: 25,
+        left: '4%',
+        right: '4%',
+        fontSize: 23,
+        lineHeight: 30,
       }
     : themeId === 'voertuigen'
     ? {
-        fontSize: 22,
-        lineHeight: 30,
+        left: '6%',
+        right: '6%',
+        fontSize: 28,
+        lineHeight: 36,
       }
     : themeId === 'platteland'
     ? {
-        fontSize: 26,
-        lineHeight: 36,
+        left: '5%',
+        right: '5%',
+        fontSize: 29,
+        lineHeight: 37,
       }
     : null;
 
@@ -260,6 +1350,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
     return {
       color: '#111111',
       ...compactTitleStyle,
+      top: titleTop,
       letterSpacing: 0.5,
       textShadowColor: 'rgba(255, 255, 255, 0.52)',
       textShadowOffset: { width: 0, height: 1 },
@@ -270,6 +1361,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
   return {
     color: '#FFFFFF',
     ...compactTitleStyle,
+    top: titleTop,
     letterSpacing: 0.5,
     textShadowColor: '#15539D',
     textShadowOffset: { width: 0, height: 1 },
@@ -287,6 +1379,10 @@ function withAlpha(hexColor, alpha) {
   const blue = parseInt(hexColor.slice(5, 7), 16);
 
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function HomeNavIcon({ icon, active, size = 60 }) {
@@ -376,7 +1472,7 @@ function SkinRoadBackground() {
   );
 }
 
-function ThemeRoadCard({ item, isLocked = false }) {
+function ThemeRoadCard({ item, isLocked = false, onImageLoadEnd }) {
   const cardColor = item.cardOutline ?? item.cardBorder ?? item.bg;
   const cardChromeColor = isLocked ? withAlpha(cardColor, 0.42) : cardColor;
   const embeddedFrame = hasEmbeddedThemeFrame(item.id);
@@ -410,10 +1506,11 @@ function ThemeRoadCard({ item, isLocked = false }) {
       style={[styles.roadThemeCardLockLayer, { opacity: lockOpacity }]}
     >
       <View style={styles.roadThemeCardLockedDim} />
-      <Image
+      <ExpoImage
         source={THEME_LOCK_OVERLAY_OVERVIEW_IMAGE}
-        resizeMode="cover"
-        fadeDuration={0}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={0}
         style={styles.roadThemeCardLockOverlay}
       />
     </Animated.View>
@@ -432,18 +1529,28 @@ function ThemeRoadCard({ item, isLocked = false }) {
               },
         ]}
       >
-        <ImageBackground
-          source={item.previewImage}
-          resizeMode={embeddedFrame ? 'stretch' : 'cover'}
-          imageStyle={embeddedFrame ? styles.roadThemeCardImageEmbedded : null}
+        <View
           style={[
             styles.roadThemeCardBody,
             embeddedFrame && styles.roadThemeCardBodyEmbedded,
           ]}
         >
+          <ExpoImage
+            source={item.previewImage}
+            contentFit={embeddedFrame ? 'fill' : 'cover'}
+            cachePolicy="memory-disk"
+            transition={0}
+            onLoad={onImageLoadEnd}
+            onError={onImageLoadEnd}
+            style={[
+              styles.roadThemeCardPreviewImage,
+              embeddedFrame && styles.roadThemeCardImageEmbedded,
+            ]}
+          />
           {lockLayer}
           {embeddedFrame ? (
             <Text
+              allowFontScaling={false}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.72}
@@ -456,7 +1563,7 @@ function ThemeRoadCard({ item, isLocked = false }) {
               {item.label}
             </Text>
           ) : null}
-        </ImageBackground>
+        </View>
       </View>
     );
   }
@@ -486,11 +1593,16 @@ function ThemeRoadCard({ item, isLocked = false }) {
   );
 }
 
-function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemePress }) {
+function ThemeRoadBackground({ isPremium = false, items = THEME_SHOWCASE_ITEMS, onReady, onScrollOffsetChange, onThemePress }) {
   const { height, width } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(width, height);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollOffsetRef = useRef(0);
+  const visibleRoadPageRef = useRef(0);
+  const [visibleRoadPage, setVisibleRoadPage] = useState(0);
+  const [roadBackgroundReady, setRoadBackgroundReady] = useState(false);
+  const [roadCardReadyPage, setRoadCardReadyPage] = useState(null);
+  const readyCalledRef = useRef(false);
   const stageHeight = height;
   const nextCardPeek = Math.min(isTablet ? 58 : 36, Math.max(isTablet ? 34 : 24, width * THEME_ROAD_NEXT_CARD_PEEK_RATIO));
   const topClearance = Math.max(isTablet ? 92 : 72, height * (isTablet ? 0.09 : 0.08));
@@ -502,13 +1614,35 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
   const cardTop = topClearance + (availableCardHeight - cardHeight) / 2;
   const centeredCardLeft = (width - cardWidth) / 2;
   const segmentWidth = width - centeredCardLeft - nextCardPeek;
-  const stageWidth = (THEME_ROAD_PAGE_COUNT - 1) * segmentWidth + width;
-  const roadPages = Array.from({ length: THEME_ROAD_PAGE_COUNT }, (_, pageIndex) => ({
-    items: THEME_SHOWCASE_ITEMS.slice(
+  const pageCount = Math.ceil(items.length / THEME_ROAD_ITEMS_PER_SEGMENT);
+  const stageWidth = (pageCount - 1) * segmentWidth + width;
+  const roadPages = Array.from({ length: pageCount }, (_, pageIndex) => ({
+    items: items.slice(
       pageIndex * THEME_ROAD_ITEMS_PER_SEGMENT,
       pageIndex * THEME_ROAD_ITEMS_PER_SEGMENT + THEME_ROAD_ITEMS_PER_SEGMENT
     ),
   }));
+
+  useEffect(() => {
+    if (readyCalledRef.current || !roadBackgroundReady || roadCardReadyPage !== visibleRoadPage) {
+      return;
+    }
+
+    readyCalledRef.current = true;
+    onReady?.();
+  }, [onReady, roadBackgroundReady, roadCardReadyPage, visibleRoadPage]);
+
+  const updateVisibleRoadPage = useCallback((offsetX) => {
+    const nextPage = Math.max(
+      0,
+      Math.min(pageCount - 1, Math.round(offsetX / segmentWidth))
+    );
+
+    if (nextPage !== visibleRoadPageRef.current) {
+      visibleRoadPageRef.current = nextPage;
+      setVisibleRoadPage(nextPage);
+    }
+  }, [pageCount, segmentWidth]);
 
   return (
     <Animated.ScrollView
@@ -528,15 +1662,20 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
           listener: (event) => {
             const offsetX = event.nativeEvent.contentOffset.x;
             scrollOffsetRef.current = offsetX;
+            updateVisibleRoadPage(offsetX);
             onScrollOffsetChange?.(offsetX);
           },
         }
       )}
     >
       <View style={[styles.themeRoadStage, { width: stageWidth, height: stageHeight }]}>
-        <Image
+        <ExpoImage
           source={THEME_ROAD_BACKGROUND}
-          resizeMode="stretch"
+          contentFit="fill"
+          cachePolicy="memory-disk"
+          transition={0}
+          onLoad={() => setRoadBackgroundReady(true)}
+          onError={() => setRoadBackgroundReady(true)}
           style={[
             styles.themeRoadImage,
             {
@@ -546,6 +1685,7 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
           ]}
         />
         {roadPages.map((page, pageIndex) => (
+          Math.abs(pageIndex - visibleRoadPage) > 1 ? null :
           page.items.map((item) => {
             const cardX = pageIndex * segmentWidth + centeredCardLeft;
             const cardY = cardTop;
@@ -615,7 +1755,15 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
                   }}
                   style={styles.roadThemeCardPressable}
                 >
-                  <ThemeRoadCard item={item} isLocked={isLocked} />
+                  <ThemeRoadCard
+                    item={item}
+                    isLocked={isLocked}
+                    onImageLoadEnd={() => {
+                      if (pageIndex === visibleRoadPageRef.current) {
+                        setRoadCardReadyPage(pageIndex);
+                      }
+                    }}
+                  />
                 </Pressable>
               </Animated.View>
             );
@@ -626,14 +1774,14 @@ function ThemeRoadBackground({ isPremium = false, onScrollOffsetChange, onThemeP
   );
 }
 
-function ThemeItemTile({ itemImage, onInspect }) {
+function ThemeItemTile({ itemImage, inspectImage, onInspect, onLoadEnd }) {
   const tileRef = useRef(null);
 
   function handlePress() {
     tileRef.current?.measureInWindow((x, y, measuredWidth, measuredHeight) => {
       void Haptics.selectionAsync();
       onInspect?.({
-        icon: itemImage,
+        icon: inspectImage ?? itemImage,
         rect: {
           x,
           y,
@@ -646,9 +1794,48 @@ function ThemeItemTile({ itemImage, onInspect }) {
 
   return (
     <Pressable ref={tileRef} style={styles.themeItemTile} onPress={handlePress}>
-      <Image source={itemImage} resizeMode="contain" fadeDuration={0} style={styles.themeItemImage} />
+      <ExpoImage
+        source={itemImage}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        transition={0}
+        onLoad={onLoadEnd}
+        onError={onLoadEnd}
+        style={styles.themeItemImage}
+      />
     </Pressable>
   );
+}
+
+function getResolvedAssetSource(source, resolvedSources) {
+  if (!source) {
+    return source;
+  }
+
+  return resolvedSources.get(getAssetKey(source)) ?? source;
+}
+
+async function loadResolvedAssetSources(sources) {
+  const uniqueSources = [];
+  const seen = new Set();
+
+  sources.filter(Boolean).forEach((source) => {
+    const key = getAssetKey(source);
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueSources.push(source);
+    }
+  });
+
+  const entries = await Promise.all(uniqueSources.map(async (source) => {
+    const asset = Asset.fromModule(source);
+    await asset.downloadAsync();
+    const uri = asset.localUri ?? asset.uri;
+    return [getAssetKey(source), uri ? { uri } : source];
+  }));
+
+  return new Map(entries);
 }
 
 function ThemeItemInspectOverlay({ cell, progress, onClose }) {
@@ -686,10 +1873,6 @@ function ThemeItemInspectOverlay({ cell, progress, onClose }) {
     inputRange: [0, 1],
     outputRange: [startSize, targetSize],
   });
-  const imageSize = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [startSize * 0.82, targetSize * 0.82],
-  });
   const shadowOpacity = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [0.08, 0.28],
@@ -714,21 +1897,33 @@ function ThemeItemInspectOverlay({ cell, progress, onClose }) {
           },
         ]}
       >
-        <Animated.Image
+        <ExpoImage
+          key={getAssetKey(cell.icon)}
           source={cell.icon}
-          resizeMode="contain"
-          style={{
-            width: imageSize,
-            height: imageSize,
-          }}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          transition={0}
+          style={styles.themeInspectImage}
         />
       </Animated.View>
     </View>
   );
 }
 
-function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
+function SkinShopPanel({
+  items,
+  inspectedSkinId,
+  equippedSkin,
+  tutorialActive = false,
+  tutorialStep = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
+  onInspect,
+}) {
   const { height, width } = useWindowDimensions();
+  const scrollRef = useRef(null);
+  const scrollOffsetYRef = useRef(0);
+  const skinshopAutoScrolledRef = useRef(false);
   const safeWidth = Number.isFinite(width) && width > 0 ? width : FALLBACK_WINDOW_WIDTH;
   const safeHeight = Number.isFinite(height) && height > 0 ? height : FALLBACK_WINDOW_HEIGHT;
   const { isTablet } = getResponsiveMetrics(safeWidth, safeHeight);
@@ -751,12 +1946,97 @@ function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
     Math.min(8, Number.isFinite(contentHeight / imageHeight) ? Math.ceil(contentHeight / imageHeight) : SKIN_ROAD_REPEAT_COUNT)
   );
   const roadImages = Array.from({ length: roadImageCount }, (_, index) => index);
+  const challengeSkinIndex = items.findIndex((item) => item.unlockType === 'challenge' && !isSkinShopItemUnlocked(item));
+  const challengeRowIndex = challengeSkinIndex >= 0 ? Math.floor(challengeSkinIndex / 2) : 0;
+  const challengeScrollY = Math.max(0, topOffset + challengeRowIndex * rowHeight - safeHeight * 0.2);
+
+  const reportChallengeSkinTarget = useCallback((scrollY = scrollOffsetYRef.current) => {
+    if (!tutorialActive || tutorialStep?.target !== 'home.challengeSkin' || !onTutorialTargetLayout || challengeSkinIndex < 0) {
+      return;
+    }
+
+    const rowIndex = Math.floor(challengeSkinIndex / 2);
+    const columnIndex = challengeSkinIndex % 2;
+    const tileLeft = columnIndex === 0 ? safeWidth * (isTablet ? 0.055 : 0.035) : safeWidth * (isTablet ? 0.525 : 0.495);
+    const tileTop = topOffset + rowIndex * rowHeight - scrollY;
+    const tileWidth = safeWidth * (isTablet ? 0.42 : 0.47);
+
+    onTutorialTargetLayout('home.challengeSkin', {
+      x: tileLeft,
+      y: tileTop,
+      width: tileWidth,
+      height: tileHeight,
+    });
+  }, [
+    challengeSkinIndex,
+    isTablet,
+    onTutorialTargetLayout,
+    rowHeight,
+    safeWidth,
+    tileHeight,
+    topOffset,
+    tutorialActive,
+    tutorialStep?.target,
+  ]);
+
+  useEffect(() => {
+    if (tutorialStep?.id !== 'menu-skinshop-scroll') {
+      skinshopAutoScrolledRef.current = false;
+    }
+  }, [tutorialStep?.id]);
+
+  useEffect(() => {
+    if (tutorialStep?.target === 'home.challengeSkin') {
+      reportChallengeSkinTarget();
+    }
+  }, [reportChallengeSkinTarget, tutorialStep?.target]);
+
+  const completeTutorialSkinshopScroll = useCallback(() => {
+    if (
+      tutorialStep?.id !== 'menu-skinshop-scroll'
+      || skinshopAutoScrolledRef.current
+    ) {
+      return;
+    }
+
+    skinshopAutoScrolledRef.current = true;
+    scrollRef.current?.scrollTo({ y: challengeScrollY, animated: true });
+    setTimeout(() => {
+      scrollOffsetYRef.current = challengeScrollY;
+      reportChallengeSkinTarget(challengeScrollY);
+      onTutorialAction?.('home.skinshopScrolled');
+    }, 440);
+  }, [
+    challengeScrollY,
+    onTutorialAction,
+    reportChallengeSkinTarget,
+    tutorialStep?.id,
+  ]);
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.skinRoadScroll}
       showsVerticalScrollIndicator={false}
       bounces={false}
+      scrollEnabled={!tutorialActive || tutorialStep?.id === 'menu-skinshop-scroll'}
+      scrollEventThrottle={16}
+      onScrollBeginDrag={completeTutorialSkinshopScroll}
+      onScrollEndDrag={() => {
+        if (tutorialStep?.id === 'menu-skinshop-scroll') {
+          scrollRef.current?.scrollTo({ y: challengeScrollY, animated: true });
+        }
+      }}
+      onMomentumScrollEnd={() => {
+        if (tutorialStep?.id === 'menu-skinshop-scroll') {
+          scrollRef.current?.scrollTo({ y: challengeScrollY, animated: true });
+        }
+      }}
+      onScroll={(event) => {
+        const nextOffsetY = event.nativeEvent.contentOffset.y;
+        scrollOffsetYRef.current = nextOffsetY;
+        reportChallengeSkinTarget(nextOffsetY);
+      }}
     >
       <View style={[styles.skinShopStage, { height: contentHeight }]}>
         {roadImages.map((imageIndex) => (
@@ -779,18 +2059,36 @@ function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
         {items.map((item, index) => {
           const rowIndex = Math.floor(index / 2);
           const columnIndex = index % 2;
+          const tileLeft = columnIndex === 0 ? safeWidth * (isTablet ? 0.055 : 0.035) : safeWidth * (isTablet ? 0.525 : 0.495);
+          const tileTop = topOffset + rowIndex * rowHeight;
+          const tileWidth = safeWidth * (isTablet ? 0.42 : 0.47);
+          const shouldAnimateIdleMotion = true;
 
           return (
             <SkinShopTile
               key={item.id}
               item={item}
+              columnIndex={columnIndex}
               animationSeed={index}
               hidden={item.id === inspectedSkinId}
+              equipped={item.id === equippedSkin}
+              shouldAnimateIdleMotion={shouldAnimateIdleMotion}
               onInspect={onInspect}
+              onTutorialAction={onTutorialAction}
+              tutorialActionName={index === challengeSkinIndex && tutorialStep?.target === 'home.challengeSkin'
+                ? 'home.challengeSkinOpened'
+                : null}
+              sourceRect={{
+                x: tileLeft,
+                y: tileTop,
+                width: tileWidth,
+                height: tileHeight,
+                getScrollOffsetY: () => scrollOffsetYRef.current,
+              }}
               style={{
-                left: columnIndex === 0 ? width * (isTablet ? 0.055 : 0.035) : width * (isTablet ? 0.525 : 0.495),
-                top: topOffset + rowIndex * rowHeight,
-                width: width * (isTablet ? 0.42 : 0.47),
+                left: tileLeft,
+                top: tileTop,
+                width: tileWidth,
                 height: tileHeight,
               }}
             />
@@ -801,18 +2099,39 @@ function SkinShopPanel({ items, inspectedSkinId, onInspect }) {
   );
 }
 
-function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
+const SkinShopTile = React.memo(function SkinShopTile({
+  item,
+  columnIndex = 0,
+  animationSeed = 0,
+  hidden,
+  equipped,
+  shouldAnimateIdleMotion = true,
+  onInspect,
+  onTutorialAction,
+  tutorialActionName,
+  sourceRect,
+  style,
+}) {
   const tileRef = useRef(null);
   const bob = useRef(new Animated.Value(0)).current;
   const isUnlocked = isSkinShopItemUnlocked(item);
-  const isChallengeLocked = item.unlockType === 'challenge' && !isUnlocked;
+  const isLocked = !isUnlocked;
+  const showChallengeProgress = isLocked && item.unlockType === 'challenge' && item.challengeProgress?.target > 0;
+  const showPremiumProgress = isLocked && item.unlockType === 'premium';
+  const verticalProgressRatio = showChallengeProgress
+    ? Math.max(0, Math.min(1, item.challengeProgress.current / item.challengeProgress.target))
+    : showPremiumProgress
+      ? 0
+      : 0;
+  const shouldRunIdleMotion = shouldAnimateIdleMotion && isUnlocked;
+  const tileHeight = style?.height ?? 146;
   const animationPhase = getSkinShopAnimationPhase(item, animationSeed, SKIN_SHOP_CAR_BOB_DURATION);
-  const tileImageHeight = Math.max(SKIN_SHOP_TILE_IMAGE_HEIGHT, Math.min(202, (style?.height ?? 146) * 0.94));
+  const tileImageHeight = Math.max(SKIN_SHOP_TILE_IMAGE_HEIGHT, Math.min(202, tileHeight * 0.94));
 
   useEffect(() => {
     bob.stopAnimation();
 
-    if (!isUnlocked) {
+    if (!shouldRunIdleMotion) {
       bob.setValue(0);
       return undefined;
     }
@@ -841,9 +2160,29 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
       bob.stopAnimation();
       bob.setValue(0);
     };
-  }, [bob, isUnlocked]);
+  }, [bob, shouldRunIdleMotion]);
 
   function handlePress() {
+    if (sourceRect) {
+      const movingWidth = sourceRect.width * SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO / SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO;
+      const tileImageLeft = sourceRect.x - ((SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO - 1) * sourceRect.width) / 2;
+      const movingImageBleed = ((SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO - 1) * movingWidth) / 2;
+
+      onInspect({
+        skin: item,
+        rect: {
+          x: tileImageLeft + movingImageBleed,
+          y: sourceRect.y - sourceRect.getScrollOffsetY() + (sourceRect.height - tileImageHeight) / 2,
+          width: movingWidth,
+          height: tileImageHeight,
+        },
+      });
+      if (tutorialActionName) {
+        onTutorialAction?.(tutorialActionName);
+      }
+      return;
+    }
+
     tileRef.current?.measureInWindow((x, y, width, height) => {
       const movingWidth = width * SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO / SKIN_INSPECT_MOVING_IMAGE_WIDTH_RATIO;
       const tileImageLeft = x - ((SKIN_SHOP_TILE_IMAGE_WIDTH_RATIO - 1) * width) / 2;
@@ -858,6 +2197,9 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
           height: tileImageHeight,
         },
       });
+      if (tutorialActionName) {
+        onTutorialAction?.(tutorialActionName);
+      }
     });
   }
 
@@ -876,7 +2218,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
       <Animated.View
         style={[
           styles.skinShopTileShadowMotion,
-          isUnlocked && {
+          shouldRunIdleMotion && {
             transform: [
               {
                 scaleX: bob.interpolate({
@@ -900,7 +2242,7 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
         style={[
           styles.skinShopTileCarMotion,
           { height: tileImageHeight },
-          isUnlocked && {
+          shouldRunIdleMotion && {
             transform: [
               {
                 translateY: bob.interpolate({
@@ -918,22 +2260,77 @@ function SkinShopTile({ item, animationSeed = 0, hidden, onInspect, style }) {
           style={[
             styles.skinShopTileImage,
             { height: tileImageHeight },
-            isChallengeLocked && styles.challengeSkinMutedImage,
+            isLocked && styles.challengeSkinMutedImage,
           ]}
         />
       </Animated.View>
-      {isChallengeLocked ? (
+        {equipped && isUnlocked ? (
+          <View pointerEvents="none" style={styles.skinShopEquippedBadge}>
+            <Image
+              source={STATE_ON_IMAGE}
+              resizeMode="contain"
+              fadeDuration={0}
+              style={styles.skinShopEquippedIcon}
+            />
+          </View>
+        ) : null}
+      {isLocked ? (
         <ChallengeSkinLockOverlay
+          source={item.unlockType === 'challenge' && !item.premiumLocked ? CHALLENGE_SKIN_LOCK_IMAGE : PREMIUM_SKIN_LOCK_IMAGE}
           size="tile"
           animationPhase={animationPhase}
+          pointerEvents="none"
           style={styles.skinShopChallengeLock}
+        />
+      ) : null}
+      {showChallengeProgress || showPremiumProgress ? (
+        <SkinShopVerticalProgressIndicator
+          side={columnIndex === 0 ? 'right' : 'left'}
+          ratio={verticalProgressRatio}
+          tileHeight={tileHeight}
         />
       ) : null}
     </Pressable>
   );
-}
+});
 
-function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPhase = 0 }) {
+const SkinShopVerticalProgressIndicator = React.memo(function SkinShopVerticalProgressIndicator({ side = 'right', ratio = 0, tileHeight = 146 }) {
+  const fillRatio = Math.max(0, Math.min(1, ratio));
+  const progressHeight = Math.round(Math.max(44, Math.min(64, tileHeight * 0.38)));
+  const progressTop = Math.round(Math.max(40, Math.min(58, tileHeight * 0.34)));
+  const progressInset = Math.round(Math.max(8, Math.min(15, tileHeight * 0.1)));
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.skinShopVerticalProgress,
+        side === 'left' ? styles.skinShopVerticalProgressLeft : styles.skinShopVerticalProgressRight,
+        {
+          top: progressTop,
+          height: progressHeight,
+          [side === 'left' ? 'left' : 'right']: progressInset,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.skinShopVerticalProgressFill,
+          { height: `${fillRatio * 100}%` },
+        ]}
+      />
+    </View>
+  );
+});
+
+function ChallengeSkinLockOverlay({
+  size = 'tile',
+  source = CHALLENGE_SKIN_LOCK_IMAGE,
+  progress,
+  style,
+  animationPhase = 0,
+  pointerEvents = 'auto',
+}) {
   const jump = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -978,6 +2375,7 @@ function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPha
 
   return (
     <Animated.View
+      pointerEvents={pointerEvents}
       style={[
         size === 'large' ? styles.challengeSkinLockLarge : styles.challengeSkinLockTile,
         style,
@@ -992,7 +2390,7 @@ function ChallengeSkinLockOverlay({ size = 'tile', progress, style, animationPha
         }}
       >
         <Image
-          source={CHALLENGE_SKIN_LOCK_IMAGE}
+          source={source}
           resizeMode="contain"
           style={styles.challengeSkinLockImage}
         />
@@ -1016,8 +2414,20 @@ function SkinCarShadow({ style } = {}) {
   );
 }
 
-function SkinInspectOverlay({ inspection, progress, onClose }) {
+function SkinInspectOverlay({
+  inspection,
+  progress,
+  equippedSkin,
+  isPremium,
+  purchasingSkinId,
+  getPaidSkinPrice,
+  onClose,
+  onEquip,
+  onPremiumPress,
+  onPurchase,
+}) {
   const { height, width } = useWindowDimensions();
+  const { t } = useTranslation();
 
   if (!inspection) {
     return null;
@@ -1025,9 +2435,16 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
 
   const { skin, rect } = inspection;
   const isFutureSkin = skin.unlockType === 'future';
+  const isLocked = !isSkinShopItemUnlocked(skin);
   const isChallengeLocked = skin.unlockType === 'challenge' && !skin.unlocked;
-  const hasSkinNameLabel = !isChallengeLocked && !isFutureSkin;
-  const challengeText = skin.challenge ?? 'Voltooi de bijbehorende challenge om deze skin gratis te ontgrendelen.';
+  const isPremiumChallengeLocked = isChallengeLocked && skin.premium && !isPremium;
+  const isPremiumLocked = skin.unlockType === 'premium' && isLocked;
+  const isPaidLocked = skin.unlockType === 'paid' && isLocked;
+  const canEquipSkin = isSkinShopItemUnlocked(skin) && !isFutureSkin;
+  const paidSkinPrice = getPaidSkinPrice?.(skin.id) ?? '€0,99';
+  const purchasingThisSkin = purchasingSkinId === skin.id;
+  const isEquipped = skin.id === equippedSkin;
+  const challengeText = skin.challenge ?? t('home.skinLockedChallenge');
   const challengeProgress = skin.challengeProgress ?? { current: 0, target: 1 };
   const challengeRatio = challengeProgress.target > 0
     ? Math.max(0, Math.min(1, challengeProgress.current / challengeProgress.target))
@@ -1035,10 +2452,14 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
   const { isTablet } = getResponsiveMetrics(width, height);
   const targetWidth = isTablet ? Math.min(width * 0.86, 680) : Math.min(width * 1.08, 470);
   const targetHeight = targetWidth * 0.76;
-  const targetContainerHeight = isChallengeLocked
-    ? targetHeight + 142
-    : hasSkinNameLabel
-      ? targetHeight + 86
+  const challengeTextBlockWidth = Math.max(0, targetWidth - 44);
+  const nameTextBlockWidth = Math.max(0, targetWidth - 68);
+  const challengeTextBlockHeight = (isPaidLocked || isPremiumLocked || isPremiumChallengeLocked) ? 158 : 122;
+  const nameTextBlockHeight = 142;
+  const targetContainerHeight = isLocked && !isFutureSkin
+    ? targetHeight + challengeTextBlockHeight + 20
+    : canEquipSkin
+      ? targetHeight + 172
       : targetHeight;
   const targetLeft = (width - targetWidth) / 2;
   const targetTop = (height - targetContainerHeight) / 2 - 4;
@@ -1064,7 +2485,7 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
   });
   const imageHeight = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [SKIN_SHOP_TILE_IMAGE_HEIGHT, (isChallengeLocked || hasSkinNameLabel) ? targetHeight * 0.92 : targetHeight],
+    outputRange: [SKIN_SHOP_TILE_IMAGE_HEIGHT, (isLocked || canEquipSkin) ? targetHeight * 0.92 : targetHeight],
   });
   const shadowScale = progress.interpolate({
     inputRange: [0, 1],
@@ -1074,7 +2495,10 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
     inputRange: [0, 1],
     outputRange: [25, 14],
   });
-
+  const detailTextOpacity = progress.interpolate({
+    inputRange: [0, 0.58, 1],
+    outputRange: [0, 0, 1],
+  });
   return (
     <View pointerEvents="box-none" style={styles.skinInspectLayer}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
@@ -1082,11 +2506,11 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
       </Pressable>
 
       <Animated.View
-        pointerEvents="none"
+        pointerEvents="box-none"
         style={[
           styles.skinInspectMovingCar,
-          isChallengeLocked && styles.skinInspectChallengeMovingCar,
-          hasSkinNameLabel && styles.skinInspectNamedMovingCar,
+          isLocked && styles.skinInspectChallengeMovingCar,
+          canEquipSkin && styles.skinInspectNamedMovingCar,
           {
             left,
             top,
@@ -1095,7 +2519,9 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
           },
         ]}
       >
+        <Pressable style={styles.skinInspectMovingDismissArea} onPress={onClose} />
         <Animated.View
+          pointerEvents="none"
           style={[
             styles.skinInspectMovingShadow,
             {
@@ -1107,82 +2533,28 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
           <SkinCarShadow style={styles.skinInspectShadowSvg} />
         </Animated.View>
         <Animated.Image
+          pointerEvents="none"
           source={skin.image}
           resizeMode="contain"
           style={[
             styles.skinInspectMovingImage,
             isFutureSkin && styles.skinInspectFutureImage,
-            isChallengeLocked && styles.challengeSkinMutedImage,
+            isLocked && styles.challengeSkinMutedImage,
             {
               height: imageHeight,
             },
           ]}
         />
-        {isChallengeLocked ? (
+        {isLocked && !isFutureSkin ? (
           <>
             <ChallengeSkinLockOverlay
+              source={isPremiumChallengeLocked ? PREMIUM_SKIN_LOCK_IMAGE : isChallengeLocked ? CHALLENGE_SKIN_LOCK_IMAGE : PREMIUM_SKIN_LOCK_IMAGE}
               size="large"
               progress={progress}
+              pointerEvents="none"
               style={styles.skinInspectChallengeLock}
             />
-            <Animated.View
-              style={[
-                styles.skinInspectChallengeTextBlock,
-                {
-                  opacity: progress,
-                },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.76}
-                style={styles.skinInspectChallengeName}
-              >
-                {skin.label}
-              </Text>
-              <Text
-                numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.82}
-                style={styles.skinInspectChallengeText}
-              >
-                {challengeText}
-              </Text>
-              <View style={styles.skinInspectChallengeProgressRow}>
-                <View style={styles.skinInspectChallengeProgressTrack}>
-                  <View
-                    style={[
-                      styles.skinInspectChallengeProgressFill,
-                      { width: `${challengeRatio * 100}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.skinInspectChallengeProgressText}>
-                  {challengeProgress.current} / {challengeProgress.target}
-                </Text>
-              </View>
-            </Animated.View>
           </>
-        ) : null}
-        {hasSkinNameLabel ? (
-          <Animated.View
-            style={[
-              styles.skinInspectNameBlock,
-              {
-                opacity: progress,
-              },
-            ]}
-          >
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.76}
-              style={styles.skinInspectChallengeName}
-            >
-              {skin.label}
-            </Text>
-          </Animated.View>
         ) : null}
         {isFutureSkin ? (
           <Animated.Text
@@ -1197,16 +2569,206 @@ function SkinInspectOverlay({ inspection, progress, onClose }) {
           </Animated.Text>
         ) : null}
       </Animated.View>
+      {isLocked && !isFutureSkin ? (
+        <Animated.View
+          style={[
+            styles.skinInspectChallengeTextBlock,
+            {
+              left: targetLeft + (targetWidth - challengeTextBlockWidth) / 2,
+              top: targetTop + targetContainerHeight - 8 - challengeTextBlockHeight,
+              right: undefined,
+              bottom: undefined,
+              width: challengeTextBlockWidth,
+              minHeight: challengeTextBlockHeight,
+              opacity: detailTextOpacity,
+            },
+          ]}
+        >
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.76}
+            style={styles.skinInspectChallengeName}
+          >
+            {skin.label}
+          </Text>
+          <Text
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            style={styles.skinInspectChallengeText}
+          >
+            {challengeText}
+          </Text>
+          {isChallengeLocked && !isPremiumChallengeLocked ? (
+            <View style={styles.skinInspectChallengeProgressRow}>
+              <View style={styles.skinInspectChallengeProgressTrack}>
+                <View
+                  style={[
+                    styles.skinInspectChallengeProgressFill,
+                    { width: `${challengeRatio * 100}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.skinInspectChallengeProgressText}>
+                {challengeProgress.current} / {challengeProgress.target}
+              </Text>
+            </View>
+          ) : null}
+          {isPaidLocked ? (
+            <View style={styles.skinInspectBuyButtonWrap}>
+              <GlossyButton
+                label={purchasingThisSkin ? t('common.loading') : t('common.buyFor', { price: paidSkinPrice })}
+                variant="green"
+                size="normal"
+                disabled={purchasingThisSkin}
+                heightOverride={isTablet ? 58 : 50}
+                horizontalPadding={isTablet ? 30 : 24}
+                labelFontScale={isTablet ? 0.94 : 0.86}
+                soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+                onPress={() => onPurchase?.(skin.id)}
+              />
+            </View>
+          ) : null}
+          {isPremiumLocked || isPremiumChallengeLocked ? (
+            <View style={styles.skinInspectBuyButtonWrap}>
+              <GlossyButton
+                label={t('premiumModal.takePremium')}
+                variant="green"
+                size="normal"
+                heightOverride={isTablet ? 58 : 50}
+                horizontalPadding={isTablet ? 30 : 24}
+                labelFontScale={isTablet ? 0.94 : 0.86}
+                soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+                onPress={onPremiumPress}
+              />
+            </View>
+          ) : null}
+        </Animated.View>
+      ) : null}
+      {canEquipSkin ? (
+        <Animated.View
+          style={[
+            styles.skinInspectNameBlock,
+            {
+              left: targetLeft + (targetWidth - nameTextBlockWidth) / 2,
+              top: targetTop + targetContainerHeight - 10 - nameTextBlockHeight,
+              right: undefined,
+              bottom: undefined,
+              width: nameTextBlockWidth,
+              minHeight: nameTextBlockHeight,
+              opacity: detailTextOpacity,
+            },
+          ]}
+        >
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.76}
+            style={styles.skinInspectChallengeName}
+          >
+            {skin.label}
+          </Text>
+          <Text
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            style={[
+              styles.skinInspectChallengeText,
+              !skin.challenge && styles.skinInspectReservedChallengeText,
+            ]}
+          >
+            {skin.challenge ?? ' '}
+          </Text>
+          <View style={styles.skinInspectEquipButtonWrap}>
+            <GlossyButton
+              label={isEquipped ? t('common.selected') : t('common.select')}
+              variant="green"
+              size="normal"
+              disabled={isEquipped}
+              heightOverride={isTablet ? 64 : 56}
+              horizontalPadding={isTablet ? 34 : 28}
+              labelFontScale={isTablet ? 1.04 : 0.96}
+              soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
+              onPress={() => onEquip?.(skin.id)}
+            />
+          </View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
 
-function ThemeDetailScreen({ theme, onBack }) {
-  const items = theme.id === 'winter' ? [] : getThemeIcons(theme.id);
-  const titleColor = theme.id === 'winter' ? '#274154' : '#FFFFFF';
+function ThemeDetailScreen({ theme, onBack, onReady }) {
+  const { t } = useTranslation();
+  const items = useMemo(() => getThemeIcons(theme.id), [theme.id]);
+  const titleColor = '#FFFFFF';
   const backgroundImage = getThemeDetailBackgroundImage(theme.id);
   const inspectProgress = useRef(new Animated.Value(0)).current;
   const [inspectedItem, setInspectedItem] = useState(null);
+  const [resolvedSources, setResolvedSources] = useState(new Map());
+  const [assetBundleReady, setAssetBundleReady] = useState(false);
+  const [backgroundImageReady, setBackgroundImageReady] = useState(!backgroundImage);
+  const [visibleItemLoadCount, setVisibleItemLoadCount] = useState(0);
+  const visibleItemLoadKeysRef = useRef(new Set());
+  const readyCalledRef = useRef(false);
+  const resolvedBackgroundImage = getResolvedAssetSource(backgroundImage, resolvedSources);
+  const requiredInitialItemCount = Math.min(items.length, 6);
+  const resolvedDetailAssets = useMemo(() => ([
+    backgroundImage,
+    ...items,
+    ...THEME_DETAIL_ROUTE_ASSETS,
+  ].filter(Boolean).map((source) => getResolvedAssetSource(source, resolvedSources))), [backgroundImage, items, resolvedSources]);
+
+  useEffect(() => {
+    readyCalledRef.current = false;
+    setAssetBundleReady(false);
+    setBackgroundImageReady(!backgroundImage);
+    visibleItemLoadKeysRef.current = new Set();
+    setVisibleItemLoadCount(0);
+
+    let cancelled = false;
+
+    loadResolvedAssetSources([
+      backgroundImage,
+      ...items,
+      ...THEME_DETAIL_ROUTE_ASSETS,
+    ]).then((nextResolvedSources) => {
+      if (!cancelled) {
+        setResolvedSources(nextResolvedSources);
+        setAssetBundleReady(true);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setResolvedSources(new Map());
+        setAssetBundleReady(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backgroundImage, items, theme.id]);
+
+  useEffect(() => {
+    const visibleAssetsReady = backgroundImageReady && visibleItemLoadCount >= requiredInitialItemCount;
+
+    if (!assetBundleReady || !visibleAssetsReady || readyCalledRef.current) {
+      return;
+    }
+
+    readyCalledRef.current = true;
+    onReady?.();
+  }, [assetBundleReady, backgroundImageReady, onReady, requiredInitialItemCount, visibleItemLoadCount]);
+
+  function markVisibleItemLoaded(index) {
+    if (visibleItemLoadKeysRef.current.has(index)) {
+      return;
+    }
+
+    visibleItemLoadKeysRef.current.add(index);
+    setVisibleItemLoadCount(visibleItemLoadKeysRef.current.size);
+  }
 
   function openItemInspect(cell) {
     setInspectedItem(cell);
@@ -1234,6 +2796,21 @@ function ThemeDetailScreen({ theme, onBack }) {
     });
   }
 
+  const renderThemeItem = useCallback(({ item: itemImage, index }) => (
+    <ThemeItemTile
+      itemImage={getResolvedAssetSource(itemImage, resolvedSources)}
+      inspectImage={itemImage}
+      onInspect={openItemInspect}
+      onLoadEnd={() => {
+        if (index < requiredInitialItemCount) {
+          markVisibleItemLoaded(index);
+        }
+      }}
+    />
+  ), [openItemInspect, requiredInitialItemCount, resolvedSources]);
+
+  const themeItemKeyExtractor = useCallback((_itemImage, index) => `${theme.id}-${index}`, [theme.id]);
+
   const content = (
     <>
       <View style={styles.themeDetailShade} />
@@ -1242,56 +2819,91 @@ function ThemeDetailScreen({ theme, onBack }) {
         size={66}
         style={styles.themeDetailBackButtonWrap}
       />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.themeDetailContent}
-      >
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.78}
-          style={[
-            styles.themeDetailTitle,
-            theme.id === 'verkeersborden' && styles.themeDetailTitleCompact,
-            { color: titleColor },
-          ]}
+      {items.length ? (
+        <FlatList
+          data={items}
+          keyExtractor={themeItemKeyExtractor}
+          renderItem={renderThemeItem}
+          numColumns={3}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={requiredInitialItemCount}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={24}
+          windowSize={7}
+          columnWrapperStyle={styles.themeItemsGridRow}
+          contentContainerStyle={styles.themeDetailContent}
+          ListHeaderComponent={(
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              style={[
+                styles.themeDetailTitle,
+                theme.id === 'verkeersborden' && styles.themeDetailTitleCompact,
+                { color: titleColor },
+              ]}
+            >
+              {theme.label}
+            </Text>
+          )}
+        />
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={Platform.OS === 'android'}
+          contentContainerStyle={styles.themeDetailContent}
         >
-          {theme.label}
-        </Text>
-        {items.length ? (
-          <View style={styles.themeItemsGrid}>
-            {items.map((itemImage, index) => (
-              <ThemeItemTile
-                key={`${theme.id}-${index}`}
-                itemImage={itemImage}
-                onInspect={openItemInspect}
-              />
-            ))}
-          </View>
-        ) : (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            style={[
+              styles.themeDetailTitle,
+              theme.id === 'verkeersborden' && styles.themeDetailTitleCompact,
+              { color: titleColor },
+            ]}
+          >
+            {theme.label}
+          </Text>
           <View style={styles.themeItemsEmptyState}>
-            <Text style={styles.themeItemsEmptyText}>Items komen later</Text>
+            <Text style={styles.themeItemsEmptyText}>{t('home.itemsComingLater')}</Text>
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
       <ThemeItemInspectOverlay
         cell={inspectedItem}
         progress={inspectProgress}
         onClose={closeItemInspect}
       />
+      <WarmupImages
+        assets={resolvedDetailAssets}
+        active={assetBundleReady && Platform.OS !== 'android'}
+        timeoutMs={null}
+        imageSize={96}
+        batchSize={16}
+      />
     </>
   );
 
   if (backgroundImage) {
+    if (!assetBundleReady) {
+      return <View style={[styles.themeDetailScreen, { backgroundColor: theme.cardSurface ?? theme.bg ?? '#376A98' }]} />;
+    }
+
     return (
-      <ImageBackground
-        source={backgroundImage}
-        resizeMode="cover"
-        fadeDuration={0}
-        style={styles.themeDetailScreen}
-      >
+      <View style={styles.themeDetailScreen}>
+        <ExpoImage
+          source={resolvedBackgroundImage}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={0}
+          style={StyleSheet.absoluteFill}
+          onLoad={() => setBackgroundImageReady(true)}
+          onError={() => setBackgroundImageReady(true)}
+        />
         {content}
-      </ImageBackground>
+      </View>
     );
   }
 
@@ -1301,6 +2913,7 @@ function ThemeDetailScreen({ theme, onBack }) {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.themeDetailScreen}
+      onLayout={onReady}
     >
       {content}
     </LinearGradient>
@@ -1310,6 +2923,7 @@ function ThemeDetailScreen({ theme, onBack }) {
 function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex, onSelectItem }) {
   const { width, height } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(width, height);
+  const { t } = useTranslation();
   const selectedTheme = THEME_SHOWCASE_ITEMS[selectedThemeIndex] ?? THEME_SHOWCASE_ITEMS[0];
   const previewItems = selectedTheme.previewItems ?? [];
   const boundedItemIndex = previewItems.length ? Math.min(selectedItemIndex, previewItems.length - 1) : 0;
@@ -1318,9 +2932,9 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
   return (
     <View style={styles.tabPanel}>
       <View style={styles.panelHeader}>
-        <Text style={styles.panelEyebrow}>Verzamel</Text>
-        <Text style={styles.panelTitle}>Thema kaarten</Text>
-        <Text style={styles.panelSubtitle}>Swipe door de kaartensets en bekijk voorbeelditems van elke set.</Text>
+        <Text style={styles.panelEyebrow}>{t('home.collect')}</Text>
+        <Text style={styles.panelTitle}>{t('home.themeCards')}</Text>
+        <Text style={styles.panelSubtitle}>{t('home.themeCardsSubtitle')}</Text>
       </View>
 
       <ThemeCarousel
@@ -1351,6 +2965,7 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
               <ImageBackground
                 source={item.previewImage}
                 resizeMode={embeddedFrame ? 'stretch' : 'cover'}
+                resizeMethod={Platform.OS === 'android' ? 'scale' : 'auto'}
                 fadeDuration={0}
                 imageStyle={[
                   styles.themeShowcaseCardImage,
@@ -1363,6 +2978,10 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
               >
                 <View style={styles.themeShowcaseOverlay} />
                 <Text
+                  allowFontScaling={false}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.76}
                   style={[
                     styles.themeShowcaseTitle,
                     embeddedFrame && styles.themeShowcaseTitleEmbedded,
@@ -1381,7 +3000,7 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
               >
                 {item.premium ? (
                   <View style={styles.lockBadge}>
-                    <Text style={styles.lockBadgeText}>Premium</Text>
+                    <Text style={styles.lockBadgeText}>{t('common.premium')}</Text>
                   </View>
                 ) : null}
                 <Text style={styles.themeShowcaseTitle}>
@@ -1400,13 +3019,13 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
             <Text style={styles.detailPanelTitle}>{selectedTheme.label}</Text>
             <Text style={styles.detailPanelText}>
               {selectedTheme.itemCount
-                ? `${selectedTheme.itemCount} mogelijke items om doorheen te bladeren`
-                : 'Preview-items voor deze set komen later'}
+                ? t('home.possibleItems', { count: selectedTheme.itemCount })
+                : t('home.previewItemsComingLater')}
             </Text>
           </View>
           <View style={[styles.themeStatusBadge, selectedTheme.premium && styles.themeStatusBadgePremium]}>
             <Text style={[styles.themeStatusBadgeText, selectedTheme.premium && styles.themeStatusBadgeTextPremium]}>
-              {selectedTheme.premium ? 'Premium' : 'Free'}
+              {selectedTheme.premium ? t('common.premium') : t('common.free')}
             </Text>
           </View>
         </View>
@@ -1414,7 +3033,12 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
         {selectedItemImage ? (
           <>
             <View style={styles.itemPreviewStage}>
-              <Image source={selectedItemImage} resizeMode="contain" fadeDuration={0} style={styles.itemPreviewImage} />
+              <Image
+                source={selectedItemImage}
+                resizeMode="contain"
+                fadeDuration={0}
+                style={styles.itemPreviewImage}
+              />
             </View>
             <Text style={styles.itemPreviewCaption}>
               Voorbeelditem {boundedItemIndex + 1} van {previewItems.length}
@@ -1430,7 +3054,12 @@ function ThemeCardsPanel({ selectedThemeIndex, onSelectTheme, selectedItemIndex,
                   onPress={() => onSelectItem(index)}
                   style={[styles.itemThumb, index === boundedItemIndex && styles.itemThumbActive]}
                 >
-                  <Image source={itemImage} resizeMode="contain" fadeDuration={0} style={styles.itemThumbImage} />
+                  <Image
+                    source={itemImage}
+                    resizeMode="contain"
+                    fadeDuration={0}
+                    style={styles.itemThumbImage}
+                  />
                 </Pressable>
               ))}
             </ScrollView>
@@ -1466,22 +3095,33 @@ export default function HomeScreen({
   route,
   showDriverWarning = false,
   onDriverWarningComplete = null,
+  tutorialActive = false,
+  tutorialStep = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
+  onTutorialRouteReveal = null,
 }) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(windowWidth, windowHeight);
-  const { isPremium } = usePremium();
+  const {
+    isPremium,
+    ownedPaidSkins,
+    paidSkinPackagesBySkin,
+    getPaidSkinPrice,
+    purchasePaidSkin,
+  } = usePremium();
   const { settings } = useAppSettings();
+  const { language, t } = useTranslation();
   const pulse = useRef(new Animated.Value(1)).current;
   const premiumCrownPulse = useRef(new Animated.Value(1)).current;
   const premiumButtonPress = useRef(new Animated.Value(0)).current;
-  const bugReportPress = useRef(new Animated.Value(0)).current;
   const joinOptionPress = useRef(new Animated.Value(0)).current;
   const hostOptionPress = useRef(new Animated.Value(0)).current;
   const driverWarningFade = useRef(new Animated.Value(0)).current;
   const driverWarningButtonFade = useRef(new Animated.Value(0)).current;
   const driverWarningDismissedRef = useRef(false);
   const hostPadlockJiggle = useRef(new Animated.Value(0)).current;
-  const playCarJump = useRef(new Animated.Value(0)).current;
+  const playCarFeedbackProgress = useRef(new Animated.Value(0)).current;
   const onlineYellowJump = useRef(new Animated.Value(0)).current;
   const onlineBlueJump = useRef(new Animated.Value(0)).current;
   const onlineGreenJump = useRef(new Animated.Value(0)).current;
@@ -1495,11 +3135,24 @@ export default function HomeScreen({
   const onlineButtonWrapRef = useRef(null);
   const hostOptionRef = useRef(null);
   const joinOptionRef = useRef(null);
+  const joinPlateTargetRef = useRef(null);
+  const premiumButtonRef = useRef(null);
+  const navButtonRefs = useRef({});
   const joinCodeInputRef = useRef(null);
   const pendingOnlineJumpTimeoutRef = useRef(null);
   const pendingRouteRef = useRef(null);
   const pendingRouteParamsRef = useRef(null);
+  const pendingRevealCompleteRef = useRef(null);
   const pendingThemeBackRef = useRef(false);
+  const playCarHapticTimeoutsRef = useRef([]);
+  const playCarRevealTimeoutRef = useRef(null);
+  const themeDetailReadyResolverRef = useRef(null);
+  const themeDetailReadyRef = useRef(false);
+  const themeRoadReadyResolverRef = useRef(null);
+  const themeRoadReadyRef = useRef(false);
+  const themeRevealFallbackTimeoutRef = useRef(null);
+  const homeReturnReadyResolverRef = useRef(null);
+  const homeReturnReadyRef = useRef(false);
   const latestPressPointRef = useRef(null);
   const loadedCriticalImagesRef = useRef(new Set());
   const themeRoadOffsetRef = useRef(0);
@@ -1518,32 +3171,32 @@ export default function HomeScreen({
   const [premiumModalSource, setPremiumModalSource] = useState(null);
   const [driverWarningVisible, setDriverWarningVisible] = useState(showDriverWarning);
   const [driverWarningButtonReady, setDriverWarningButtonReady] = useState(false);
-  const [bugReportModalVisible, setBugReportModalVisible] = useState(false);
-  const [bugReportForm, setBugReportForm] = useState(EMPTY_BUG_REPORT_FORM);
-  const [bugReportError, setBugReportError] = useState('');
-  const [bugReportSuccess, setBugReportSuccess] = useState('');
-  const [bugReportSubmitting, setBugReportSubmitting] = useState(false);
   const [lobbyExitMessage, setLobbyExitMessage] = useState(route?.params?.lobbyExitMessage ?? '');
   const [activeTab, setActiveTab] = useState(HOME_TAB_HOME);
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
   const [selectedThemeItemIndex, setSelectedThemeItemIndex] = useState(0);
   const [selectedThemeDetail, setSelectedThemeDetail] = useState(null);
   const [skinInspection, setSkinInspection] = useState(null);
+  const [equippedSkin, setEquippedSkin] = useState('rood');
+  const [purchasingSkinId, setPurchasingSkinId] = useState(null);
   const [skinChallengeProgress, setSkinChallengeProgress] = useState(null);
+  const skinChallengeProgressLoadingRef = useRef(false);
   const [pendingThemeDetail, setPendingThemeDetail] = useState(null);
   const [homeAssetsReady, setHomeAssetsReady] = useState(false);
   const [homeLayoutReady, setHomeLayoutReady] = useState(false);
   const [homeImagesReady, setHomeImagesReady] = useState(false);
+  const [homeRenderKey, setHomeRenderKey] = useState(0);
+  const [themeRoadRenderKey, setThemeRoadRenderKey] = useState(0);
   const [themeRevealState, setThemeRevealState] = useState({
     covering: false,
+    phase: 'cover',
+    solidHold: false,
     color: '#1A5EA8',
     origin: { x: windowWidth / 2, y: 360 },
   });
   const tabWidth = windowWidth / NAV_ITEMS.length;
-  const driverWarningIconSize = Math.min(
-    DRIVER_WARNING_ICON_MAX_SIZE,
-    windowWidth * DRIVER_WARNING_ICON_WIDTH_RATIO
-  );
+  const driverWarningMetrics = getDriverWarningMetrics(windowWidth, windowHeight);
+  const driverWarningIconSize = driverWarningMetrics.iconSize;
   const navMetrics = {
     navHeight: isTablet ? 154 : 118,
     navHighlightHeight: isTablet ? 176 : 136,
@@ -1559,6 +3212,9 @@ export default function HomeScreen({
   const actionButtonHeight = isTablet ? 112 : 88;
   const actionAvailableWidth = windowWidth - actionPadding * 2 - actionGap;
   const collapsedActionWidth = actionAvailableWidth / 2;
+  const shouldRenderSkinShopTab = true;
+  const shouldRenderHomeTab = true;
+  const shouldRenderThemeCardsTab = true;
   const expandedOnlineWidth = actionAvailableWidth * 0.66;
   const expandedPlayWidth = actionAvailableWidth - expandedOnlineWidth;
   const playPanelWidth = onlineExpand.interpolate({
@@ -1619,7 +3275,6 @@ export default function HomeScreen({
   const homeMenuButtonSize = 54;
   const homeMenuButtonTop = 16;
   const homeMenuButtonLeft = 16;
-  const homeMenuButtonGap = 10;
   const premiumButtonPressStyle = {
     transform: [
       {
@@ -1637,34 +3292,49 @@ export default function HomeScreen({
       { scale: premiumCrownPulse },
     ],
   };
-  const bugReportPressStyle = {
-    transform: [
-      {
-        translateY: bugReportPress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 3],
-        }),
-      },
-      {
-        scale: bugReportPress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 0.94],
-        }),
-      },
-    ],
-  };
-
   const markHomeCriticalImageLoaded = useCallback((key) => {
     loadedCriticalImagesRef.current.add(key);
 
     if (loadedCriticalImagesRef.current.size >= HOME_CRITICAL_IMAGE_COUNT) {
       setHomeImagesReady(true);
+      homeReturnReadyRef.current = true;
+      homeReturnReadyResolverRef.current?.();
+      homeReturnReadyResolverRef.current = null;
     }
   }, []);
 
   useEffect(() => {
     setLobbyExitMessage(route?.params?.lobbyExitMessage ?? '');
   }, [route?.params?.lobbyExitMessage]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY).then((storedSkin) => {
+      if (
+        !cancelled
+        && SKIN_OPTIONS.includes(storedSkin)
+        && isSkinAvailableForPlayer(storedSkin, { isPremium, ownedPaidSkins })
+      ) {
+        setEquippedSkin(storedSkin);
+      }
+    }).catch(() => {
+      // Rood blijft de standaard als de opgeslagen keuze niet leesbaar is.
+    });
+
+    skinChallengeProgressLoadingRef.current = true;
+    loadSkinChallengeProgress().then((progress) => {
+      if (!cancelled) {
+        setSkinChallengeProgress(progress);
+      }
+    }).finally(() => {
+      skinChallengeProgressLoadingRef.current = false;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPremium, ownedPaidSkins]);
 
   useEffect(() => {
     preloadSoundEffect(GLOSSY_BUTTON_CLICK_SOUND);
@@ -1678,43 +3348,111 @@ export default function HomeScreen({
         clearTimeout(pendingOnlineJumpTimeoutRef.current);
         pendingOnlineJumpTimeoutRef.current = null;
       }
+      if (themeRevealFallbackTimeoutRef.current) {
+        clearTimeout(themeRevealFallbackTimeoutRef.current);
+        themeRevealFallbackTimeoutRef.current = null;
+      }
+      playCarHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      playCarHapticTimeoutsRef.current = [];
+      if (playCarRevealTimeoutRef.current) {
+        clearTimeout(playCarRevealTimeoutRef.current);
+        playCarRevealTimeoutRef.current = null;
+      }
     };
   }, []);
+
   const normalizedJoinCode = useMemo(() => normalizeLobbyCode(joinCode), [joinCode]);
+  const localizedThemeShowcaseItems = useMemo(() => THEME_SHOWCASE_ITEMS.map((theme) => ({
+    ...theme,
+    label: getThemeLabel(language, theme.id, theme.label),
+  })), [language]);
+  const localizedNavItems = useMemo(() => NAV_ITEMS.map((item) => ({
+    ...item,
+    label: item.key === HOME_TAB_SKINSHOP
+      ? t('home.skinshop')
+      : item.key === HOME_TAB_THEMECARDS
+        ? t('home.cards')
+        : t('home.home'),
+  })), [t]);
+  const isTutorialJoinCodeStep = tutorialStep?.target === 'home.joinPlate';
+  const displayJoinCode = isTutorialJoinCodeStep
+    ? normalizeTutorialJoinCode(joinCode)
+    : normalizedJoinCode;
   const skinShopItems = useMemo(
-    () => buildSkinShopItems(skinChallengeProgress),
-    [skinChallengeProgress]
+    () => buildSkinShopItems(skinChallengeProgress, language, isPremium, ownedPaidSkins),
+    [isPremium, language, ownedPaidSkins, skinChallengeProgress]
   );
+  const playButtonImage = PLAY_BUTTON_CAR_IMAGES[equippedSkin] ?? PLAY_BUTTON_IMAGE;
+  const playCarFeedback = PLAY_CAR_SKIN_FEEDBACK[equippedSkin] ?? PLAY_CAR_DEFAULT_FEEDBACK;
+  const playCarTranslateX = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.translateX,
+  });
+  const playCarTranslateY = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.translateY,
+  });
+  const playCarRotate = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.rotate,
+  });
+  const playCarScale = playCarFeedbackProgress.interpolate({
+    inputRange: playCarFeedback.keyframes,
+    outputRange: playCarFeedback.scale,
+  });
+
+  useEffect(() => {
+    preloadSoundEffect(playCarFeedback.soundName);
+  }, [playCarFeedback.soundName]);
   const showMainMenuPremiumButton = (
     [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
     && !isPremium
     && !selectedThemeDetail
   );
-  const showMainMenuBugReportButton = (
-    [HOME_TAB_HOME, HOME_TAB_SKINSHOP, HOME_TAB_THEMECARDS].includes(activeTab)
-    && !selectedThemeDetail
-  );
-  const joinPlateSlots = useMemo(() => {
-    const chars = normalizedJoinCode.split('');
-    return [
-      { key: 'char-0', type: 'char', value: chars[0] ?? '' },
-      { key: 'char-1', type: 'char', value: chars[1] ?? '' },
-      { key: 'dash-0', type: 'dash', value: '-' },
-      { key: 'char-2', type: 'char', value: chars[2] ?? '' },
-      { key: 'char-3', type: 'char', value: chars[3] ?? '' },
-      { key: 'dash-1', type: 'dash', value: '-' },
-      { key: 'char-4', type: 'char', value: chars[4] ?? '' },
-      { key: 'char-5', type: 'char', value: chars[5] ?? '' },
-      { key: 'char-6', type: 'char', value: chars[6] ?? '' },
-    ];
-  }, [normalizedJoinCode]);
-  const joinCursorSlotIndex = [0, 1, 3, 4, 6, 7, 8, 9][normalizedJoinCode.length] ?? 9;
+  const reportTutorialTarget = useCallback((key, targetRef) => {
+    if (!tutorialActive || !onTutorialTargetLayout || !targetRef?.current?.measureInWindow) {
+      return;
+    }
+
+    let attempts = 0;
+    const measure = () => {
+      targetRef.current?.measureInWindow?.((x, y, targetWidth, targetHeight) => {
+        if ((!targetWidth || !targetHeight) && attempts < 8) {
+          attempts += 1;
+          setTimeout(measure, 80);
+          return;
+        }
+
+        onTutorialTargetLayout(key, {
+          x,
+          y,
+          width: targetWidth,
+          height: targetHeight,
+        });
+      });
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(measure);
+    });
+  }, [onTutorialTargetLayout, tutorialActive]);
+  const joinPlateSlots = isTutorialJoinCodeStep
+    ? getTutorialLicensePlateSlots(joinCode)
+    : getLicensePlateSlots(normalizedJoinCode);
   const joinPlateWidth = Math.min(windowWidth - (isTablet ? 48 : 18), isTablet ? 760 : 430);
   const joinPlateHeight = joinPlateWidth / (1870 / 520);
   const joinPlateTop = (windowHeight - joinPlateHeight) / 2;
   const joinPlateIntroHeight = isTablet ? 92 : 68;
   const joinPlateLayerTop = Math.max(isTablet ? 116 : 82, joinPlateTop - joinPlateIntroHeight);
-  const joinPlateFontSize = Math.min(isTablet ? 72 : 42, Math.max(isTablet ? 48 : 30, joinPlateWidth * 0.096));
+  const joinPlateTextLeft = joinPlateWidth * 0.18;
+  const joinPlateTextWidth = joinPlateWidth * 0.728;
+  const joinPlateSlotWidth = joinPlateTextWidth / LICENSE_PLATE_TOTAL_SLOT_UNITS;
+  const joinPlateDashSlotWidth = joinPlateSlotWidth * LICENSE_PLATE_DASH_SLOT_WEIGHT;
+  const joinPlateFontSize = Math.round(clamp(joinPlateSlotWidth * 0.78, isTablet ? 34 : 25, isTablet ? 48 : 31));
+  const joinPlateCursorLeft = Math.min(
+    joinPlateTextWidth - 3,
+    getLicensePlateCursorUnits(displayJoinCode.length) * joinPlateSlotWidth
+  );
   const joinPlateOpacity = joinPlateProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
@@ -1771,12 +3509,19 @@ export default function HomeScreen({
   }, [homeAssetsReady, homeImagesReady, homeLayoutReady, navigation]);
 
   useEffect(() => {
-    if (activeTab !== HOME_TAB_SKINSHOP) {
+    if (
+      activeTab !== HOME_TAB_SKINSHOP
+      || skinChallengeProgress
+      || skinChallengeProgressLoadingRef.current
+    ) {
       return;
     }
 
-    void loadSkinChallengeProgress().then(setSkinChallengeProgress);
-  }, [activeTab]);
+    skinChallengeProgressLoadingRef.current = true;
+    void loadSkinChallengeProgress().then(setSkinChallengeProgress).finally(() => {
+      skinChallengeProgressLoadingRef.current = false;
+    });
+  }, [activeTab, skinChallengeProgress]);
 
   useEffect(() => {
     if (!isJoinPlateVisible) {
@@ -1818,6 +3563,7 @@ export default function HomeScreen({
 
   useEffect(() => {
     const unsubscribe = navigation.addListener?.('focus', () => {
+      void recoverAudioPlaybackMode();
       onlineExpand.stopAnimation();
       onlineExpand.setValue(0);
       setIsOnlineMenuVisible(false);
@@ -1828,6 +3574,44 @@ export default function HomeScreen({
 
     return unsubscribe;
   }, [navigation, onlineExpand, joinPlateProgress]);
+
+  useEffect(() => {
+    if (!route?.params?.tutorialResetKey) {
+      return;
+    }
+
+    if (pendingOnlineJumpTimeoutRef.current) {
+      clearTimeout(pendingOnlineJumpTimeoutRef.current);
+      pendingOnlineJumpTimeoutRef.current = null;
+    }
+
+    joinCodeInputRef.current?.blur();
+    onlineExpand.stopAnimation();
+    onlineExpand.setValue(0);
+    setIsOnlineMenuVisible(false);
+    joinPlateProgress.stopAnimation();
+    joinPlateProgress.setValue(0);
+    setIsJoinPlateVisible(false);
+    setJoinCode('');
+    setJoinError('');
+    setIsJoinBusy(false);
+    setActiveTab(HOME_TAB_HOME);
+    activeTabTranslateX.stopAnimation();
+    activeTabTranslateX.setValue(tabWidth);
+    tabPageTranslateX.stopAnimation();
+    tabPageTranslateX.setValue(-windowWidth);
+    setSelectedThemeDetail(null);
+    setSkinInspection(null);
+    isNavigatingRef.current = false;
+  }, [
+    activeTabTranslateX,
+    joinPlateProgress,
+    onlineExpand,
+    route?.params?.tutorialResetKey,
+    tabPageTranslateX,
+    tabWidth,
+    windowWidth,
+  ]);
 
   useEffect(() => {
     const activeIndex = NAV_ITEMS.findIndex((item) => item.key === activeTab);
@@ -1849,6 +3633,35 @@ export default function HomeScreen({
       }),
     ]).start();
   }, [activeTab, activeTabTranslateX, tabPageTranslateX, tabWidth, windowWidth]);
+
+  useEffect(() => {
+    if (tutorialStep?.target === 'home.play') {
+      reportTutorialTarget('home.play', playButtonWrapRef);
+    } else if (tutorialStep?.target === 'home.online') {
+      reportTutorialTarget('home.online', onlineButtonWrapRef);
+    } else if (tutorialStep?.target === 'home.onlineJoin') {
+      reportTutorialTarget('home.onlineJoin', joinOptionRef);
+    } else if (tutorialStep?.target === 'home.onlineHost') {
+      reportTutorialTarget('home.onlineHost', hostOptionRef);
+    } else if (tutorialStep?.target === 'home.joinPlate') {
+      reportTutorialTarget('home.joinPlate', joinPlateTargetRef);
+    } else if (tutorialStep?.target === 'home.skinshopTab') {
+      reportTutorialTarget('home.skinshopTab', { current: navButtonRefs.current[HOME_TAB_SKINSHOP] });
+    } else if (tutorialStep?.target === 'home.themeCardsTab') {
+      reportTutorialTarget('home.themeCardsTab', { current: navButtonRefs.current[HOME_TAB_THEMECARDS] });
+    } else if (tutorialStep?.target === 'home.homeTab') {
+      reportTutorialTarget('home.homeTab', { current: navButtonRefs.current[HOME_TAB_HOME] });
+    } else if (tutorialStep?.target === 'home.premium') {
+      reportTutorialTarget('home.premium', premiumButtonRef);
+    }
+  }, [
+    isJoinPlateVisible,
+    isOnlineMenuVisible,
+    reportTutorialTarget,
+    tutorialStep?.target,
+    windowHeight,
+    windowWidth,
+  ]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -1995,24 +3808,6 @@ export default function HomeScreen({
     }).start();
   };
 
-  const pressBugReportButtonIn = () => {
-    Animated.spring(bugReportPress, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 52,
-      bounciness: 0,
-    }).start();
-  };
-
-  const pressBugReportButtonOut = () => {
-    Animated.spring(bugReportPress, {
-      toValue: 0,
-      useNativeDriver: true,
-      speed: 34,
-      bounciness: 5,
-    }).start();
-  };
-
   const pressOnlineMiniButtonIn = (pressValue, event) => {
     latestPressPointRef.current = {
       x: event.nativeEvent.pageX,
@@ -2077,35 +3872,93 @@ export default function HomeScreen({
       }),
     ]);
 
-  const buildPlayHornHopAnimation = (height = -12) =>
-    Animated.sequence([
-      Animated.timing(playCarJump, {
-        toValue: height,
-        duration: 58,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(playCarJump, {
-        toValue: 2,
-        duration: 52,
-        easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(playCarJump, {
-        toValue: 0,
-        duration: 96,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]);
+  const buildPlayCarFeedbackAnimation = (feedback = PLAY_CAR_DEFAULT_FEEDBACK) => {
+    playCarFeedbackProgress.stopAnimation();
+    playCarFeedbackProgress.setValue(0);
 
-  const buildPlayHornJumpAnimation = () =>
-    Animated.sequence([
-      Animated.delay(PRESS_THEN_HORN_DELAY_MS + PLAY_HORN_JUMP_DELAYS[0]),
-      buildPlayHornHopAnimation(-13),
-      Animated.delay(PLAY_HORN_JUMP_DELAYS[1] - PLAY_HORN_JUMP_DELAYS[0] - 206),
-      buildPlayHornHopAnimation(-10),
-    ]);
+    if (feedback.kind === 'classicHornJump') {
+      return Animated.sequence([
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.115,
+          duration: 58,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.217,
+          duration: 52,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.407,
+          duration: 96,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.593,
+          duration: 94,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.708,
+          duration: 58,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 0.81,
+          duration: 52,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(playCarFeedbackProgress, {
+          toValue: 1,
+          duration: 96,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]);
+    }
+
+    if (feedback.kind === 'snapTimeline' && Array.isArray(feedback.timelineSteps)) {
+      let elapsed = 0;
+      const animations = feedback.timelineSteps.flatMap((step) => {
+        const wait = Math.max(0, step.at - elapsed);
+        elapsed = step.at + step.duration;
+
+        return [
+          ...(wait > 0 ? [Animated.delay(wait)] : []),
+          Animated.timing(playCarFeedbackProgress, {
+            toValue: step.toValue,
+            duration: step.duration,
+            easing: step.easing ?? Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ];
+      });
+
+      return Animated.sequence(animations);
+    }
+
+    if (feedback.kind === 'linearTimeline') {
+      return Animated.timing(playCarFeedbackProgress, {
+        toValue: 1,
+        duration: feedback.duration,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      });
+    }
+
+    return Animated.timing(playCarFeedbackProgress, {
+      toValue: 1,
+      duration: feedback.duration,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+  };
 
   const runOnlineCarJumpSequence = ({ withHaptics = false, onComplete } = {}) => {
     void playSoundEffect(ONLINE_CARS_HORN_SOUND, settings);
@@ -2206,142 +4059,6 @@ export default function HomeScreen({
     });
   };
 
-  const openBugReportModal = async () => {
-    setBugReportError('');
-    setBugReportSuccess('');
-    try {
-      await preloadImageAssets(BUG_REPORT_MODAL_ASSETS);
-    } catch (_error) {
-      // Bug melden mag alsnog openen als prefetch faalt.
-    }
-    setBugReportModalVisible(true);
-  };
-
-  const closeBugReportModal = () => {
-    setBugReportModalVisible(false);
-    setBugReportError('');
-  };
-
-  const updateBugReportForm = (field, value) => {
-    setBugReportForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-    setBugReportError('');
-    setBugReportSuccess('');
-  };
-
-  const pickBugReportScreenshot = async () => {
-    setBugReportError('');
-    setBugReportSuccess('');
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setBugReportError('Geef toegang tot je foto’s om een screenshot toe te voegen.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: false,
-      quality: 0.75,
-      exif: false,
-    });
-
-    if (result.canceled || !result.assets?.[0]) {
-      return;
-    }
-
-    updateBugReportForm('screenshot', result.assets[0]);
-  };
-
-  const submitBugReport = async () => {
-    if (bugReportSubmitting) {
-      return;
-    }
-
-    const location = bugReportForm.location.trim();
-    const summary = bugReportForm.summary.trim();
-    const steps = bugReportForm.steps.trim();
-
-    if (location.length < 3) {
-      setBugReportError('Vul in waar je de bug zag.');
-      return;
-    }
-
-    if (summary.length < 6) {
-      setBugReportError('Vertel kort wat er mis ging.');
-      return;
-    }
-
-    if (steps.length < 6) {
-      setBugReportError('Vul in hoe we de bug kunnen nadoen.');
-      return;
-    }
-
-    setBugReportSubmitting(true);
-    setBugReportError('');
-
-    const reportContext = {
-      activeTab,
-      isPremium,
-      selectedThemeId: selectedThemeDetail?.id ?? null,
-      appVersion: BUG_REPORT_APP_VERSION,
-      windowWidth,
-      windowHeight,
-    };
-
-    try {
-      await submitBugReportToSupabase({
-        location,
-        summary,
-        steps,
-        severity: bugReportForm.severity,
-        context: reportContext,
-        screenshot: bugReportForm.screenshot,
-      });
-
-      setBugReportForm(EMPTY_BUG_REPORT_FORM);
-      setBugReportSuccess('Dank je! Je melding is verstuurd.');
-    } catch (_error) {
-      try {
-        const storedReports = await AsyncStorage.getItem(BUG_REPORT_STORAGE_KEY);
-        const parsedReports = storedReports ? JSON.parse(storedReports) : [];
-        const reports = Array.isArray(parsedReports) ? parsedReports : [];
-        const nextReport = {
-          id: `bug-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          status: 'pending_sync',
-          location,
-          summary,
-          steps,
-          severity: bugReportForm.severity,
-          screenshot: bugReportForm.screenshot
-            ? {
-                uri: bugReportForm.screenshot.uri,
-                fileName: bugReportForm.screenshot.fileName ?? null,
-                mimeType: bugReportForm.screenshot.mimeType ?? null,
-                fileSize: bugReportForm.screenshot.fileSize ?? null,
-              }
-            : null,
-          context: reportContext,
-        };
-
-        await AsyncStorage.setItem(
-          BUG_REPORT_STORAGE_KEY,
-          JSON.stringify([nextReport, ...reports].slice(0, 25))
-        );
-
-        setBugReportForm(EMPTY_BUG_REPORT_FORM);
-        setBugReportSuccess('Geen verbinding. Je melding is lokaal bewaard.');
-      } catch {
-        setBugReportError('Opslaan lukt nu niet. Probeer het zo opnieuw.');
-      }
-    } finally {
-      setBugReportSubmitting(false);
-    }
-  };
-
   const openSkinInspect = (inspection) => {
     void Haptics.selectionAsync();
     void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
@@ -2354,6 +4071,69 @@ export default function HomeScreen({
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
+  };
+
+  const handleEquipSkin = async (skinId) => {
+    if (!SKIN_OPTIONS.includes(skinId)) {
+      return;
+    }
+
+    if (isChallengeSkin(skinId) && !isSkinUnlocked(skinChallengeProgress, skinId)) {
+      return;
+    }
+
+    if (!isSkinAvailableForPlayer(skinId, { isPremium, ownedPaidSkins })) {
+      return;
+    }
+
+    setEquippedSkin(skinId);
+
+    try {
+      await AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, skinId);
+    } catch (_error) {
+      // Niet kritiek: de keuze is direct zichtbaar en rood blijft de fallback.
+    }
+
+    closeSkinInspect();
+  };
+
+  const handlePurchaseSkin = async (skinId) => {
+    if (!isPaidSkin(skinId) || purchasingSkinId) {
+      return;
+    }
+
+    const packageAvailable = Boolean(paidSkinPackagesBySkin?.[skinId]);
+
+    if (!packageAvailable) {
+      Alert.alert(t('home.skinshop'), t('home.skinPurchaseUnavailable'));
+      return;
+    }
+
+    setPurchasingSkinId(skinId);
+
+    try {
+      const result = await purchasePaidSkin(skinId);
+      const nextOwnedPaidSkins = Object.keys(result?.customerInfo?.entitlements?.active ?? {})
+        .filter((entitlementId) => entitlementId.startsWith('skin_'))
+        .map((entitlementId) => entitlementId.replace(/^skin_/, ''));
+
+      if (nextOwnedPaidSkins.includes(skinId) || ownedPaidSkins.includes(skinId)) {
+        setEquippedSkin(skinId);
+        void AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, skinId).catch(() => {});
+        closeSkinInspect();
+        return;
+      }
+
+      Alert.alert(t('home.skinshop'), t('home.skinPurchasePending'));
+    } catch (error) {
+      if (error?.userCancelled) {
+        Alert.alert(t('home.skinshop'), t('home.skinPurchaseCancelled'));
+      } else {
+        Alert.alert(t('home.skinshop'), t('home.skinPurchaseFailed'));
+      }
+    } finally {
+      setPurchasingSkinId(null);
+    }
   };
 
   const closeSkinInspect = (onClosed) => {
@@ -2401,12 +4181,17 @@ export default function HomeScreen({
       return;
     }
 
+    if (tutorialActive && tutorialStep?.target !== 'home.onlineJoin') {
+      return;
+    }
+
     void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
 
     setIsJoinPlateVisible(true);
     setJoinCode('');
     setJoinError('');
     setIsJoinBusy(false);
+    onTutorialAction?.('home.joinPlateOpened');
 
     if (isOnlineMenuVisible) {
       closeOnlineMenu();
@@ -2441,15 +4226,83 @@ export default function HomeScreen({
   };
 
   const submitJoinCode = async (codeToSubmit = normalizedJoinCode) => {
-    const code = normalizeLobbyCode(codeToSubmit);
+    const code = isTutorialJoinCodeStep
+      ? normalizeTutorialJoinCode(codeToSubmit)
+      : normalizeLobbyCode(codeToSubmit);
 
-    if (code.length !== 7 || isJoinBusy) {
+    if (code.length !== 8 || isJoinBusy) {
+      return;
+    }
+
+    if (isTutorialJoinCodeStep && code === 'UITLEG12') {
+      setIsJoinBusy(false);
+      joinCodeInputRef.current?.blur();
+      isNavigatingRef.current = true;
+
+      const tutorialLobbyConfig = createGameConfig({
+        thema: 'snelweg',
+        modus: 'klassiek',
+        syncType: 'live',
+        lobbyCode: 'UITLEG12',
+        seed: 12345,
+        salt: 67890,
+        wincondition: '1rij',
+        diagonaal: true,
+        kaartOpzet: 'zelfde',
+        nederlands: true,
+        spelers: [
+          {
+            ...createPlayer({ skin: equippedSkin }),
+            naam: 'Jij',
+            skin: equippedSkin,
+          },
+        ],
+        liveLobbyPlayers: [
+          { ...createPlayer({ naam: 'Host', skin: 'rood' }), role: 'host' },
+          { ...createPlayer({ naam: 'Jij', skin: equippedSkin }), role: 'player' },
+        ],
+      });
+
+      if (onTutorialRouteReveal) {
+        onTutorialRouteReveal({
+          color: '#F5C400',
+          routeName: 'Lobby',
+          routeParams: {
+            config: tutorialLobbyConfig,
+            tutorialMode: true,
+          },
+          actionName: 'home.tutorialJoinSubmitted',
+          origin: {
+            nativeEvent: {
+              pageX: windowWidth / 2,
+              pageY: windowHeight / 2,
+            },
+          },
+        });
+      } else {
+        void triggerReveal({
+          targetRef: joinPlateTargetRef,
+          color: '#F5C400',
+          routeName: 'Lobby',
+          routeParams: {
+            config: tutorialLobbyConfig,
+            tutorialMode: true,
+          },
+          origin: {
+            x: windowWidth / 2,
+            y: windowHeight / 2,
+          },
+          onComplete: () => {
+            onTutorialAction?.('home.tutorialJoinSubmitted');
+          },
+        });
+      }
       return;
     }
 
     const decoded = decodeLobbyCode(code);
     if (!decoded) {
-      setJoinError('Deze code klopt niet.');
+      setJoinError(t('home.invalidCode'));
       return;
     }
 
@@ -2462,8 +4315,8 @@ export default function HomeScreen({
         const online = await checkOnlineConnection();
         if (!online) {
           setConnectionError({
-            title: 'Geen internetverbinding',
-            message: 'Om deze lobby te joinen, heb je een stabiele internetverbinding nodig.',
+            title: t('home.noInternetTitle'),
+            message: t('home.noInternetJoinMessage'),
           });
           setIsJoinBusy(false);
           return;
@@ -2472,10 +4325,16 @@ export default function HomeScreen({
       const liveLobby = syncType === 'live' ? await getLobbySnapshot(code) : null;
 
       if (syncType === 'live' && !liveLobby) {
-        setJoinError('Lobby niet gevonden.');
+        setJoinError(t('home.lobbyNotFound'));
         setIsJoinBusy(false);
         return;
       }
+
+      const joinPlayer = {
+        ...createPlayer({ skin: equippedSkin }),
+        naam: getDefaultPlayerNameForLanguage(language, 0),
+        skin: equippedSkin,
+      };
 
       const config = createGameConfig({
         thema: liveLobby?.config?.thema ?? decoded.thema,
@@ -2484,15 +4343,23 @@ export default function HomeScreen({
         lobbyCode: code,
         seed: liveLobby?.config?.seed ?? decoded.seed,
         salt: liveLobby?.config?.salt ?? decoded.salt,
-        wincondition: liveLobby?.config?.wincondition ?? '1rij',
-        diagonaal: typeof liveLobby?.config?.diagonaal === 'boolean' ? liveLobby.config.diagonaal : true,
-        kaartOpzet: liveLobby?.config?.kaartOpzet ?? 'zelfde',
+        wincondition: liveLobby?.config?.wincondition ?? decoded.wincondition ?? '1rij',
+        diagonaal: typeof liveLobby?.config?.diagonaal === 'boolean'
+          ? liveLobby.config.diagonaal
+          : (typeof decoded.diagonaal === 'boolean' ? decoded.diagonaal : true),
+        kaartOpzet: liveLobby?.config?.kaartOpzet ?? decoded.kaartOpzet ?? 'zelfde',
+        nederlands: typeof liveLobby?.config?.nederlands === 'boolean'
+          ? liveLobby.config.nederlands
+          : (typeof decoded.nederlands === 'boolean' ? decoded.nederlands : true),
         zichtbaarheid: decoded.syncType === 'live'
           ? { ...DEFAULT_ZICHTBAARHEID }
           : { eigenVoortgang: false, andermansVoortgang: false },
         startedAt: liveLobby?.startedAt ?? null,
         liveLobbyPlayers: liveLobby?.players ?? [],
+        spelers: [joinPlayer],
       });
+
+      void AsyncStorage.setItem(EQUIPPED_SKIN_STORAGE_KEY, equippedSkin);
 
       setIsJoinBusy(false);
       isNavigatingRef.current = true;
@@ -2509,16 +4376,17 @@ export default function HomeScreen({
         },
       });
     } catch (_error) {
-      setJoinError('Joinen lukt even niet.');
+      setJoinError(t('home.joinFailed'));
       setIsJoinBusy(false);
     }
   };
 
-  const triggerReveal = async ({ targetRef, color, routeName, routeParams = {}, origin }) => {
+  const triggerReveal = async ({ targetRef, color, routeName, routeParams = {}, origin, onComplete }) => {
     const center = origin ?? latestPressPointRef.current ?? await measureViewCenter(targetRef);
 
     pendingRouteRef.current = routeName;
     pendingRouteParamsRef.current = routeParams;
+    pendingRevealCompleteRef.current = typeof onComplete === 'function' ? onComplete : null;
     setRevealColor(color);
     setRevealOrigin(center);
 
@@ -2537,26 +4405,56 @@ export default function HomeScreen({
     }
 
     isNavigatingRef.current = true;
-    setTimeout(() => {
-      void playSoundEffect(PLAY_HORN_SOUND, settings);
-    }, PRESS_THEN_HORN_DELAY_MS);
-    PLAY_HORN_JUMP_DELAYS.forEach((delay) => {
-      setTimeout(() => {
-        triggerLightJumpHaptic();
-      }, PRESS_THEN_HORN_DELAY_MS + delay);
+    const feedback = playCarFeedback;
+    playCarFeedbackProgress.stopAnimation();
+    playCarHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    playCarHapticTimeoutsRef.current = [];
+    if (playCarRevealTimeoutRef.current) {
+      clearTimeout(playCarRevealTimeoutRef.current);
+      playCarRevealTimeoutRef.current = null;
+    }
+
+    void playSoundEffect(feedback.soundName, settings, {
+      ...feedback.soundOptions,
+      exclusiveSoundNames: PLAY_CAR_SOUND_NAMES,
+      forceAudioMode: true,
+    });
+    feedback.hapticDelays.forEach((delay, index) => {
+      const timeoutId = setTimeout(() => {
+        if (index === 0) {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } else {
+          triggerLightJumpHaptic();
+        }
+      }, delay);
+      playCarHapticTimeoutsRef.current.push(timeoutId);
     });
 
-    buildPlayHornJumpAnimation().start(({ finished }) => {
+    buildPlayCarFeedbackAnimation(feedback).start(({ finished }) => {
       if (!finished) {
+        playCarHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+        playCarHapticTimeoutsRef.current = [];
         isNavigatingRef.current = false;
         return;
       }
 
-      setTimeout(() => {
+      playCarHapticTimeoutsRef.current = [];
+      playCarRevealTimeoutRef.current = setTimeout(() => {
+        playCarRevealTimeoutRef.current = null;
         void triggerReveal({
           targetRef: playButtonWrapRef,
           color: '#F5C400',
           routeName: 'SingleDeviceSetupTest',
+          routeParams: {
+            initialConfig: createGameConfig({
+              spelers: [
+                {
+                  naam: getDefaultPlayerNameForLanguage(language, 0),
+                  skin: equippedSkin,
+                },
+              ],
+            }),
+          },
           origin: latestPressPointRef.current,
         });
       }, 120);
@@ -2568,22 +4466,30 @@ export default function HomeScreen({
       return;
     }
 
+    if (tutorialActive && tutorialStep?.target !== 'home.online') {
+      return;
+    }
+
     if (isOnlineMenuVisible) {
       if (pendingOnlineJumpTimeoutRef.current) {
         clearTimeout(pendingOnlineJumpTimeoutRef.current);
         pendingOnlineJumpTimeoutRef.current = null;
+      }
+      if (tutorialActive) {
+        onTutorialAction?.('home.onlineOpened');
+        return;
       }
       void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
       closeOnlineMenu();
       return;
     }
 
-    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
     pendingOnlineJumpTimeoutRef.current = setTimeout(() => {
       pendingOnlineJumpTimeoutRef.current = null;
       runOnlineCarJumpSequence({ withHaptics: true });
     }, PRESS_THEN_HORN_DELAY_MS);
     openOnlineMenu();
+    onTutorialAction?.('home.onlineOpened');
   };
 
   const handleOnlineOptionPress = (routeName, targetRef, origin) => {
@@ -2602,20 +4508,44 @@ export default function HomeScreen({
     }, 150);
   };
 
-  const handleHostOptionPress = async () => {
-    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
-
-    if (!isPremium) {
-      void openPremiumModal('host');
+  const handleHostOptionPress = () => {
+    if (tutorialActive && tutorialStep?.target !== 'home.onlineHost') {
       return;
     }
 
-    const online = await checkOnlineConnection();
-    if (!online) {
-      setConnectionError({
-        title: 'Geen internetverbinding',
-        message: 'Om een online lobby aan te maken, heb je een stabiele internetverbinding nodig.',
-      });
+    void playSoundEffect(GLOSSY_BUTTON_CLICK_SOUND, settings);
+
+    if (tutorialStep?.target === 'home.onlineHost') {
+      if (onTutorialRouteReveal) {
+        onTutorialRouteReveal({
+          color: '#E03030',
+          routeName: 'HostSetup',
+          routeParams: {
+            tutorialMode: true,
+          },
+          actionName: 'home.hostPressed',
+          origin: latestPressPointRef.current
+            ? {
+                nativeEvent: {
+                  pageX: latestPressPointRef.current.x,
+                  pageY: latestPressPointRef.current.y,
+                },
+              }
+            : {
+                nativeEvent: {
+                  pageX: windowWidth / 2,
+                  pageY: windowHeight / 2,
+                },
+              },
+        });
+      } else {
+        onTutorialAction?.('home.hostPressed');
+      }
+      return;
+    }
+
+    if (!isPremium) {
+      void openPremiumModal('host');
       return;
     }
 
@@ -2627,7 +4557,35 @@ export default function HomeScreen({
   };
 
   const handleTabPress = (tabKey) => {
+    const tutorialTabTargets = {
+      [HOME_TAB_SKINSHOP]: {
+        target: 'home.skinshopTab',
+        action: 'home.skinshopOpened',
+      },
+      [HOME_TAB_HOME]: {
+        target: 'home.homeTab',
+        action: 'home.homeOpened',
+      },
+      [HOME_TAB_THEMECARDS]: {
+        target: 'home.themeCardsTab',
+        action: 'home.themeCardsOpened',
+      },
+    };
+    const tutorialTabTarget = tutorialTabTargets[tabKey];
+
+    if (
+      tutorialActive
+      && tutorialStep?.target
+      && Object.values(tutorialTabTargets).some(({ target }) => target === tutorialStep.target)
+      && tutorialStep.target !== tutorialTabTarget?.target
+    ) {
+      return;
+    }
+
     if (activeTab === tabKey) {
+      if (tutorialActive && tutorialStep?.target === tutorialTabTarget?.target) {
+        onTutorialAction?.(tutorialTabTarget.action);
+      }
       return;
     }
 
@@ -2643,11 +4601,17 @@ export default function HomeScreen({
     if (skinInspection) {
       closeSkinInspect(() => {
         setActiveTab(tabKey);
+        if (tutorialActive && tutorialStep?.target === tutorialTabTarget?.target) {
+          onTutorialAction?.(tutorialTabTarget.action);
+        }
       });
       return;
     }
 
     setActiveTab(tabKey);
+    if (tutorialActive && tutorialStep?.target === tutorialTabTarget?.target) {
+      onTutorialAction?.(tutorialTabTarget.action);
+    }
   };
 
   const handleThemeSelect = (index) => {
@@ -2665,17 +4629,57 @@ export default function HomeScreen({
 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     pendingThemeBackRef.current = false;
+    themeDetailReadyRef.current = false;
+    themeDetailReadyResolverRef.current = null;
     setPendingThemeDetail(theme);
     setThemeRevealState({
       covering: true,
-      color: theme.cardOutline ?? theme.cardBorder ?? theme.bg ?? '#1A5EA8',
-      origin,
+      phase: 'cover',
+      solidHold: false,
+      color: getThemeRevealColor(theme),
+      origin: origin ?? { x: windowWidth / 2, y: windowHeight / 2 },
     });
-
     requestAnimationFrame(() => {
       themeCoverRevealRef.current?.reveal();
     });
   };
+
+  const handleThemeDetailReady = useCallback(() => {
+    themeDetailReadyRef.current = true;
+    themeDetailReadyResolverRef.current?.();
+    themeDetailReadyResolverRef.current = null;
+  }, []);
+
+  const waitForThemeDetailReady = useCallback(() => {
+    if (themeDetailReadyRef.current) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (isReady) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timeoutId);
+        if (themeDetailReadyResolverRef.current === finish) {
+          themeDetailReadyResolverRef.current = null;
+        }
+        resolve(isReady);
+      };
+      const timeoutId = setTimeout(() => finish(false), THEME_DETAIL_READY_TIMEOUT_MS);
+
+      themeDetailReadyResolverRef.current = () => finish(true);
+    });
+  }, []);
+
+  const handleThemeRoadReady = useCallback(() => {
+    themeRoadReadyRef.current = true;
+    themeRoadReadyResolverRef.current?.();
+    themeRoadReadyResolverRef.current = null;
+  }, []);
 
   const handleThemeBackPress = (origin) => {
     const theme = selectedThemeDetail;
@@ -2687,54 +4691,135 @@ export default function HomeScreen({
     pendingThemeBackRef.current = true;
     setThemeRevealState({
       covering: true,
-      color: theme.cardOutline ?? theme.cardBorder ?? theme.bg ?? '#1A5EA8',
+      phase: 'cover',
+      solidHold: false,
+      color: getThemeRevealColor(theme),
       origin: origin ?? { x: windowWidth / 2, y: 76 },
     });
-
     requestAnimationFrame(() => {
       themeCoverRevealRef.current?.reveal();
     });
   };
 
   const handleThemeCoverComplete = async () => {
+    setThemeRevealState((current) => (
+      current.phase === 'cover'
+        ? { ...current, solidHold: true }
+        : current
+    ));
+
     if (pendingThemeBackRef.current) {
       pendingThemeBackRef.current = false;
 
       try {
-        await preloadImageAssets(HOME_ASSETS);
+        await Promise.race([
+          preloadImageAssets([
+            THEME_ROAD_BACKGROUND,
+            THEME_LOCK_OVERLAY_OVERVIEW_IMAGE,
+            ...THEME_SHOWCASE_ITEMS.map((item) => item.previewImage).filter(Boolean),
+          ]),
+          new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
+        ]);
       } catch (_error) {
-        // De homepagina mag alsnog terugkomen als een cache-warmup faalt.
+        // De thema-overzichtpagina mag alsnog terugkomen als een cache-warmup faalt.
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 220));
-
+      setThemeRoadRenderKey((current) => current + 1);
       setSelectedThemeDetail(null);
+      await new Promise((resolve) => setTimeout(resolve, 80));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      setThemeRevealState((current) => ({ ...current, covering: false }));
+      setThemeRevealState((current) => ({
+        ...current,
+        phase: 'uncover',
+        solidHold: true,
+        origin: { x: windowWidth / 2, y: windowHeight / 2 },
+      }));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      themeCoverRevealRef.current?.reveal();
+      if (themeRevealFallbackTimeoutRef.current) {
+        clearTimeout(themeRevealFallbackTimeoutRef.current);
+      }
+      themeRevealFallbackTimeoutRef.current = setTimeout(() => {
+        setThemeRevealState((current) => (
+          current.phase === 'uncover'
+            ? { ...current, covering: false, solidHold: false, phase: 'cover' }
+            : current
+        ));
+      }, 1100);
       return;
     }
 
     const theme = pendingThemeDetail;
 
     if (!theme) {
-      setThemeRevealState((current) => ({ ...current, covering: false }));
+      setThemeRevealState((current) => ({
+        ...current,
+        covering: false,
+        solidHold: false,
+      }));
       return;
     }
 
     try {
-      await preloadImageAssets(getThemeDetailAssets(
-        theme.id,
-        theme.previewImage ? [theme.previewImage] : []
-      ));
+      await Promise.race([
+        preloadImageAssets(getThemeDetailAssets(
+          theme.id,
+          theme.previewImage ? [theme.previewImage] : []
+        )),
+        new Promise((resolve) => setTimeout(resolve, THEME_REVEAL_PRELOAD_TIMEOUT_MS)),
+      ]);
     } catch (_error) {
       // Als preload faalt, tonen we de detailpagina alsnog.
     }
 
+    themeDetailReadyRef.current = false;
+    themeDetailReadyResolverRef.current = null;
     setSelectedThemeDetail(theme);
     setPendingThemeDetail(null);
-    await new Promise((resolve) => setTimeout(resolve, 280));
+    await waitForThemeDetailReady();
+    setThemeRevealState((current) => ({
+      ...current,
+      phase: 'uncover',
+      solidHold: true,
+      origin: { x: windowWidth / 2, y: windowHeight / 2 },
+    }));
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    setThemeRevealState((current) => ({ ...current, covering: false }));
+    themeCoverRevealRef.current?.reveal();
+    if (themeRevealFallbackTimeoutRef.current) {
+      clearTimeout(themeRevealFallbackTimeoutRef.current);
+    }
+    themeRevealFallbackTimeoutRef.current = setTimeout(() => {
+      setThemeRevealState((current) => (
+        current.phase === 'uncover'
+          ? { ...current, covering: false, solidHold: false, phase: 'cover' }
+          : current
+      ));
+    }, 1100);
+  };
+
+  const handleThemeUncoverStarted = useCallback(() => {
+    if (themeRevealFallbackTimeoutRef.current) {
+      clearTimeout(themeRevealFallbackTimeoutRef.current);
+      themeRevealFallbackTimeoutRef.current = null;
+    }
+    setThemeRevealState((current) => (
+      current.phase === 'uncover'
+        ? { ...current, solidHold: false }
+        : current
+    ));
+  }, []);
+
+  const handleThemeUncoverComplete = () => {
+    if (themeRevealFallbackTimeoutRef.current) {
+      clearTimeout(themeRevealFallbackTimeoutRef.current);
+      themeRevealFallbackTimeoutRef.current = null;
+    }
+    setThemeRevealState((current) => ({
+      ...current,
+      covering: false,
+      phase: 'cover',
+      solidHold: false,
+    }));
   };
 
   const tabSwipeResponder = useMemo(() => {
@@ -2767,27 +4852,28 @@ export default function HomeScreen({
       ]).start();
     };
 
-    return PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_event, gestureState) => (
-        !isJoinPlateVisible
-        &&
+    const canStartTabSwipe = (gestureState) => {
+      if (isJoinPlateVisible || selectedThemeDetail) {
+        return false;
+      }
+
+      if (
         activeTab === HOME_TAB_THEMECARDS
         && !selectedThemeDetail
-        && themeRoadOffsetRef.current <= 2
-        && gestureState.dx > 8
-        && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.25
-      ),
-      onMoveShouldSetPanResponder: (_event, gestureState) => (
-        !isJoinPlateVisible
-        &&
-        (
-          activeTab !== HOME_TAB_THEMECARDS
-          || (!selectedThemeDetail && themeRoadOffsetRef.current <= 2 && gestureState.dx > 8)
-        )
-        &&
+        && !(themeRoadOffsetRef.current <= 8 && gestureState.dx > 8)
+      ) {
+        return false;
+      }
+
+      return (
         Math.abs(gestureState.dx) > 8
         && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.25
-      ),
+      );
+    };
+
+    return PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_event, gestureState) => canStartTabSwipe(gestureState),
+      onMoveShouldSetPanResponder: (_event, gestureState) => canStartTabSwipe(gestureState),
       onPanResponderGrant: () => {
         if (isJoinPlateVisible) {
           return;
@@ -2887,37 +4973,51 @@ export default function HomeScreen({
           ]}
         >
           <View style={[styles.tabPage, { width: windowWidth }]}>
-            <SkinShopPanel
-              items={skinShopItems}
-              inspectedSkinId={skinInspection?.skin?.id}
-              onInspect={openSkinInspect}
-            />
+            {shouldRenderSkinShopTab ? (
+              <SkinShopPanel
+                items={skinShopItems}
+                inspectedSkinId={skinInspection?.skin?.id}
+                equippedSkin={equippedSkin}
+                tutorialActive={tutorialActive}
+                tutorialStep={tutorialStep}
+                onTutorialTargetLayout={onTutorialTargetLayout}
+                onTutorialAction={onTutorialAction}
+                onInspect={openSkinInspect}
+              />
+            ) : null}
           </View>
 
           <View style={[styles.tabPage, { width: windowWidth }]}>
-            <ImageBackground
-              source={require('../assets/homepage.png')}
-              resizeMode="cover"
-              style={StyleSheet.absoluteFill}
-              fadeDuration={0}
-              onLoadEnd={() => markHomeCriticalImageLoaded('background')}
-            />
-            <View style={styles.overlay}>
-              <Animated.Image
-                source={require('../assets/logo.png')}
-                resizeMode="contain"
-                fadeDuration={0}
-                onLoadEnd={() => markHomeCriticalImageLoaded('logo')}
-                style={[
-                  styles.logo,
-                  compactHomeChrome && styles.logoCompactHomeChrome,
-                  isTablet && {
-                    height: 520,
-                    marginTop: -18,
-                  },
-                  { transform: [{ scale: pulse }] },
-                ]}
-              />
+            {shouldRenderHomeTab ? (
+              <>
+                <ExpoImage
+                  key={`home-bg-${homeRenderKey}`}
+                  source={require('../assets/homepage.png')}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={0}
+                  style={StyleSheet.absoluteFill}
+                  onLoad={() => markHomeCriticalImageLoaded('background')}
+                  onError={() => markHomeCriticalImageLoaded('background')}
+                />
+                <View style={styles.overlay}>
+                  <Animated.Image
+                    key={`home-logo-${homeRenderKey}`}
+                    source={require('../assets/logo.png')}
+                    resizeMode="contain"
+                    fadeDuration={0}
+                    onLoadEnd={() => markHomeCriticalImageLoaded('logo')}
+                    onError={() => markHomeCriticalImageLoaded('logo')}
+                    style={[
+                      styles.logo,
+                      compactHomeChrome && styles.logoCompactHomeChrome,
+                      isTablet && {
+                        height: 520,
+                        marginTop: -18,
+                      },
+                      { transform: [{ scale: pulse }] },
+                    ]}
+                  />
 
               {isJoinPlateVisible ? (
                 <>
@@ -2947,12 +5047,14 @@ export default function HomeScreen({
                     ]}
                   >
                     <View style={[styles.joinPlateIntro, { width: joinPlateWidth }]}>
-                      <Text style={styles.joinPlateIntroTitle}>Voer de lobbycode in</Text>
+                      <Text style={styles.joinPlateIntroTitle}>{t('home.joinTitle')}</Text>
                       <Text style={styles.joinPlateIntroText}>
-                        Deze code staat bovenin het scherm van de lobby.
+                        {t('home.joinText')}
                       </Text>
                     </View>
                     <Pressable
+                      ref={joinPlateTargetRef}
+                      collapsable={false}
                       onPress={() => joinCodeInputRef.current?.focus()}
                       style={[
                         styles.joinPlateTapTarget,
@@ -2971,16 +5073,20 @@ export default function HomeScreen({
                           style={[
                             styles.joinPlateCodeRow,
                             {
+                              left: joinPlateTextLeft,
+                              width: joinPlateTextWidth,
                               height: joinPlateFontSize * 1.34,
                             },
                           ]}
                       >
-                        {joinPlateSlots.map((slot, slotIndex) => (
+                        {joinPlateSlots.map((slot) => (
                           <View
                             key={slot.key}
                             style={[
-                              styles.joinPlateSlot,
-                              slot.type === 'dash' ? styles.joinPlateDashSlot : styles.joinPlateCharSlot,
+                              styles.joinPlateCodeSlot,
+                              {
+                                width: slot.type === 'dash' ? joinPlateDashSlotWidth : joinPlateSlotWidth,
+                              },
                             ]}
                           >
                             <Text
@@ -2988,42 +5094,29 @@ export default function HomeScreen({
                               style={[
                                 styles.joinPlateSlotText,
                                 slot.type === 'dash' && styles.joinPlateDashText,
-                                slot.type !== 'dash' && /[MW]/.test(slot.value) && styles.joinPlateWideSlotText,
                                 {
-                                  fontSize: joinPlateFontSize,
-                                  lineHeight: joinPlateFontSize * 1.24,
+                                  fontSize: slot.type === 'dash'
+                                    ? Math.round(joinPlateFontSize * 0.72)
+                                    : joinPlateFontSize,
+                                  lineHeight: joinPlateFontSize * 1.18,
                                 },
                               ]}
                             >
                               {slot.value}
                             </Text>
-                            {joinCursorSlotIndex === slotIndex ? (
-                              <Animated.View
-                                pointerEvents="none"
-                                style={[
-                                  styles.joinPlateCursor,
-                                  {
-                                    width: joinPlateFontSize * 0.48,
-                                    opacity: joinCursorBlink,
-                                  },
-                                ]}
-                              />
-                            ) : null}
                           </View>
                         ))}
-                        {joinCursorSlotIndex === 9 ? (
-                          <Animated.View
-                            pointerEvents="none"
-                            style={[
-                              styles.joinPlateCursor,
-                              styles.joinPlateEndCursor,
-                              {
-                                width: joinPlateFontSize * 0.48,
-                                opacity: joinCursorBlink,
-                              },
-                            ]}
-                          />
-                        ) : null}
+                        <Animated.View
+                          pointerEvents="none"
+                          style={[
+                            styles.joinPlateCursor,
+                            {
+                              opacity: joinCursorBlink,
+                              left: joinPlateCursorLeft,
+                              display: displayJoinCode.length >= 8 ? 'none' : 'flex',
+                            },
+                          ]}
+                        />
                       </View>
                     </Pressable>
                     {joinError ? (
@@ -3033,11 +5126,14 @@ export default function HomeScreen({
                       ref={joinCodeInputRef}
                       value={joinCode}
                       onChangeText={(value) => {
-                        const nextCode = normalizeLobbyCode(value);
+                        const rawCode = value.replace(/[\r\n]+/g, '');
+                        const nextCode = isTutorialJoinCodeStep
+                          ? normalizeTutorialJoinCode(rawCode)
+                          : normalizeLobbyCode(rawCode);
                         setJoinCode(nextCode);
                         setJoinError('');
 
-                        if (nextCode.length === 7) {
+                        if (nextCode.length === 8) {
                           setTimeout(() => {
                             void submitJoinCode(nextCode);
                           }, 220);
@@ -3045,7 +5141,11 @@ export default function HomeScreen({
                       }}
                       autoCapitalize="characters"
                       autoCorrect={false}
+                      autoComplete="off"
                       maxLength={10}
+                      multiline={false}
+                      numberOfLines={1}
+                      scrollEnabled
                       returnKeyType="done"
                       onSubmitEditing={() => {
                         void submitJoinCode();
@@ -3070,7 +5170,7 @@ export default function HomeScreen({
                     styles.actionsArea,
                     {
                       height: actionExpandedHeight,
-                      transform: [{ translateY: isTablet ? -52 : -80 }],
+                      transform: [{ translateY: isTablet ? -92 : -80 }],
                     },
                   ]}
                 >
@@ -3100,42 +5200,52 @@ export default function HomeScreen({
                           styles.actionImageBadge,
                           isTablet && {
                             top: 8,
-                            transform: [{ scale: Math.min(tabletScale, 1.18) }],
+                            transform: [{ scale: Math.min(tabletScale, 1.34) }],
                           },
                         ]}
                       >
                         <Animated.Image
-                          source={PLAY_BUTTON_IMAGE}
+                          key={`home-play-${homeRenderKey}`}
+                          source={playButtonImage}
                           resizeMode="contain"
                           fadeDuration={0}
                           onLoadEnd={() => markHomeCriticalImageLoaded('play')}
+                          onError={() => markHomeCriticalImageLoaded('play')}
                           style={[
                             styles.playActionImage,
                             {
-                              transform: [{ translateY: playCarJump }],
+                              transform: [
+                                { translateX: playCarTranslateX },
+                                { translateY: playCarTranslateY },
+                                { rotate: playCarRotate },
+                                { scale: playCarScale },
+                              ],
                             },
                           ]}
                         />
                       </View>
-                      <GlossyButton
-                        label="Play"
-                        variant="yellow"
-                        size="large"
-                        labelOffsetY={0}
-                        contentOffsetY={12}
-                        horizontalPadding={28}
-                        heightOverride={actionButtonHeight}
-                        labelFontScale={isTablet ? 1.18 : 1}
-                        hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
-                        soundEffectName={GLOSSY_BUTTON_CLICK_SOUND}
-                        onPressIn={(event) => {
-                          latestPressPointRef.current = {
-                            x: event.nativeEvent.pageX,
-                            y: event.nativeEvent.pageY,
-                          };
-                        }}
-                        onPress={handlePlayPress}
-                      />
+                      <View>
+                        <GlossyButton
+                          label={t('home.play')}
+                          variant="yellow"
+                          size="large"
+                          labelOffsetY={0}
+                          contentOffsetY={12}
+                          horizontalPadding={28}
+                          heightOverride={actionButtonHeight}
+                          labelFontScale={isTablet ? 1.18 : 1}
+                          hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
+                          disableHaptics
+                          soundEffectName={null}
+                          onPressIn={(event) => {
+                            latestPressPointRef.current = {
+                              x: event.nativeEvent.pageX,
+                              y: event.nativeEvent.pageY,
+                            };
+                          }}
+                          onPress={handlePlayPress}
+                        />
+                      </View>
                     </Animated.View>
 
                     <Animated.View
@@ -3159,7 +5269,7 @@ export default function HomeScreen({
                             transform: isTablet
                               ? [
                                   { translateY: onlineCarsTranslateY },
-                                  { scale: Math.min(tabletScale, 1.16) },
+                                  { scale: Math.min(tabletScale, 1.32) },
                                 ]
                               : [{ translateY: onlineCarsTranslateY }],
                           },
@@ -3413,30 +5523,40 @@ export default function HomeScreen({
                   </View>
                 </View>
               </View>
-            </View>
+                </View>
+              </>
+            ) : null}
           </View>
 
           <View style={[styles.tabPage, styles.themeCardsPage, { width: windowWidth }]}>
-            {selectedThemeDetail ? (
-              <ThemeDetailScreen
-                theme={selectedThemeDetail}
-                onBack={handleThemeBackPress}
-              />
-            ) : (
-              <ThemeRoadBackground
-                isPremium={isPremium}
-                onScrollOffsetChange={(offset) => {
-                  themeRoadOffsetRef.current = offset;
-                }}
-                onThemePress={handleRoadThemePress}
-              />
-            )}
+            {shouldRenderThemeCardsTab ? (
+              selectedThemeDetail ? (
+                <ThemeDetailScreen
+                  theme={selectedThemeDetail}
+                  onBack={handleThemeBackPress}
+                  onReady={handleThemeDetailReady}
+                />
+              ) : (
+                <ThemeRoadBackground
+                  key={`theme-road-${themeRoadRenderKey}`}
+                  items={localizedThemeShowcaseItems}
+                  isPremium={isPremium}
+                  onReady={handleThemeRoadReady}
+                  onScrollOffsetChange={(offset) => {
+                    themeRoadOffsetRef.current = offset;
+                  }}
+                  onThemePress={handleRoadThemePress}
+                />
+              )
+            ) : null}
           </View>
         </Animated.View>
       </View>
 
       {showMainMenuPremiumButton ? (
         <Pressable
+          ref={premiumButtonRef}
+          collapsable={false}
           accessibilityRole="button"
           accessibilityLabel="Open Premium"
           style={[
@@ -3461,10 +5581,11 @@ export default function HomeScreen({
             void openPremiumModal('menu');
           }}
         >
-          <Animated.Image
+          <AnimatedExpoImage
             source={MAIN_MENU_PREMIUM_CROWN_IMAGE}
-            resizeMode="contain"
-            fadeDuration={0}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            transition={0}
             style={[
               styles.mainMenuPremiumButtonImage,
               {
@@ -3481,60 +5602,20 @@ export default function HomeScreen({
         </Pressable>
       ) : null}
 
-      {showMainMenuBugReportButton ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Meld een bug"
-          style={[
-            styles.mainMenuBugReportButton,
-            {
-              top: showMainMenuPremiumButton
-                ? homeMenuButtonTop + homeMenuButtonSize + homeMenuButtonGap
-                : homeMenuButtonTop,
-              left: homeMenuButtonLeft,
-              width: homeMenuButtonSize,
-              height: homeMenuButtonSize,
-            },
-            isTablet && {
-              top: showMainMenuPremiumButton ? 24 + 64 * tabletScale : 24,
-              left: 24,
-              width: 54 * tabletScale,
-              height: 54 * tabletScale,
-            },
-          ]}
-          onPressIn={pressBugReportButtonIn}
-          onPressOut={pressBugReportButtonOut}
-          onPress={() => {
-            triggerLightJumpHaptic();
-            void playSoundEffect(SETTINGS_GEAR_SOUND, settings);
-            void openBugReportModal();
-          }}
-        >
-          <Animated.Image
-            source={BUG_REPORT_BUTTON_IMAGE}
-            resizeMode="contain"
-            fadeDuration={0}
-            style={[
-              styles.mainMenuBugReportButtonImage,
-              {
-                width: homeMenuButtonSize,
-                height: homeMenuButtonSize,
-              },
-              isTablet && {
-                width: 54 * tabletScale,
-                height: 54 * tabletScale,
-              },
-              bugReportPressStyle,
-            ]}
-          />
-        </Pressable>
-      ) : null}
-
-      <SkinInspectOverlay
-        inspection={skinInspection}
-        progress={skinInspectProgress}
-        onClose={closeSkinInspect}
-      />
+        <SkinInspectOverlay
+          inspection={skinInspection}
+          progress={skinInspectProgress}
+          equippedSkin={equippedSkin}
+          isPremium={isPremium}
+          purchasingSkinId={purchasingSkinId}
+          getPaidSkinPrice={getPaidSkinPrice}
+          onClose={closeSkinInspect}
+          onEquip={handleEquipSkin}
+          onPremiumPress={() => closeSkinInspect(() => {
+            void openPremiumModal('skin');
+          })}
+          onPurchase={handlePurchaseSkin}
+        />
 
       {!selectedThemeDetail ? (
         <View style={styles.bottomNavShell}>
@@ -3561,17 +5642,28 @@ export default function HomeScreen({
                 colors={['#FFE56A', '#F3C316']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
-                style={styles.bottomNavActiveHighlightFill}
+                style={[
+                  styles.bottomNavActiveHighlightFill,
+                  Platform.OS === 'android' && styles.bottomNavActiveHighlightFillAndroid,
+                ]}
               />
             </Animated.View>
-            {NAV_ITEMS.map((item) => (
-              <HomeTabButton
+            {localizedNavItems.map((item) => (
+              <View
                 key={item.key}
-                item={item}
-                active={activeTab === item.key}
-                onPress={() => handleTabPress(item.key)}
-                metrics={navMetrics}
-              />
+                ref={(node) => {
+                  navButtonRefs.current[item.key] = node;
+                }}
+                collapsable={false}
+                style={styles.bottomNavButtonRefWrap}
+              >
+                <HomeTabButton
+                  item={item}
+                  active={activeTab === item.key}
+                  onPress={() => handleTabPress(item.key)}
+                  metrics={navMetrics}
+                />
+              </View>
             ))}
           </View>
         </View>
@@ -3584,9 +5676,11 @@ export default function HomeScreen({
           originY={revealOrigin.y}
           onComplete={() => {
             const routeName = pendingRouteRef.current;
+            const revealComplete = pendingRevealCompleteRef.current;
 
             if (!routeName) {
               pendingRouteParamsRef.current = null;
+              pendingRevealCompleteRef.current = null;
               isNavigatingRef.current = false;
               return;
             }
@@ -3607,17 +5701,31 @@ export default function HomeScreen({
             });
             pendingRouteRef.current = null;
             pendingRouteParamsRef.current = null;
-            isNavigatingRef.current = false;
+            pendingRevealCompleteRef.current = null;
+            revealComplete?.();
           }}
         />
+        {themeRevealState.solidHold ? (
+          <View
+            pointerEvents="auto"
+            style={[
+              styles.themeRevealSolidHold,
+              { backgroundColor: themeRevealState.color },
+            ]}
+          />
+        ) : null}
         {themeRevealState.covering ? (
           <CircularReveal
-            key={`theme-cover-${pendingThemeDetail?.id ?? 'pending'}`}
+            key={`theme-${themeRevealState.phase}`}
             ref={themeCoverRevealRef}
             color={themeRevealState.color}
             originX={themeRevealState.origin.x}
             originY={themeRevealState.origin.y}
-            onComplete={handleThemeCoverComplete}
+            initiallyVisible={themeRevealState.phase === 'uncover'}
+            initialProgress={0}
+            mode={themeRevealState.phase}
+            onRevealStart={themeRevealState.phase === 'uncover' ? handleThemeUncoverStarted : undefined}
+            onComplete={themeRevealState.phase === 'uncover' ? handleThemeUncoverComplete : handleThemeCoverComplete}
           />
         ) : null}
         {driverWarningVisible ? (
@@ -3625,29 +5733,52 @@ export default function HomeScreen({
             <ImageBackground
               source={DRIVER_WARNING_MENU_IMAGE}
               resizeMode="contain"
-              style={styles.driverWarningMenu}
+              style={[
+                styles.driverWarningMenu,
+                isTablet && styles.driverWarningMenuTablet,
+                {
+                  width: driverWarningMetrics.menuWidth,
+                  transform: [{ translateY: driverWarningMetrics.menuTranslateY }],
+                },
+              ]}
               imageStyle={styles.driverWarningMenuImage}
             >
-              <Text style={[styles.driverWarningTitle, { fontFamily: 'FredokaOne_400Regular' }]}>
-                Rij veilig!
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.48}
+                style={[styles.driverWarningTitle, isTablet && styles.driverWarningTitleTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+              >
+                {t('home.driverTitle')}
               </Text>
-              <View style={styles.driverWarningBody}>
-                <Text style={[styles.driverWarningText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                  Gebruik AutoBingo niet als bestuurder
+              <View style={[styles.driverWarningBody, isTablet && styles.driverWarningBodyTablet]}>
+                <Text
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.66}
+                  style={[styles.driverWarningText, isTablet && styles.driverWarningTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+                >
+                  {t('home.driverWarning')}
                 </Text>
                 <Image
                   source={DRIVER_WARNING_ICON_IMAGE}
                   resizeMode="contain"
                   style={[
                     styles.driverWarningIcon,
+                    isTablet && styles.driverWarningIconTablet,
                     {
                       width: driverWarningIconSize,
                       height: driverWarningIconSize,
                     },
                   ]}
                 />
-                <Text style={[styles.driverWarningFooterText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                  De app is bedoeld voor passagiers
+                <Text
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.66}
+                  style={[styles.driverWarningFooterText, isTablet && styles.driverWarningFooterTextTablet, { fontFamily: 'FredokaOne_400Regular' }]}
+                >
+                  {t('home.driverFooter')}
                 </Text>
               </View>
               <Animated.View
@@ -3668,11 +5799,11 @@ export default function HomeScreen({
                 ]}
               >
                 <GlossyButton
-                  label="Ik ben geen bestuurder"
+                  label={t('home.driverConfirm')}
                   variant="green"
-                  heightOverride={54}
-                  horizontalPadding={22}
-                  labelFontScale={0.78}
+                  heightOverride={driverWarningMetrics.buttonHeight}
+                  horizontalPadding={driverWarningMetrics.buttonPaddingHorizontal}
+                  labelFontScale={isTablet ? 0.88 : 0.78}
                   disabled={!driverWarningButtonReady}
                   onPress={completeDriverWarning}
                 />
@@ -3695,8 +5826,8 @@ export default function HomeScreen({
               );
             }
           }}
-          title="Auto Bingo Premium"
-          message="Met Premium kun je lobby’s hosten en alle premium thema’s gebruiken. Joinen blijft gratis."
+          title="AutoBingo Premium"
+          message={t('home.premiumMessage')}
         />
         <Modal
           visible={Boolean(lobbyExitMessage)}
@@ -3706,13 +5837,13 @@ export default function HomeScreen({
         >
           <View style={styles.lobbyNoticeBackdrop}>
             <PopupPanel
-              title="Lobby verlaten"
+              title={t('home.lobbyExit')}
               fontFamily="FredokaOne_400Regular"
               compact
               actions={(
                 <View style={styles.lobbyNoticeButtonWrap}>
                 <GlossyButton
-                  label="Oké"
+                  label={t('common.ok')}
                   variant="green"
                   heightOverride={58}
                   horizontalPadding={34}
@@ -3723,179 +5854,6 @@ export default function HomeScreen({
             >
               {lobbyExitMessage}
             </PopupPanel>
-          </View>
-        </Modal>
-        <Modal
-          visible={bugReportModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={closeBugReportModal}
-        >
-          <View style={styles.lobbyNoticeBackdrop}>
-            <ImageBackground
-              source={BUG_REPORT_MENU_IMAGE}
-              resizeMode="contain"
-              style={styles.bugReportMenu}
-              imageStyle={styles.bugReportMenuImage}
-              fadeDuration={0}
-            >
-              <Text style={[styles.bugReportMenuTitle, { fontFamily: 'FredokaOne_400Regular' }]}>
-                Bug melden
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Sluit bugmelding"
-                hitSlop={10}
-                style={styles.bugReportCloseIconButton}
-                onPress={closeBugReportModal}
-              >
-                <Image
-                  source={BUG_REPORT_CLOSE_IMAGE}
-                  resizeMode="contain"
-                  style={styles.bugReportCloseIcon}
-                  fadeDuration={0}
-                />
-              </Pressable>
-              <View style={styles.bugReportMenuBody}>
-                <ScrollView
-                  style={styles.bugReportBodyScrollView}
-                  indicatorStyle="black"
-                  showsVerticalScrollIndicator
-                  contentContainerStyle={styles.bugReportBodyScroll}
-                >
-                  <Text style={[styles.bugReportIntroText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                    Heb je een bug gevonden? Vul hieronder kort in wat er gebeurde. Zo kunnen we het probleem serieus oplossen.
-                  </Text>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Waar gebeurde het?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Bijvoorbeeld: home, lobby, kaart, premium of instellingen.
-                    </Text>
-                    <TextInput
-                      value={bugReportForm.location}
-                      onChangeText={(value) => updateBugReportForm('location', value)}
-                      placeholder="Scherm of onderdeel"
-                      placeholderTextColor="#719649"
-                      maxLength={80}
-                      style={[styles.bugReportInput, styles.bugReportSingleLineInput, { fontFamily: 'FredokaOne_400Regular' }]}
-                    />
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Wat ging er mis?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Beschrijf wat je zag, hoorde of wat niet werkte.
-                    </Text>
-                    <TextInput
-                      value={bugReportForm.summary}
-                      onChangeText={(value) => updateBugReportForm('summary', value)}
-                      placeholder="De knop reageerde niet..."
-                      placeholderTextColor="#719649"
-                      multiline
-                      maxLength={220}
-                      style={[styles.bugReportInput, styles.bugReportSummaryInput, { fontFamily: 'FredokaOne_400Regular' }]}
-                      textAlignVertical="top"
-                    />
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Hoe kunnen we het nadoen?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Noem de stappen vanaf het moment dat alles nog goed ging.
-                    </Text>
-                    <TextInput
-                      value={bugReportForm.steps}
-                      onChangeText={(value) => updateBugReportForm('steps', value)}
-                      placeholder="1. Open... 2. Tik op..."
-                      placeholderTextColor="#719649"
-                      multiline
-                      maxLength={320}
-                      style={[styles.bugReportInput, styles.bugReportStepsInput, { fontFamily: 'FredokaOne_400Regular' }]}
-                      textAlignVertical="top"
-                    />
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Hoe ernstig is het?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Kies hoe erg het spelen hierdoor werd verstoord.
-                    </Text>
-                    <View style={styles.bugReportSeverityRow}>
-                      {BUG_REPORT_SEVERITIES.map((severity) => {
-                        const selected = bugReportForm.severity === severity.value;
-                        return (
-                          <Pressable
-                            key={severity.value}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected }}
-                            style={[
-                              styles.bugReportSeverityChoice,
-                              selected && styles.bugReportChoiceSelected,
-                            ]}
-                            onPress={() => updateBugReportForm('severity', severity.value)}
-                          >
-                            <Text
-                              style={[
-                                styles.bugReportChoiceText,
-                                selected && styles.bugReportChoiceTextSelected,
-                                { fontFamily: 'FredokaOne_400Regular' },
-                              ]}
-                            >
-                              {severity.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                  <View style={styles.bugReportSection}>
-                    <Text style={[styles.bugReportLabel, { fontFamily: 'FredokaOne_400Regular' }]}>Afbeelding toevoegen?</Text>
-                    <Text style={[styles.bugReportHelpText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      Optioneel: kies een screenshot uit je foto’s. Maximaal 5 MB.
-                    </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      style={styles.bugReportAttachmentBox}
-                      onPress={pickBugReportScreenshot}
-                    >
-                      <Text style={[styles.bugReportAttachmentText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                        {bugReportForm.screenshot?.fileName
-                          ?? (bugReportForm.screenshot ? 'Screenshot gekozen' : 'Screenshot kiezen')}
-                      </Text>
-                    </Pressable>
-                    {bugReportForm.screenshot ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        style={styles.bugReportRemoveAttachmentButton}
-                        onPress={() => updateBugReportForm('screenshot', null)}
-                      >
-                        <Text style={[styles.bugReportRemoveAttachmentText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                          Verwijder screenshot
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  {bugReportError ? (
-                    <Text style={[styles.bugReportErrorText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      {bugReportError}
-                    </Text>
-                  ) : null}
-                  {bugReportSuccess ? (
-                    <Text style={[styles.bugReportSuccessText, { fontFamily: 'FredokaOne_400Regular' }]}>
-                      {bugReportSuccess}
-                    </Text>
-                  ) : null}
-                  <View style={styles.bugReportSubmitButtonWrap}>
-                    <GlossyButton
-                      label={bugReportSubmitting ? 'Opslaan...' : 'Verstuur melding'}
-                      variant="yellow"
-                      heightOverride={48}
-                      horizontalPadding={22}
-                      labelFontScale={0.82}
-                      disabled={bugReportSubmitting}
-                      onPress={submitBugReport}
-                    />
-                  </View>
-                </ScrollView>
-              </View>
-            </ImageBackground>
           </View>
         </Modal>
         <Modal
@@ -4012,6 +5970,7 @@ const styles = StyleSheet.create({
   },
   roadThemeCardBody: {
     flex: 1,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -4022,6 +5981,11 @@ const styles = StyleSheet.create({
   },
   roadThemeCardImageEmbedded: {
     borderRadius: 0,
+  },
+  roadThemeCardPreviewImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   roadThemeCardLockLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -4052,11 +6016,11 @@ const styles = StyleSheet.create({
   },
   roadThemeCardTitleEmbedded: {
     position: 'absolute',
-    top: '5.0%',
+    top: '6.2%',
     left: '10%',
     right: '10%',
-    fontSize: 28,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 40,
     color: '#FFFFFF',
     textAlign: 'center',
   },
@@ -4102,6 +6066,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     rowGap: 16,
   },
+  themeItemsGridRow: {
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   themeItemTile: {
     width: '31%',
     aspectRatio: 1,
@@ -4138,6 +6106,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000000',
   },
+  themeRevealSolidHold: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9998,
+    elevation: 99998,
+  },
   themeInspectCell: {
     position: 'absolute',
     alignItems: 'center',
@@ -4152,6 +6125,12 @@ const styles = StyleSheet.create({
     },
     shadowRadius: 22,
     elevation: 18,
+  },
+  themeInspectImage: {
+    width: '76%',
+    height: '76%',
+    maxWidth: 320,
+    maxHeight: 320,
   },
   tabPagesViewport: {
     flex: 1,
@@ -4196,21 +6175,6 @@ const styles = StyleSheet.create({
     elevation: 60,
   },
   mainMenuPremiumButtonImage: {
-    width: 54,
-    height: 54,
-  },
-  mainMenuBugReportButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 54,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 60,
-    elevation: 60,
-  },
-  mainMenuBugReportButtonImage: {
     width: 54,
     height: 54,
   },
@@ -4270,26 +6234,19 @@ const styles = StyleSheet.create({
   },
   joinPlateCodeRow: {
     position: 'absolute',
-    left: '18.2%',
-    right: '8.2%',
-    top: '25.8%',
+    top: '34%',
+    height: '42%',
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  joinPlateSlot: {
-    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  joinPlateCharSlot: {
-    flex: 1,
-  },
-  joinPlateDashSlot: {
-    flex: 0.36,
+  joinPlateCodeSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
   },
   joinPlateSlotText: {
-    width: '138%',
+    width: '100%',
     fontFamily: 'KentekenSmits1951',
     fontWeight: '400',
     color: '#111111',
@@ -4299,22 +6256,18 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(17,17,17,0.42)',
     textShadowOffset: { width: 0.6, height: 0 },
     textShadowRadius: 0.2,
-  },
-  joinPlateWideSlotText: {
-    transform: [{ scaleX: 0.86 }],
+    transform: [{ scaleY: 1.08 }],
   },
   joinPlateDashText: {
-    opacity: 0.78,
+    opacity: 0.86,
   },
   joinPlateCursor: {
     position: 'absolute',
-    bottom: '3%',
-    height: 3,
-    borderRadius: 3,
+    top: '12%',
+    width: 3,
+    height: '72%',
+    borderRadius: 2,
     backgroundColor: '#111111',
-  },
-  joinPlateEndCursor: {
-    right: -4,
   },
   joinPlateError: {
     marginTop: -4,
@@ -4408,6 +6361,49 @@ const styles = StyleSheet.create({
     marginLeft: -38,
     zIndex: 4,
   },
+  skinShopVerticalProgress: {
+    position: 'absolute',
+    top: 52,
+    width: 14,
+    height: 54,
+    borderRadius: 7,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.86)',
+    shadowColor: '#11213B',
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+    zIndex: 5,
+  },
+  skinShopVerticalProgressLeft: {
+    left: 15,
+  },
+  skinShopVerticalProgressRight: {
+    right: 15,
+  },
+  skinShopVerticalProgressFill: {
+    width: '100%',
+    borderRadius: 7,
+    backgroundColor: '#F5C400',
+  },
+  skinShopEquippedBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 6,
+  },
+  skinShopEquippedIcon: {
+    width: '100%',
+    height: '100%',
+  },
   challengeSkinLockTile: {
     width: 76,
     height: 76,
@@ -4432,6 +6428,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  skinInspectMovingDismissArea: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   skinInspectChallengeMovingCar: {
     justifyContent: 'flex-start',
@@ -4482,11 +6482,11 @@ const styles = StyleSheet.create({
     left: 34,
     right: 34,
     bottom: 10,
-    minHeight: 58,
+    minHeight: 142,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: 'rgba(18, 32, 52, 0.84)',
@@ -4504,6 +6504,13 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.42)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  skinInspectReservedChallengeText: {
+    opacity: 0,
+  },
+  skinInspectEquipButtonWrap: {
+    width: '100%',
+    marginTop: 10,
   },
   skinInspectChallengeText: {
     width: '100%',
@@ -4550,6 +6557,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  skinInspectBuyButtonWrap: {
+    marginTop: 10,
+    minWidth: 190,
+    alignSelf: 'center',
   },
   skinInspectFutureText: {
     position: 'absolute',
@@ -4951,11 +6963,11 @@ const styles = StyleSheet.create({
   },
   themeShowcaseTitleEmbedded: {
     position: 'absolute',
-    top: 12,
+    top: 16,
     left: 24,
     right: 24,
-    fontSize: 28,
-    lineHeight: 40,
+    fontSize: 30,
+    lineHeight: 42,
     textAlign: 'center',
   },
   lockBadge: {
@@ -5068,8 +7080,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
     paddingBottom: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     backgroundColor: '#1573E0',
     borderTopWidth: 4,
     borderLeftWidth: 0,
@@ -5089,7 +7101,10 @@ const styles = StyleSheet.create({
   bottomNavButton: {
     flex: 1,
     justifyContent: 'flex-end',
-    zIndex: 1,
+    zIndex: 2,
+  },
+  bottomNavButtonRefWrap: {
+    flex: 1,
   },
   bottomNavButtonCenter: {
     marginTop: 0,
@@ -5117,24 +7132,28 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     bottom: 0,
-    minHeight: 136,
-    marginTop: -18,
+    top: -22,
     zIndex: 0,
   },
   bottomNavActiveHighlightFill: {
     flex: 1,
     borderTopWidth: 4,
-    borderTopColor: '#FFF1A8',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopColor: '#FFF2A8',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     shadowColor: '#C99B10',
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.38,
     shadowOffset: {
       width: 0,
       height: -2,
     },
-    shadowRadius: 6,
-    elevation: 10,
+    shadowRadius: 10,
+    elevation: 9,
+  },
+  bottomNavActiveHighlightFillAndroid: {
+    borderTopWidth: 0,
   },
   bottomNavIconWrap: {
     width: 60,
@@ -5190,6 +7209,11 @@ const styles = StyleSheet.create({
     aspectRatio: 1122 / 1402,
     transform: [{ translateY: -58 }],
   },
+  driverWarningMenuTablet: {
+    width: '68%',
+    maxWidth: 560,
+    transform: [{ translateY: -52 }],
+  },
   driverWarningMenuImage: {
     width: '100%',
     height: '100%',
@@ -5210,6 +7234,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 3,
   },
+  driverWarningTitleTablet: {
+    fontSize: 38,
+    lineHeight: 44,
+  },
   driverWarningBody: {
     position: 'absolute',
     top: '16%',
@@ -5217,6 +7245,11 @@ const styles = StyleSheet.create({
     right: '11%',
     bottom: '8%',
     alignItems: 'center',
+  },
+  driverWarningBodyTablet: {
+    top: '16.8%',
+    left: '10%',
+    right: '10%',
   },
   driverWarningText: {
     marginTop: 10,
@@ -5226,9 +7259,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0,
   },
+  driverWarningTextTablet: {
+    marginTop: 18,
+    fontSize: 24,
+    lineHeight: 31,
+  },
   driverWarningIcon: {
     marginTop: DRIVER_WARNING_ICON_MARGIN_TOP,
     marginBottom: DRIVER_WARNING_ICON_MARGIN_BOTTOM,
+  },
+  driverWarningIconTablet: {
+    marginTop: 18,
+    marginBottom: 16,
   },
   driverWarningFooterText: {
     fontSize: 18,
@@ -5236,6 +7278,10 @@ const styles = StyleSheet.create({
     color: '#111111',
     textAlign: 'center',
     letterSpacing: 0,
+  },
+  driverWarningFooterTextTablet: {
+    fontSize: 24,
+    lineHeight: 31,
   },
   driverWarningButtonWrap: {
     position: 'absolute',
@@ -5245,194 +7291,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 5,
     elevation: 5,
-  },
-  bugReportMenu: {
-    width: '98%',
-    maxWidth: 452,
-    aspectRatio: 958 / 1642,
-  },
-  bugReportMenuImage: {
-    width: '100%',
-    height: '100%',
-  },
-  bugReportMenuTitle: {
-    position: 'absolute',
-    top: '6.9%',
-    left: '17%',
-    right: '17%',
-    height: '9%',
-    color: '#FFFFFF',
-    fontSize: 36,
-    lineHeight: 42,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    letterSpacing: 0,
-    textShadowColor: 'rgba(20, 74, 18, 0.82)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 3,
-  },
-  bugReportMenuBody: {
-    position: 'absolute',
-    top: '17%',
-    left: '9%',
-    right: '7%',
-    bottom: '10.4%',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  bugReportBodyScroll: {
-    alignItems: 'center',
-    paddingTop: 12,
-    paddingRight: 16,
-    paddingBottom: 34,
-  },
-  bugReportBodyScrollView: {
-    width: '100%',
-    flex: 1,
-  },
-  bugReportIntroText: {
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#315319',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportSection: {
-    width: '100%',
-    marginTop: 13,
-  },
-  bugReportLabel: {
-    fontSize: 15,
-    lineHeight: 19,
-    color: '#234C11',
-    letterSpacing: 0,
-  },
-  bugReportHelpText: {
-    marginTop: 2,
-    marginBottom: 6,
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#5A7B34',
-    letterSpacing: 0,
-  },
-  bugReportInput: {
-    width: '100%',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderWidth: 2,
-    borderColor: '#A7CF62',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.62)',
-    fontSize: 14,
-    lineHeight: 19,
-    color: '#24460F',
-    letterSpacing: 0,
-  },
-  bugReportSingleLineInput: {
-    minHeight: 42,
-  },
-  bugReportSummaryInput: {
-    minHeight: 82,
-  },
-  bugReportStepsInput: {
-    minHeight: 96,
-  },
-  bugReportSeverityRow: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 5,
-  },
-  bugReportSeverityChoice: {
-    flex: 1,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-    borderWidth: 2,
-    borderColor: '#A7CF62',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.62)',
-  },
-  bugReportChoiceSelected: {
-    borderColor: '#1C7B1D',
-    backgroundColor: '#BDF05E',
-  },
-  bugReportChoiceText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#315319',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportChoiceTextSelected: {
-    color: '#173D09',
-  },
-  bugReportErrorText: {
-    marginTop: 10,
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#9E1515',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportSuccessText: {
-    marginTop: 10,
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#16852D',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportSubmitButtonWrap: {
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  bugReportAttachmentBox: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    borderWidth: 2,
-    borderColor: '#A7CF62',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.36)',
-  },
-  bugReportAttachmentText: {
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#5A7B34',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportRemoveAttachmentButton: {
-    alignSelf: 'center',
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  bugReportRemoveAttachmentText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#9E1515',
-    textAlign: 'center',
-    letterSpacing: 0,
-  },
-  bugReportCloseIconButton: {
-    position: 'absolute',
-    top: '7.8%',
-    right: '2.8%',
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 4,
-    elevation: 4,
-  },
-  bugReportCloseIcon: {
-    width: 40,
-    height: 40,
   },
   connectionErrorActions: {
     marginTop: 8,

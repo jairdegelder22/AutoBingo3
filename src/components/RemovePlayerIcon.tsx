@@ -1,3 +1,4 @@
+import React from 'react';
 import { Image } from 'react-native';
 
 const REMOVE_PLAYER_IMAGE = require('../../assets/images/ui/remove-player.png');

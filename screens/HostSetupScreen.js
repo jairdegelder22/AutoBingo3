@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
   Easing,
@@ -6,6 +7,7 @@ import {
   ImageBackground,
   InteractionManager,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -13,34 +15,55 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, Mask, Rect } from 'react-native-svg';
 import * as Haptics from '../src/settings/haptics';
 import ThemeCarousel from '../src/components/ThemeCarousel';
 import GlossyButton from '../src/components/GlossyButton';
 import PopupPanel from '../src/components/PopupPanel';
 import AnimatedRouteBackButton from '../src/components/AnimatedRouteBackButton';
 import WarmupImages from '../src/components/WarmupImages';
+import { TutorialCoachContent } from '../src/components/TutorialOverlay';
 import CircularReveal from '../components/CircularReveal';
 import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { usePremium } from '../src/premium/PremiumContext';
 import { getThemeCardImage, THEME_CARD_IMAGES, THEME_LOCK_OVERLAY_IMAGE } from '../assets/images/theme-cards/themeCardImages';
 import {
   createGameConfig,
+  createPlayer,
   DEFAULT_ZICHTBAARHEID,
+  EQUIPPED_SKIN_STORAGE_KEY,
+  GAME_RULE_PREFERENCES_STORAGE_KEY,
+  PREFERRED_PLAYER_NAME_STORAGE_KEY,
+  SKIN_OPTIONS,
+  parseStoredGameRulePreferences,
+  serializeGameRulePreferences,
+  normalizeCustomPlayerName,
 } from './gameFlowConfig';
 import { THEMES } from './themeCatalog';
-import { generateLobbyCode } from '../src/utils/lobbyCode';
-import { getResponsiveMetrics } from '../src/utils/responsive';
-import { checkOnlineConnection } from '../src/services/liveLobbyService';
+import { LOBBY_CODE_SALT_ENTROPY_BITS, generateLobbyCode } from '../src/utils/lobbyCode';
+import { getGameModePickerMetrics, getResponsiveMetrics, getRulesPanelMetrics } from '../src/utils/responsive';
+import { ensureLobby } from '../src/services/liveLobbyService';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
 import { playSoundEffect, preloadSoundEffect } from '../src/audio/soundEffects';
 import { HOST_ASSETS } from '../src/assets/preloadManifest';
+import { isSkinAvailableForPlayer } from '../src/skins/skinCatalog';
+import { useTranslation } from '../src/i18n/useTranslation';
+import {
+  getCardLayoutOptionLabel,
+  getGameModeInfoBody,
+  getGameModeSubtitle,
+  getGameModeTitle,
+  getThemeLabel,
+  getWinOptionLabel,
+} from '../src/i18n/languages';
 
 const GAME_SETUP_BACKGROUND = require('../assets/images/backgrounds/game-setup-birds-eye-background-v4.png');
 const LOBBY_ROAD_BACKGROUND_IMAGE = require('../assets/images/backgrounds/lobby-road-background.png');
 const LOBBY_PARKING_GRID_IMAGE = require('../assets/images/lobby/lobby-parking-grid.png');
 const WIFI_REQUIRED_IMAGE = require('../assets/images/game-mode-cards/wifi-required.png');
-const WIFI_NOT_REQUIRED_IMAGE = require('../assets/images/game-mode-cards/offline-section-no-wifi.png');
+const WIFI_NOT_REQUIRED_IMAGE = require('../assets/images/game-mode-cards/wifi-not-required.png');
 const WIFI_STATUS_PANEL_IMAGE = require('../assets/images/game-mode-cards/wifi-status-panel.png');
 const KLASSIEK_CARD_RED = require('../assets/images/game-mode-cards/klassiek-card-red.png');
 const KLASSIEK_CARD_GREEN = require('../assets/images/game-mode-cards/klassiek-card-green.png');
@@ -55,19 +78,29 @@ const KAARTCODE_NO_WIFI = require('../assets/images/game-mode-cards/kaartcode-no
 const KAARTCODE_LICENSE_PLATE = require('../assets/images/license-plates/dutch-join-plate-cropped.png');
 const COLLECTIEF_BINGO_BOARD = require('../assets/images/game-mode-cards/collectief-bingo-board.png');
 const CLAIM_BINGO_BOARD = require('../assets/images/game-mode-cards/claim-direct-bingo-board.png');
+const INFO_BUTTON_IMAGE = require('../assets/images/ui/info-button.png');
 const SETTINGS_CROWN_ICON = require('../assets/images/settings/crown-logo.png');
 const SETTINGS_DIAGONAL_ICON = require('../assets/images/settings/diagonal-logo.png');
 const SETTINGS_RULES_PANEL_IMAGE = require('../assets/images/settings/rules-menu-panel-v2.png');
 const SETTINGS_RULE_SLIDER_FRAME_WINCONDITION = require('../assets/images/settings/rules-slider-frame-wincondition.png');
 const SETTINGS_RULE_SLIDER_FRAME_DIAGONAL = require('../assets/images/settings/rules-slider-frame-diagonal.png');
+const SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS = require('../assets/images/settings/rules-slider-frame-dutch-items.png');
+const SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT = require('../assets/images/settings/rules-slider-frame-card-layout.png');
 const SETTINGS_WIN_CONDITION_TITLE_ICON = require('../assets/images/settings/win-condition-title.png');
 const SETTINGS_DIAGONAL_TITLE_ICON = require('../assets/images/settings/diagonal-rule-title.png');
+const SETTINGS_CARD_LAYOUT_TITLE_ICON = require('../assets/images/settings/card-layout-title.png');
 const SETTINGS_WIN_ONE_LINE = require('../assets/images/settings/win-1-line.png');
 const SETTINGS_WIN_TWO_LINES = require('../assets/images/settings/win-2-lines.png');
 const SETTINGS_WIN_FULL_CARD = require('../assets/images/settings/win-full-card.png');
 const SETTINGS_DIAGONAL_ON = require('../assets/images/settings/diagonal-on.png');
 const SETTINGS_DIAGONAL_OFF = require('../assets/images/settings/diagonal-off.png');
+const SETTINGS_DUTCH_ITEMS_ON = require('../assets/images/settings/dutch-items-on.png');
+const SETTINGS_DUTCH_ITEMS_OFF = require('../assets/images/settings/dutch-items-off.png');
+const SETTINGS_DUTCH_ITEMS_TITLE = require('../assets/images/settings/dutch-items-title.png');
+const SETTINGS_CARD_LAYOUT_SAME = require('../assets/images/settings/card-layout-same.png');
+const SETTINGS_CARD_LAYOUT_DIFFERENT = require('../assets/images/settings/card-layout-different.png');
 const CREATE_LOBBY_REVEAL_BLUE = '#1A7BD4';
+const ANDROID_DISABLE_SETUP_IDLE_MOTION = Platform.OS === 'android';
 const CONFIRM_CREATE_LOBBY_REVEAL_GREEN = '#159B3B';
 
 function withAlpha(hexColor, alpha) {
@@ -90,6 +123,7 @@ function isEmbeddedThemeCard(themeId) {
     || themeId === 'vakantie'
     || themeId === 'voertuigen'
     || themeId === 'winter'
+    || themeId === 'bergen'
     || themeId === 'verkeersborden'
   );
 }
@@ -116,7 +150,7 @@ function getEmbeddedThemeTitleStyle(themeId) {
 
 function getEmbeddedThemeTitleScale(themeId) {
   if (themeId === 'verkeersborden') {
-    return 0.64;
+    return 0.48;
   }
 
   if (themeId === 'voertuigen') {
@@ -134,6 +168,7 @@ const THEME_CARDS = THEMES.map((theme) => ({
   outline: theme.cardOutline,
   premium: theme.premium,
 }));
+const PREMIUM_THEME_IDS = new Set(THEMES.filter((theme) => theme.premium).map((theme) => theme.id));
 
 const GAME_MODE_CARDS = [
   {
@@ -161,6 +196,42 @@ const GAME_MODE_CARDS = [
     requiresWifi: false,
   },
 ];
+const GAME_MODE_INFO = {
+  klassiek: {
+    title: 'Klassiek',
+    body: 'Iedere speler krijgt een eigen of dezelfde bingokaart. Wie als eerste bingo heeft wint!',
+  },
+  claim: {
+    title: 'Claim',
+    body: 'Iedereen speelt live op hetzelfde bingobord. Zie je een item? Klik deze dan als eerste aan om te claimen. Wie de meeste vakjes claimt wint.',
+  },
+  collectief: {
+    title: 'Collectief',
+    body: 'Iedereen speelt samen op hetzelfde bingobord. Samen met de andere spelers probeer je bingo te halen, perfect voor als je als team wilt spelen.',
+  },
+  wegenkaart: {
+    title: 'Kaartcode',
+    body: 'Deel de kaartcode met andere spelers om zonder internet toch hetzelfde bingobord te gebruiken.',
+  },
+};
+const RULE_INFO = {
+  wincondition: {
+    title: 'Winconditie',
+    body: 'Kies wanneer iemand bingo heeft: na 1 rij, 2 rijen of pas bij een hele kaart.',
+  },
+  diagonal: {
+    title: 'Diagonaal',
+    body: 'Bepaal of een diagonale rij ook meetelt voor bingo. Zet dit uit als je alleen horizontaal en verticaal wilt spelen.',
+  },
+  dutch: {
+    title: 'Nederlands',
+    body: 'Voegt items toe die je alleen in Nederland vindt. Speel je niet in Nederland? Dan kun je deze beter uitzetten.',
+  },
+  cardLayout: {
+    title: 'Kaarten',
+    body: 'Spelers kunnen precies hetzelfde bingobord krijgen of een bord met een andere indeling en items.',
+  },
+};
 const WIFI_GAME_MODE_CARDS = GAME_MODE_CARDS.filter((mode) => mode.requiresWifi);
 const OFFLINE_GAME_MODE_CARDS = GAME_MODE_CARDS.filter((mode) => !mode.requiresWifi);
 const GAME_MODE_PICKER_SEQUENCE = [
@@ -180,8 +251,26 @@ const SETTINGS_DIAGONAL_OPTIONS = [
   { id: true, label: 'Wel', image: SETTINGS_DIAGONAL_ON },
   { id: false, label: 'Niet', image: SETTINGS_DIAGONAL_OFF },
 ];
+const SETTINGS_DUTCH_OPTIONS = [
+  { id: true, label: 'Wel Nederlandse items', image: SETTINGS_DUTCH_ITEMS_ON },
+  { id: false, label: 'Geen Nederlandse items', image: SETTINGS_DUTCH_ITEMS_OFF },
+];
+const SETTINGS_CARD_LAYOUT_OPTIONS = [
+  { id: 'zelfde', label: 'Zelfde kaart', image: SETTINGS_CARD_LAYOUT_SAME },
+  { id: 'anders', label: 'Andere kaarten', image: SETTINGS_CARD_LAYOUT_DIFFERENT },
+];
 const GAME_SETTINGS_KLAP_IN_SOUND = 'gameSettingsKlapIn';
 const GAME_SETTINGS_KLAP_UIT_SOUND = 'gameSettingsKlapUit';
+const HOST_CONFIRM_YES_HIGHLIGHT_TUNING = {
+  // Positief = naar rechts / naar beneden. Handig om deze ene tutorial-highlight in VS Code te finetunen.
+  offsetX: 14,
+  offsetY: 9,
+  paddingLeft: 18,
+  paddingRight: 10,
+  paddingTop: 8,
+  paddingBottom: 10,
+  radius: 24,
+};
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -204,11 +293,20 @@ function measureViewCenter(ref, fallback) {
   });
 }
 
-export default function HostSetupScreen({ navigation }) {
+export default function HostSetupScreen({
+  navigation,
+  route,
+  tutorialActive = false,
+  tutorialStep = null,
+  onTutorialTargetLayout = null,
+  onTutorialAction = null,
+}) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { isTablet, tabletScale } = getResponsiveMetrics(screenWidth, screenHeight);
-  const { isPremium } = usePremium();
+  const { isPremium, ownedPaidSkins } = usePremium();
   const { settings } = useAppSettings();
+  const { language, t } = useTranslation();
+  const tutorialMode = Boolean(route?.params?.tutorialMode);
   const [selectedThemeIndex, setSelectedThemeIndex] = useState(0);
   const [selectedGameModeIndex, setSelectedGameModeIndex] = useState(0);
   const [gameModePickerOpen, setGameModePickerOpen] = useState(false);
@@ -217,29 +315,36 @@ export default function HostSetupScreen({ navigation }) {
   const [wincondition, setWincondition] = useState('1rij');
   const [diagonaal, setDiagonaal] = useState(true);
   const [kaartOpzet, setKaartOpzet] = useState('zelfde');
+  const [nederlands, setNederlands] = useState(true);
+  const [gameRulePreferencesLoaded, setGameRulePreferencesLoaded] = useState(tutorialMode);
   const [createLobbyConfirmVisible, setCreateLobbyConfirmVisible] = useState(false);
   const [connectionErrorVisible, setConnectionErrorVisible] = useState(false);
   const [createLobbyReveal, setCreateLobbyReveal] = useState(null);
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [hostLayoutReady, setHostLayoutReady] = useState(false);
   const [hostAssetsReady, setHostAssetsReady] = useState(false);
+  const [settingsScrollMetrics, setSettingsScrollMetrics] = useState({ contentHeight: 0, viewportHeight: 0 });
+  const [confirmYesRect, setConfirmYesRect] = useState(null);
+  const [activeInfoPopover, setActiveInfoPopover] = useState(null);
 
-  const scale = clamp(Math.min(screenWidth / 430, screenHeight / 932), 0.88, isTablet ? 1.34 : 1.18);
-  const collapsedPanelHeight = Math.round(clamp(screenHeight * (isTablet ? 0.09 : 0.078), 66, isTablet ? 118 : 88));
-  const expandedPanelHeight = Math.round(clamp(screenHeight * (isTablet ? 0.79 : 0.74), isTablet ? 720 : 560, screenHeight * 0.86));
+  const responsiveMetrics = getResponsiveMetrics(screenWidth, screenHeight);
+  const rulesPanelMetrics = getRulesPanelMetrics(screenWidth, screenHeight);
+  const gameModePickerMetrics = getGameModePickerMetrics(screenWidth, screenHeight);
+  const scale = responsiveMetrics.scale;
+  const collapsedPanelHeight = rulesPanelMetrics.collapsedPanelHeight;
+  const expandedPanelHeight = rulesPanelMetrics.expandedPanelHeight;
   const setupMetrics = useMemo(() => {
     const horizontalPadding = Math.round(clamp(screenWidth * 0.058, 20, 64));
 
     const themeCardWidth = Math.round(clamp(screenWidth * (isTablet ? 0.39 : 0.45), 194, isTablet ? 350 : 250));
-    const bottomSafeAreaEstimate = screenHeight >= 812
-      ? Math.round(clamp(screenHeight * 0.034, 24, 34))
-      : 0;
 
     return {
       scale,
       horizontalPadding,
-      contentTop: Math.round(clamp(screenHeight * 0.018, 12, 28)),
-      contentBottom: Math.max(0, collapsedPanelHeight - bottomSafeAreaEstimate),
+      contentTop: Platform.OS === 'android'
+        ? Math.round(clamp(screenHeight * (isTablet ? 0.042 : 0.047), 34, isTablet ? 72 : 54))
+        : Math.round(clamp(screenHeight * 0.018, 12, 28)),
+      contentBottom: rulesPanelMetrics.contentBottom,
       titleMarginTop: Math.round(clamp(screenHeight * 0.011, 8, 14)),
       titleMarginBottom: Math.round(clamp(screenHeight * 0.006, 5, 8)),
       pageTitleMarginBottom: Math.round(clamp(screenHeight * 0.013, 10, 16)),
@@ -255,19 +360,7 @@ export default function HostSetupScreen({ navigation }) {
       panelContentPaddingHorizontal: Math.round(clamp(screenWidth * 0.052, 20, 48)),
       panelContentPaddingTop: Math.round(clamp(screenHeight * 0.013, 10, 18)),
       panelContentPaddingBottom: Math.round(clamp(screenHeight * 0.024, 20, 34)),
-      pickerPaddingHorizontal: Math.round(clamp(screenWidth * 0.047, 18, 52)),
-      pickerPaddingTop: Math.round(clamp(screenHeight * 0.084, 64, 94)) + Math.round(8 * scale),
-      pickerPaddingBottom: Math.round(clamp(screenHeight * 0.099, 78, 112)),
-      pickerGap: Math.round(clamp(screenHeight * 0.017, 13, 20)),
-      pickerPanelToChoiceGap: Math.round(10 * scale),
-      pickerChoiceGap: Math.round(clamp(screenWidth * 0.033, 12, 20)),
-      pickerIconWidth: Math.round(clamp(screenWidth * 0.274, 106, 142)),
-      pickerIconHeight: Math.round(clamp(screenHeight * 0.137, 116, 152)),
-      pickerStatusPanelWidth: Math.round(clamp(screenWidth * 0.70, 268, 326)),
-      pickerStatusPanelHeight: Math.round(clamp(screenWidth * 0.70 / (1672 / 941), 150, 184)),
-      pickerStatusPanelIconSize: Math.round(clamp(screenWidth * 0.235, 90, 112)),
-      pickerChoiceHeight: Math.round(clamp(screenHeight * (isTablet ? 0.175 : 0.133), 114, isTablet ? 244 : 156)),
-      pickerFeaturedChoiceHeight: Math.round(clamp(screenHeight * (isTablet ? 0.188 : 0.144), 124, isTablet ? 262 : 170)),
+      ...gameModePickerMetrics,
       backButtonSize: Math.round(clamp(screenWidth * (isTablet ? 0.105 : 0.13), 54, isTablet ? 88 : 66)),
       backButtonInset: Math.round(clamp(screenWidth * 0.037, 14, isTablet ? 34 : 24)),
       settingsPillIconSize: Math.round(clamp(screenWidth * 0.052, 20, 30)),
@@ -276,20 +369,29 @@ export default function HostSetupScreen({ navigation }) {
       settingsDiagonalTileSize: Math.round(clamp(screenWidth * 0.23, 84, 124)),
       settingsDiagonalImageSize: Math.round(clamp(screenWidth * 0.17, 64, 92)),
       settingsLabelFontSize: Math.round(clamp(screenWidth * 0.045, 17, 24)),
-      settingsTitleIconSize: Math.round(clamp(screenWidth * 0.118, 46, isTablet ? 88 : 66)),
-      settingsSliderHeight: Math.round(clamp(screenHeight * (isTablet ? 0.18 : 0.156), 126, isTablet ? 210 : 156)),
-      settingsSliderImageSize: Math.round(clamp(screenWidth * 0.155, 58, isTablet ? 108 : 78)),
-      settingsSliderDiagonalImageSize: Math.round(clamp(screenWidth * 0.178, 68, isTablet ? 124 : 92)),
+      settingsTitleIconSize: rulesPanelMetrics.settingsTitleIconSize,
+      settingsSliderHeight: rulesPanelMetrics.settingsSliderHeight,
+      settingsSliderImageSize: rulesPanelMetrics.settingsSliderImageSize,
+      settingsSliderDiagonalImageSize: rulesPanelMetrics.settingsSliderDiagonalImageSize,
       settingsPillFontSize: Math.round(clamp(screenWidth * 0.035, 14, isTablet ? 25 : 19)),
-      settingsSectionGap: Math.round(clamp(screenHeight * (isTablet ? 0.046 : 0.038), 28, isTablet ? 64 : 42)),
+      settingsSectionGap: rulesPanelMetrics.settingsSectionGap,
       settingsOptionGap: Math.round(clamp(screenWidth * 0.05, 18, 34)),
       isTablet,
       tabletScale,
     };
-  }, [collapsedPanelHeight, isTablet, scale, screenHeight, screenWidth, tabletScale]);
+  }, [gameModePickerMetrics, isTablet, rulesPanelMetrics, scale, screenHeight, screenWidth, tabletScale]);
+  const modalBubbleWidth = Math.min(screenWidth * 0.9, 430);
+  const modalBubbleHeight = modalBubbleWidth * 0.74;
+  const modalCarSize = Math.min(screenWidth * 0.38, 190);
+  const modalBubbleTop = Math.max(38, Math.min(screenHeight * 0.16, screenHeight - modalBubbleHeight - 20));
+  const modalBubbleLeft = Math.min(screenWidth - modalBubbleWidth - 10, Math.max(10, screenWidth * 0.5 - modalBubbleWidth * 0.54));
+  const modalCarLeft = Math.min(screenWidth - modalCarSize * 0.72, modalBubbleLeft + modalBubbleWidth * 0.68);
+  const modalCarTop = modalBubbleTop + modalBubbleHeight * 0.72;
   const panelHeight = useRef(new Animated.Value(collapsedPanelHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const settingsProgress = useRef(new Animated.Value(0)).current;
+  const settingsScrollY = useRef(new Animated.Value(0)).current;
+  const infoPopoverProgress = useRef(new Animated.Value(0)).current;
   const gameModePickerOpacity = useRef(new Animated.Value(0)).current;
   const gameModeMotionProgress = useRef(new Animated.Value(0)).current;
   const createLobbyConfirmProgress = useRef(new Animated.Value(0)).current;
@@ -303,6 +405,9 @@ export default function HostSetupScreen({ navigation }) {
     })
   ).current;
   const setupGameModeCardRef = useRef(null);
+  const setupThemeCarouselRef = useRef(null);
+  const setupRulesHandleRef = useRef(null);
+  const setupRulesDiagonalOffRef = useRef(null);
   const createLobbyButtonRef = useRef(null);
   const confirmCreateLobbyButtonRef = useRef(null);
   const createLobbyRevealRef = useRef(null);
@@ -311,15 +416,88 @@ export default function HostSetupScreen({ navigation }) {
   const [gameModePickerExiting, setGameModePickerExiting] = useState(false);
   const [hiddenGameModeChoiceId, setHiddenGameModeChoiceId] = useState(null);
   const [setupGameModeDetached, setSetupGameModeDetached] = useState(false);
-  const selectedTheme = THEME_CARDS[selectedThemeIndex] ?? THEME_CARDS[0];
-  const selectedGameMode = GAME_MODE_CARDS[selectedGameModeIndex] ?? GAME_MODE_CARDS[0];
+  const localizedThemeCards = useMemo(() => THEME_CARDS.map((theme) => ({
+    ...theme,
+    title: getThemeLabel(language, theme.id, theme.title),
+  })), [language]);
+  const localizedGameModeCards = useMemo(() => GAME_MODE_CARDS.map((mode) => ({
+    ...mode,
+    title: getGameModeTitle(language, mode.id, mode.title),
+    subtitle: getGameModeSubtitle(language, mode.id, mode.subtitle),
+    infoBody: getGameModeInfoBody(language, mode.id, mode.subtitle),
+  })), [language]);
+  const localizedWifiGameModeCards = useMemo(
+    () => localizedGameModeCards.filter((mode) => mode.requiresWifi),
+    [localizedGameModeCards]
+  );
+  const localizedOfflineGameModeCards = useMemo(
+    () => localizedGameModeCards.filter((mode) => !mode.requiresWifi),
+    [localizedGameModeCards]
+  );
+  const localizedWinOptions = useMemo(() => SETTINGS_WIN_OPTIONS.map((option) => ({
+    ...option,
+    label: getWinOptionLabel(language, option.id, option.label),
+  })), [language]);
+  const localizedDiagonalOptions = useMemo(() => SETTINGS_DIAGONAL_OPTIONS.map((option) => ({
+    ...option,
+    label: option.id ? t('game.options.yes') : t('game.options.no'),
+  })), [t]);
+  const localizedDutchOptions = useMemo(() => SETTINGS_DUTCH_OPTIONS.map((option) => ({
+    ...option,
+    label: option.id ? t('game.options.withDutchItems') : t('game.options.noDutchItems'),
+  })), [t]);
+  const localizedCardLayoutOptions = useMemo(() => SETTINGS_CARD_LAYOUT_OPTIONS.map((option) => ({
+    ...option,
+    label: getCardLayoutOptionLabel(language, option.id, option.label),
+  })), [language]);
+  const localizedRuleInfo = useMemo(() => ({
+    wincondition: {
+      title: t('game.rules.winCondition'),
+      body: t('game.rules.winConditionInfo'),
+    },
+    diagonal: {
+      title: t('game.rules.diagonal'),
+      body: t('game.rules.diagonalInfo'),
+    },
+    dutch: {
+      title: t('game.rules.dutchItems'),
+      body: t('game.rules.dutchItemsInfo'),
+    },
+    cardLayout: {
+      title: t('game.rules.cards'),
+      body: t('game.rules.cardsInfo'),
+    },
+  }), [t]);
+  const selectedTheme = localizedThemeCards[selectedThemeIndex] ?? localizedThemeCards[0];
+  const selectedGameMode = localizedGameModeCards[selectedGameModeIndex] ?? localizedGameModeCards[0];
   const liveSyncEnabled = selectedGameMode?.requiresWifi ?? true;
   const isCardCodeMode = selectedGameMode?.id === 'wegenkaart';
-  const selectedThemeAvailable = !selectedTheme?.premium || isPremium;
+  const showWinAndDiagonalRuleSettings = (
+    selectedGameMode?.id === 'klassiek'
+    || selectedGameMode?.id === 'wegenkaart'
+    || selectedGameMode?.id === 'collectief'
+  );
+  const showCardLayoutRuleSettings = selectedGameMode?.id === 'klassiek';
+  const selectedThemeLocked = Boolean(selectedTheme?.id && PREMIUM_THEME_IDS.has(selectedTheme.id) && !isPremium);
+  const selectedThemeAvailable = !selectedThemeLocked;
+
+  const reportTutorialTarget = useCallback((key, targetRef) => {
+    if (!tutorialActive || !onTutorialTargetLayout || !targetRef?.current?.measureInWindow) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        targetRef.current?.measureInWindow?.((x, y, width, height) => {
+          onTutorialTargetLayout(key, { x, y, width, height });
+        });
+      });
+    });
+  }, [onTutorialTargetLayout, tutorialActive]);
 
   const canGenerate = useMemo(
-    () => Boolean(selectedTheme?.id && selectedGameMode?.id),
-    [selectedGameMode?.id, selectedTheme?.id]
+    () => Boolean(selectedTheme?.id && (tutorialMode || selectedThemeAvailable) && selectedGameMode?.id),
+    [selectedGameMode?.id, selectedTheme?.id, selectedThemeAvailable, tutorialMode]
   );
   const settingsPanelTranslateY = settingsProgress.interpolate({
     inputRange: [0, 1],
@@ -329,9 +507,110 @@ export default function HostSetupScreen({ navigation }) {
     inputRange: [0, 1],
     outputRange: [30, 0],
   });
+  const settingsScrollbarVisible = settingsScrollMetrics.contentHeight > settingsScrollMetrics.viewportHeight + 10;
+  const settingsScrollbarTrackHeight = Math.max(0, settingsScrollMetrics.viewportHeight - Math.round(22 * scale));
+  const settingsScrollbarThumbHeight = settingsScrollbarVisible
+    ? Math.max(
+        Math.round(34 * scale),
+        (settingsScrollbarTrackHeight * settingsScrollMetrics.viewportHeight) / settingsScrollMetrics.contentHeight
+      )
+    : 0;
+  const settingsScrollbarTranslateY = settingsScrollY.interpolate({
+    inputRange: [0, Math.max(1, settingsScrollMetrics.contentHeight - settingsScrollMetrics.viewportHeight)],
+    outputRange: [0, Math.max(0, settingsScrollbarTrackHeight - settingsScrollbarThumbHeight)],
+    extrapolate: 'clamp',
+  });
   const handleHostWarmupReady = useCallback(() => {
     setHostAssetsReady(true);
   }, []);
+
+  const closeInfoPopover = useCallback(() => {
+    if (!activeInfoPopover) {
+      return;
+    }
+
+    Animated.timing(infoPopoverProgress, {
+      toValue: 0,
+      duration: 130,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setActiveInfoPopover(null);
+      }
+    });
+  }, [activeInfoPopover, infoPopoverProgress]);
+
+  const showInfoPopover = useCallback((info, targetRef) => {
+    if (!info || !targetRef?.current?.measureInWindow) {
+      return;
+    }
+
+    targetRef.current.measureInWindow((x, y, width, height) => {
+      if (activeInfoPopover?.id === info.id) {
+        closeInfoPopover();
+        return;
+      }
+
+      infoPopoverProgress.stopAnimation();
+      infoPopoverProgress.setValue(0);
+      setActiveInfoPopover({
+        ...info,
+        anchor: { x, y, width, height },
+      });
+      Animated.spring(infoPopoverProgress, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 22,
+        bounciness: 8,
+      }).start();
+    });
+  }, [activeInfoPopover?.id, closeInfoPopover, infoPopoverProgress]);
+
+  useEffect(() => {
+    if (tutorialMode) {
+      setWincondition('1rij');
+      setDiagonaal(true);
+      setKaartOpzet('zelfde');
+      setNederlands(true);
+      setGameRulePreferencesLoaded(true);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    AsyncStorage.getItem(GAME_RULE_PREFERENCES_STORAGE_KEY).then((storedValue) => {
+      if (cancelled) {
+        return;
+      }
+
+      const preferences = parseStoredGameRulePreferences(storedValue);
+      setWincondition(preferences.wincondition);
+      setDiagonaal(preferences.diagonaal);
+      setKaartOpzet(preferences.kaartOpzet);
+      setNederlands(preferences.nederlands);
+      setGameRulePreferencesLoaded(true);
+    }).catch(() => {
+      if (!cancelled) {
+        setGameRulePreferencesLoaded(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tutorialMode]);
+
+  useEffect(() => {
+    if (!gameRulePreferencesLoaded || tutorialMode) {
+      return;
+    }
+
+    void AsyncStorage.setItem(
+      GAME_RULE_PREFERENCES_STORAGE_KEY,
+      serializeGameRulePreferences({ wincondition, diagonaal, kaartOpzet, nederlands })
+    );
+  }, [diagonaal, gameRulePreferencesLoaded, kaartOpzet, nederlands, tutorialMode, wincondition]);
 
   useEffect(() => {
     if (!hostLayoutReady || !hostAssetsReady) {
@@ -354,6 +633,32 @@ export default function HostSetupScreen({ navigation }) {
       cancelled = true;
     };
   }, [hostAssetsReady, hostLayoutReady, navigation]);
+
+  useEffect(() => {
+    if (tutorialStep?.target === 'host.theme') {
+      reportTutorialTarget('host.theme', setupThemeCarouselRef);
+    } else if (tutorialStep?.target === 'host.spelmodus') {
+      reportTutorialTarget('host.spelmodus', setupGameModeCardRef);
+    } else if (tutorialStep?.target === 'host.spelmodus.collectief') {
+      reportTutorialTarget('host.spelmodus.collectief', { current: gameModeChoiceRefs.current.collectief });
+    } else if (tutorialStep?.target === 'host.rules') {
+      reportTutorialTarget('host.rules', setupRulesHandleRef);
+    } else if (tutorialStep?.target === 'host.rulesDiagonal') {
+      reportTutorialTarget('host.rulesDiagonal', setupRulesDiagonalOffRef);
+    } else if (tutorialStep?.target === 'host.createLobby') {
+      reportTutorialTarget('host.createLobby', createLobbyButtonRef);
+    } else if (tutorialStep?.target === 'host.confirmYes') {
+      reportTutorialTarget('host.confirmYes', confirmCreateLobbyButtonRef);
+    }
+  }, [
+    createLobbyConfirmVisible,
+    gameModePickerOpen,
+    reportTutorialTarget,
+    screenHeight,
+    screenWidth,
+    settingsOpen,
+    tutorialStep?.target,
+  ]);
 
   useEffect(() => {
     if (!createLobbyConfirmVisible) {
@@ -379,6 +684,35 @@ export default function HostSetupScreen({ navigation }) {
       createLobbyRevealRef.current?.reveal();
     });
   }, [createLobbyReveal]);
+
+  useEffect(() => {
+    if (!createLobbyConfirmVisible || tutorialStep?.target !== 'host.confirmYes') {
+      setConfirmYesRect(null);
+      return;
+    }
+
+    const measureConfirmYes = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          confirmCreateLobbyButtonRef.current?.measureInWindow?.((x, y, width, height) => {
+            setConfirmYesRect({ x, y, width, height });
+          });
+        });
+      });
+    };
+
+    measureConfirmYes();
+    const timeoutId = setTimeout(measureConfirmYes, 360);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [
+    createLobbyConfirmVisible,
+    screenHeight,
+    screenWidth,
+    tutorialStep?.target,
+  ]);
 
   useEffect(() => {
     panelHeight.setValue(expandedPanelHeight);
@@ -413,19 +747,25 @@ export default function HostSetupScreen({ navigation }) {
       }),
     ]).start(({ finished }) => {
       if (finished && !open) {
+        settingsProgress.setValue(0);
+        backdropOpacity.setValue(0);
         setSettingsPanelVisible(false);
       }
     });
   }
 
   function openSettings() {
+    closeInfoPopover();
     void Haptics.selectionAsync();
     void playSoundEffect(GAME_SETTINGS_KLAP_UIT_SOUND, settings);
+    onTutorialAction?.('host.rulesOpened');
     animateSettings(true);
   }
 
   function closeSettings() {
+    closeInfoPopover();
     void playSoundEffect(GAME_SETTINGS_KLAP_IN_SOUND, settings);
+    onTutorialAction?.('host.rulesClosed');
     animateSettings(false);
   }
 
@@ -512,7 +852,9 @@ export default function HostSetupScreen({ navigation }) {
       return;
     }
 
+    closeInfoPopover();
     void Haptics.selectionAsync();
+    onTutorialAction?.('host.spelmodusOpened');
     if (settingsOpen) {
       closeSettings();
     }
@@ -586,6 +928,46 @@ export default function HostSetupScreen({ navigation }) {
     });
   }
 
+  function closeGameModePickerWithReturn() {
+    if (gameModeMotion || gameModePickerExiting) {
+      return;
+    }
+
+    closeInfoPopover();
+    void Haptics.selectionAsync();
+    setGameModePickerExiting(true);
+
+    requestAnimationFrame(async () => {
+      const mode = selectedGameMode;
+      const from = await measureNode(gameModeChoiceRefs.current[mode.id]);
+      const to = await measureNode(setupGameModeCardRef.current);
+
+      if (!stageGameModeMotion({ mode, from, to })) {
+        closeGameModePicker(true);
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          gameModePickerItemProgress[mode.id]?.stopAnimation();
+          gameModePickerItemProgress[mode.id]?.setValue(0);
+          setHiddenGameModeChoiceId(mode.id);
+          void animateGameModePickerItemsOut(mode.id);
+          playStagedGameModeMotion({
+            duration: 460,
+            onComplete: () => {
+              setSetupGameModeDetached(false);
+              requestAnimationFrame(() => {
+                setGameModeMotion(null);
+                closeGameModePicker(true);
+              });
+            },
+          });
+        });
+      });
+    });
+  }
+
   function selectGameMode(modeId) {
     if (gameModeMotion || gameModePickerExiting) {
       return;
@@ -597,8 +979,14 @@ export default function HostSetupScreen({ navigation }) {
       return;
     }
 
+    closeInfoPopover();
+
+    if (modeId === 'collectief') {
+      onTutorialAction?.('host.spelmodusSelected');
+    }
+
     if (nextIndex === selectedGameModeIndex) {
-      closeGameModePicker(true);
+      closeGameModePickerWithReturn();
       return;
     }
 
@@ -606,7 +994,7 @@ export default function HostSetupScreen({ navigation }) {
     setGameModePickerExiting(true);
 
     requestAnimationFrame(async () => {
-      const nextMode = GAME_MODE_CARDS[nextIndex];
+      const nextMode = localizedGameModeCards[nextIndex] ?? GAME_MODE_CARDS[nextIndex];
       const from = await measureNode(gameModeChoiceRefs.current[modeId]);
       const to = await measureNode(setupGameModeCardRef.current);
 
@@ -639,7 +1027,7 @@ export default function HostSetupScreen({ navigation }) {
   }
 
   async function handleGenerateCode() {
-    if (!isPremium || !selectedThemeAvailable) {
+    if (!tutorialMode && (!isPremium || !selectedThemeAvailable)) {
       setPremiumModalVisible(true);
       return;
     }
@@ -648,15 +1036,35 @@ export default function HostSetupScreen({ navigation }) {
       return;
     }
 
-    if (liveSyncEnabled) {
-      const online = await checkOnlineConnection();
-      if (!online) {
-        setConnectionErrorVisible(true);
-        return;
-      }
-    }
-
+    onTutorialAction?.('host.createLobbyPressed');
     setCreateLobbyConfirmVisible(true);
+  }
+
+  function buildTutorialHostLobbyConfig() {
+    const hostPlayer = createPlayer({ naam: 'Jij', skin: 'rood', playerId: 'tutorial-host' });
+    const goodGuest = createPlayer({ naam: 'Sam', skin: 'blauw', playerId: 'tutorial-guest-good' });
+    const weakGuest = createPlayer({ naam: 'Noor', skin: 'geel', playerId: 'tutorial-guest-weak', isOffline: true });
+
+    return createGameConfig({
+      thema: selectedTheme.id,
+      wincondition,
+      diagonaal,
+      kaartOpzet,
+      nederlands,
+      modus: 'collectief',
+      syncType: 'live',
+      lobbyCode: 'HOST1234',
+      seed: 24680,
+      salt: 13579,
+      aantalSpelersOpDitApparaat: 1,
+      zichtbaarheid: { ...DEFAULT_ZICHTBAARHEID },
+      spelers: [hostPlayer],
+      liveLobbyPlayers: [
+        { ...hostPlayer, role: 'host' },
+        { ...goodGuest, role: 'guest' },
+        { ...weakGuest, role: 'guest' },
+      ],
+    });
   }
 
   async function handleConfirmCreateLobbyPress(event) {
@@ -666,13 +1074,34 @@ export default function HostSetupScreen({ navigation }) {
 
     const syncType = liveSyncEnabled ? 'live' : 'geen';
     const seed = Math.floor(Math.random() * 2 ** 16);
-    const salt = Math.floor(Math.random() * 2 ** 6);
+    const salt = Math.floor(Math.random() * 2 ** LOBBY_CODE_SALT_ENTROPY_BITS);
     const lobbyCode = generateLobbyCode({
       thema: selectedTheme.id,
       gameMode: selectedGameMode.id,
       syncType: syncType === 'live' ? 'live' : 'offline',
       seed,
       salt,
+      wincondition,
+      diagonaal,
+      kaartOpzet,
+      nederlands,
+    });
+    void AsyncStorage.setItem(
+      GAME_RULE_PREFERENCES_STORAGE_KEY,
+      serializeGameRulePreferences({ wincondition, diagonaal, kaartOpzet, nederlands })
+    );
+
+    const [storedEquippedSkin, storedPreferredName] = await Promise.all([
+      AsyncStorage.getItem(EQUIPPED_SKIN_STORAGE_KEY),
+      AsyncStorage.getItem(PREFERRED_PLAYER_NAME_STORAGE_KEY),
+    ]);
+    const preferredSkin = (
+      SKIN_OPTIONS.includes(storedEquippedSkin)
+      && isSkinAvailableForPlayer(storedEquippedSkin, { isPremium, ownedPaidSkins })
+    ) ? storedEquippedSkin : 'rood';
+    const hostPlayer = createPlayer({
+      naam: normalizeCustomPlayerName(storedPreferredName),
+      skin: preferredSkin,
     });
 
     const config = createGameConfig({
@@ -680,6 +1109,7 @@ export default function HostSetupScreen({ navigation }) {
       wincondition,
       diagonaal,
       kaartOpzet,
+      nederlands,
       modus: selectedGameMode.id,
       syncType,
       lobbyCode,
@@ -689,7 +1119,7 @@ export default function HostSetupScreen({ navigation }) {
       zichtbaarheid: liveSyncEnabled
         ? { ...DEFAULT_ZICHTBAARHEID }
         : { eigenVoortgang: false, andermansVoortgang: false },
-      spelers: [],
+      spelers: [hostPlayer],
     });
 
     const origin = (
@@ -702,11 +1132,22 @@ export default function HostSetupScreen({ navigation }) {
         y: screenHeight / 2,
       });
 
+    const liveLobbySetupPromise = liveSyncEnabled
+      ? ensureLobby({
+          code: lobbyCode,
+          config,
+          hostPlayer,
+          resetExisting: true,
+        }).catch(() => null)
+      : Promise.resolve(null);
+
     setCreateLobbyReveal({
-      config,
+      config: tutorialMode ? buildTutorialHostLobbyConfig() : config,
+      liveLobbySetupPromise: tutorialMode ? Promise.resolve(null) : liveLobbySetupPromise,
       originX: origin.x,
       originY: origin.y,
       transitionKey: `host-lobby-${Date.now()}`,
+      tutorialMode,
     });
   }
 
@@ -749,8 +1190,10 @@ export default function HostSetupScreen({ navigation }) {
               },
             ]}
           >
-            <TitleBlock label="Bingo Thema" metrics={setupMetrics} />
+            <TitleBlock label={t('game.bingoTheme')} metrics={setupMetrics} />
             <View
+              ref={setupThemeCarouselRef}
+              collapsable={false}
               style={[
                 styles.topBlock,
                 {
@@ -760,11 +1203,16 @@ export default function HostSetupScreen({ navigation }) {
               ]}
             >
               <ThemeCarousel
-                items={THEME_CARDS}
+                items={localizedThemeCards}
                 itemSpacing={setupMetrics.carouselSpacing}
                 itemWidth={setupMetrics.themeCardWidth}
                 keyExtractor={(item) => item.id}
-                onSnapToItem={setSelectedThemeIndex}
+                loop
+                focusedIndex={selectedThemeIndex}
+                onSnapToItem={(index) => {
+                  setSelectedThemeIndex(index);
+                  onTutorialAction?.('host.themeChanged');
+                }}
                 renderCard={({ item }) => (
                   <ThemeCard
                     item={item}
@@ -776,7 +1224,7 @@ export default function HostSetupScreen({ navigation }) {
               />
             </View>
 
-            <TitleBlock label="Gamemode" metrics={setupMetrics} />
+            <TitleBlock label={t('game.gameMode')} metrics={setupMetrics} />
             <Pressable
               ref={setupGameModeCardRef}
               collapsable={false}
@@ -791,7 +1239,17 @@ export default function HostSetupScreen({ navigation }) {
                 setupGameModeDetached && styles.selectedGameModeCardHidden,
               ]}
             >
-              <GameModeCardArt mode={selectedGameMode} selected setupPreview={setupMetrics.isTablet} />
+              <GameModeCardArt
+                mode={selectedGameMode}
+                selected
+                setupPreview={setupMetrics.isTablet}
+                info={{
+                  id: `setup-mode-${selectedGameMode.id}`,
+                  title: selectedGameMode.title,
+                  body: selectedGameMode.infoBody ?? selectedGameMode.subtitle,
+                }}
+                onInfoPress={showInfoPopover}
+              />
             </Pressable>
 
             <View style={styles.actionRail}>
@@ -801,23 +1259,25 @@ export default function HostSetupScreen({ navigation }) {
                 style={styles.actionStack}
               >
                 <GlossyButton
-                  label={isCardCodeMode ? 'Maak kaartcode aan' : 'Maak lobby aan'}
+                  label={isCardCodeMode ? t('game.createCardCode') : t('game.createLobby')}
                   variant="blue"
                   size="large"
                   heightOverride={setupMetrics.actionButtonHeight}
                   horizontalPadding={setupMetrics.actionButtonPadding}
                   onPress={handleGenerateCode}
-                  disabled={!canGenerate || !selectedThemeAvailable || createLobbyConfirmVisible || Boolean(createLobbyReveal)}
+                  disabled={!canGenerate || (!tutorialMode && !selectedThemeAvailable) || createLobbyConfirmVisible || Boolean(createLobbyReveal)}
                 />
               </View>
             </View>
           </View>
 
-          <View pointerEvents={settingsOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
-            <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
-            </Animated.View>
-          </View>
+          {settingsPanelVisible ? (
+            <View pointerEvents={settingsOpen ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>
+              <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={closeSettings} />
+              </Animated.View>
+            </View>
+          ) : null}
         </SafeAreaView>
 
         <View pointerEvents="box-none" style={styles.bottomDock}>
@@ -843,6 +1303,8 @@ export default function HostSetupScreen({ navigation }) {
               imageStyle={styles.rulesPanelImageAsset}
             />
             <Pressable
+              ref={setupRulesHandleRef}
+              collapsable={false}
               onPress={settingsOpen ? closeSettings : openSettings}
               style={[
                 styles.panelHeader,
@@ -850,7 +1312,14 @@ export default function HostSetupScreen({ navigation }) {
                 settingsPanelVisible ? styles.panelHeaderOpen : styles.panelHeaderClosed,
               ]}
             >
-              <Text style={styles.panelHeaderText}>Spelregels</Text>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={styles.panelHeaderText}
+              >
+                {t('game.gameRules')}
+              </Text>
             </Pressable>
 
             <Animated.View
@@ -866,26 +1335,103 @@ export default function HostSetupScreen({ navigation }) {
                 },
               ]}
             >
-              <View style={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}>
-                <SettingsRuleSlider
-                  title="Winconditie"
-                  titleIcon={SETTINGS_WIN_CONDITION_TITLE_ICON}
-                  value={wincondition}
-                  options={SETTINGS_WIN_OPTIONS}
-                  onChange={setWincondition}
-                  metrics={setupMetrics}
-                />
+                <Animated.ScrollView
+                  showsVerticalScrollIndicator={false}
+                  style={styles.settingsMenuScroll}
+                  contentContainerStyle={[styles.settingsMenuBody, { gap: setupMetrics.settingsSectionGap }]}
+                  scrollEnabled={!tutorialActive}
+                  scrollEventThrottle={Platform.OS === 'android' ? 32 : 16}
+                removeClippedSubviews={Platform.OS === 'android'}
+                onLayout={(event) => {
+                  const viewportHeight = event.nativeEvent.layout.height;
+                  setSettingsScrollMetrics((current) => (
+                    current.viewportHeight === viewportHeight
+                      ? current
+                      : { ...current, viewportHeight }
+                  ));
+                }}
+                onContentSizeChange={(_, contentHeight) => {
+                  setSettingsScrollMetrics((current) => (
+                    current.contentHeight === contentHeight
+                      ? current
+                      : { ...current, contentHeight }
+                  ));
+                }}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { y: settingsScrollY } } }],
+                  { useNativeDriver: true }
+                )}
+              >
+                {showWinAndDiagonalRuleSettings ? (
+                  <>
+                    <SettingsRuleSlider
+                      title={t('game.rules.winCondition')}
+                      titleIcon={SETTINGS_WIN_CONDITION_TITLE_ICON}
+                      value={wincondition}
+                      options={localizedWinOptions}
+                      onChange={setWincondition}
+                      metrics={setupMetrics}
+                      info={{ id: 'rule-wincondition', ...localizedRuleInfo.wincondition }}
+                      onInfoPress={showInfoPopover}
+                    />
+
+                    <SettingsRuleSlider
+                      title={t('game.rules.diagonal')}
+                      titleIcon={SETTINGS_DIAGONAL_TITLE_ICON}
+                      value={diagonaal}
+                      options={localizedDiagonalOptions}
+                      optionRefs={{ false: setupRulesDiagonalOffRef }}
+                      onChange={(value) => {
+                        setDiagonaal(value);
+                        onTutorialAction?.('host.diagonalChanged');
+                      }}
+                      metrics={setupMetrics}
+                      variant="diagonal"
+                      info={{ id: 'rule-diagonal', ...localizedRuleInfo.diagonal }}
+                      onInfoPress={showInfoPopover}
+                    />
+                  </>
+                ) : null}
 
                 <SettingsRuleSlider
-                  title="Diagonaal"
-                  titleIcon={SETTINGS_DIAGONAL_TITLE_ICON}
-                  value={diagonaal}
-                  options={SETTINGS_DIAGONAL_OPTIONS}
-                  onChange={setDiagonaal}
+                  title={t('game.rules.dutchItems')}
+                  titleIcon={SETTINGS_DUTCH_ITEMS_TITLE}
+                  value={nederlands}
+                  options={localizedDutchOptions}
+                  onChange={setNederlands}
                   metrics={setupMetrics}
-                  variant="diagonal"
+                  variant="dutch"
+                  info={{ id: 'rule-dutch', ...localizedRuleInfo.dutch }}
+                  onInfoPress={showInfoPopover}
                 />
-              </View>
+
+                {showCardLayoutRuleSettings ? (
+                  <SettingsRuleSlider
+                    title={t('game.rules.cards')}
+                    titleIcon={SETTINGS_CARD_LAYOUT_TITLE_ICON}
+                    value={kaartOpzet}
+                    options={localizedCardLayoutOptions}
+                    onChange={setKaartOpzet}
+                    metrics={setupMetrics}
+                    variant="cardLayout"
+                    info={{ id: 'rule-card-layout', ...localizedRuleInfo.cardLayout }}
+                    onInfoPress={showInfoPopover}
+                  />
+                ) : null}
+              </Animated.ScrollView>
+              {settingsScrollbarVisible ? (
+                <View pointerEvents="none" style={styles.settingsScrollbarTrack}>
+                  <Animated.View
+                    style={[
+                      styles.settingsScrollbarThumb,
+                      {
+                        height: settingsScrollbarThumbHeight,
+                        transform: [{ translateY: settingsScrollbarTranslateY }],
+                      },
+                    ]}
+                  />
+                </View>
+              ) : null}
             </Animated.View>
           </Animated.View>
           {!settingsPanelVisible ? (
@@ -904,7 +1450,7 @@ export default function HostSetupScreen({ navigation }) {
           <Animated.View style={[styles.gameModePickerLayer, { opacity: gameModePickerOpacity }]}>
             <Pressable
               style={StyleSheet.absoluteFill}
-              onPress={() => selectGameMode(selectedGameMode.id)}
+              onPress={closeGameModePickerWithReturn}
             />
             <View
               pointerEvents="box-none"
@@ -920,23 +1466,25 @@ export default function HostSetupScreen({ navigation }) {
             >
               <GameModePickerSection
                 icon={WIFI_REQUIRED_IMAGE}
-                modes={WIFI_GAME_MODE_CARDS}
+                modes={localizedWifiGameModeCards}
                 selectedModeId={selectedGameMode.id}
                 hiddenModeId={hiddenGameModeChoiceId}
                 choiceRefs={gameModeChoiceRefs}
                 itemProgress={gameModePickerItemProgress}
                 onSelect={selectGameMode}
+                onInfoPress={showInfoPopover}
                 variant="wifi"
                 metrics={setupMetrics}
               />
               <GameModePickerSection
                 icon={WIFI_NOT_REQUIRED_IMAGE}
-                modes={OFFLINE_GAME_MODE_CARDS}
+                modes={localizedOfflineGameModeCards}
                 selectedModeId={selectedGameMode.id}
                 hiddenModeId={hiddenGameModeChoiceId}
                 choiceRefs={gameModeChoiceRefs}
                 itemProgress={gameModePickerItemProgress}
                 onSelect={selectGameMode}
+                onInfoPress={showInfoPopover}
                 variant="offline"
                 metrics={setupMetrics}
               />
@@ -946,18 +1494,56 @@ export default function HostSetupScreen({ navigation }) {
             ) : null}
           </Animated.View>
         ) : null}
+        <InfoPopoverOverlay
+          popover={activeInfoPopover}
+          progress={infoPopoverProgress}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
+          onClose={closeInfoPopover}
+        />
       </ImageBackground>
       <Modal
         visible={createLobbyConfirmVisible}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => {
           if (!createLobbyReveal) {
             setCreateLobbyConfirmVisible(false);
           }
         }}
       >
-        <View style={styles.confirmBackdrop}>
+        <View style={[
+          styles.confirmBackdrop,
+          tutorialStep?.target === 'host.confirmYes' && styles.confirmBackdropTutorial,
+        ]}>
+          {tutorialStep?.target === 'host.confirmYes' && confirmYesRect ? (
+            <View pointerEvents="none" style={styles.modalTutorialHighlightLayer}>
+              <Svg style={StyleSheet.absoluteFill}>
+                <Defs>
+                  <Mask id="host-confirm-yes-hole">
+                    <Rect x="0" y="0" width={screenWidth} height={screenHeight} fill="#ffffff" />
+                    <Rect
+                      x={Math.max(0, confirmYesRect.x + HOST_CONFIRM_YES_HIGHLIGHT_TUNING.offsetX - HOST_CONFIRM_YES_HIGHLIGHT_TUNING.paddingLeft)}
+                      y={Math.max(0, confirmYesRect.y + HOST_CONFIRM_YES_HIGHLIGHT_TUNING.offsetY - HOST_CONFIRM_YES_HIGHLIGHT_TUNING.paddingTop)}
+                      width={confirmYesRect.width + HOST_CONFIRM_YES_HIGHLIGHT_TUNING.paddingLeft + HOST_CONFIRM_YES_HIGHLIGHT_TUNING.paddingRight}
+                      height={confirmYesRect.height + HOST_CONFIRM_YES_HIGHLIGHT_TUNING.paddingTop + HOST_CONFIRM_YES_HIGHLIGHT_TUNING.paddingBottom}
+                      rx={HOST_CONFIRM_YES_HIGHLIGHT_TUNING.radius}
+                      ry={HOST_CONFIRM_YES_HIGHLIGHT_TUNING.radius}
+                      fill="#000000"
+                    />
+                  </Mask>
+                </Defs>
+                <Rect
+                  x="0"
+                  y="0"
+                  width={screenWidth}
+                  height={screenHeight}
+                  fill="rgba(0, 0, 0, 0.46)"
+                  mask="url(#host-confirm-yes-hole)"
+                />
+              </Svg>
+            </View>
+          ) : null}
           <Animated.View
             style={{
               opacity: createLobbyConfirmProgress,
@@ -972,13 +1558,13 @@ export default function HostSetupScreen({ navigation }) {
             }}
           >
             <PopupPanel
-              title={isCardCodeMode ? 'Kaartcode aanmaken' : 'Lobby aanmaken'}
+              title={isCardCodeMode ? t('game.createCardCode') : t('game.createLobby')}
               fontFamily="FredokaOne_400Regular"
               actions={(
                 <>
                   <View style={styles.confirmGlossyButton}>
                     <GlossyButton
-                      label="Nee"
+                      label={t('game.options.no')}
                       variant="red"
                       onPress={() => setCreateLobbyConfirmVisible(false)}
                       disabled={Boolean(createLobbyReveal)}
@@ -993,7 +1579,7 @@ export default function HostSetupScreen({ navigation }) {
                     style={styles.confirmGlossyButton}
                   >
                     <GlossyButton
-                      label="Ja"
+                      label={t('game.options.yes')}
                       variant="green"
                       onPress={(event) => {
                         void handleConfirmCreateLobbyPress(event);
@@ -1012,6 +1598,21 @@ export default function HostSetupScreen({ navigation }) {
                 : 'Weet je zeker dat je deze lobby wilt aanmaken?'}
             </PopupPanel>
           </Animated.View>
+          {tutorialStep?.modalCoach ? (
+            <View pointerEvents="none" style={styles.modalTutorialCoachLayer}>
+              <TutorialCoachContent
+                step={tutorialStep}
+                fontFamily="FredokaOne_400Regular"
+                bubbleWidth={modalBubbleWidth}
+                bubbleHeight={modalBubbleHeight}
+                bubbleLeft={modalBubbleLeft}
+                bubbleTop={modalBubbleTop}
+                carSize={modalCarSize}
+                carLeft={modalCarLeft}
+                carTop={modalCarTop}
+              />
+            </View>
+          ) : null}
           {createLobbyReveal ? (
             <CircularReveal
               key={createLobbyReveal.transitionKey}
@@ -1019,23 +1620,45 @@ export default function HostSetupScreen({ navigation }) {
               color={CONFIRM_CREATE_LOBBY_REVEAL_GREEN}
               originX={createLobbyReveal.originX}
               originY={createLobbyReveal.originY}
-              onComplete={() => {
+              onComplete={async () => {
+                const setupSnapshot = await createLobbyReveal.liveLobbySetupPromise;
+                if (!createLobbyReveal.tutorialMode && liveSyncEnabled && !setupSnapshot) {
+                  setCreateLobbyConfirmVisible(false);
+                  setCreateLobbyReveal(null);
+                  setConnectionErrorVisible(true);
+                  return;
+                }
+
+                const lobbyConfig = setupSnapshot
+                  ? {
+                      ...createLobbyReveal.config,
+                      liveLobbyPlayers: setupSnapshot.players ?? [],
+                      startedAt: setupSnapshot.startedAt ?? null,
+                    }
+                  : createLobbyReveal.config;
+
                 navigation.navigate('Lobby', {
-                  config: createLobbyReveal.config,
+                  config: lobbyConfig,
+                  tutorialMode: createLobbyReveal.tutorialMode,
                   transition: {
                     color: CONFIRM_CREATE_LOBBY_REVEAL_GREEN,
                     originX: screenWidth / 2,
                     originY: screenHeight / 2,
                     routeName: 'Lobby',
                     pauseMs: 0,
-                    minSolidMs: 260,
-                    settleMs: 120,
+                    minSolidMs: 420,
+                    settleMs: 180,
                     preloaded: true,
                     transitionKey: createLobbyReveal.transitionKey,
                   },
                 });
+                if (createLobbyReveal.tutorialMode) {
+                  onTutorialAction?.('host.confirmCreateLobbyPressed');
+                }
                 setCreateLobbyConfirmVisible(false);
-                setCreateLobbyReveal(null);
+                setTimeout(() => {
+                  setCreateLobbyReveal(null);
+                }, 80);
               }}
             />
           ) : null}
@@ -1045,8 +1668,8 @@ export default function HostSetupScreen({ navigation }) {
         visible={premiumModalVisible}
         onClose={() => setPremiumModalVisible(false)}
         onUnlocked={() => setPremiumModalVisible(false)}
-        title="Premium nodig"
-        message="Met Premium kun je lobby’s hosten en alle premium thema’s gebruiken. Joinen blijft gratis."
+        title={t('game.premiumTheme')}
+        message={t('home.premiumMessage')}
       />
       <Modal
         visible={connectionErrorVisible}
@@ -1056,22 +1679,24 @@ export default function HostSetupScreen({ navigation }) {
       >
         <View style={styles.confirmBackdrop}>
           <PopupPanel
-            title="Geen internetverbinding"
+            title="Online lobby niet aangemaakt"
             fontFamily="FredokaOne_400Regular"
             compact
+            actionsStyle={styles.connectionErrorActions}
             actions={(
               <View style={styles.confirmGlossyButton}>
                 <GlossyButton
                   label="Oké"
                   variant="green"
-                  heightOverride={setupMetrics.isTablet ? 76 : 58}
+                  heightOverride={setupMetrics.isTablet ? 74 : 52}
                   horizontalPadding={setupMetrics.isTablet ? 38 : 26}
+                  labelFontScale={setupMetrics.isTablet ? 1 : 0.92}
                   onPress={() => setConnectionErrorVisible(false)}
                 />
               </View>
             )}
           >
-            Om een online lobby aan te maken, heb je een stabiele internetverbinding nodig.
+            De online lobby kon niet worden aangemaakt. Probeer het nog een keer.
           </PopupPanel>
         </View>
       </Modal>
@@ -1084,24 +1709,33 @@ function ThemeCard({ item, metrics, isPremium = false, onLockedPress }) {
   const isLocked = item.premium && !isPremium;
   const usesEmbeddedFrame = isEmbeddedThemeCard(item.id);
   const cardBorderColor = item.outline ?? item.border;
+  const scale = metrics?.scale ?? 1;
+  const metricsIsTablet = Boolean(metrics?.isTablet);
+  const themeCardWidth = metrics?.themeCardWidth ?? 224;
+  const themeCardHeight = metrics?.themeCardHeight ?? 270;
   const cardBodyStyle = {
-    width: metrics.themeCardWidth,
-    height: usesEmbeddedFrame ? Math.round(metrics.themeCardWidth * 1.5) : metrics.themeCardHeight,
+    width: themeCardWidth,
+    height: usesEmbeddedFrame ? Math.round(themeCardWidth * 1.5) : themeCardHeight,
   };
   const titleStyle = usesEmbeddedFrame
     ? [
         styles.carouselCardTitleWrapEmbedded,
-        metrics.isTablet && styles.carouselCardTitleWrapEmbeddedTablet,
+        metricsIsTablet && styles.carouselCardTitleWrapEmbeddedTablet,
+        item.id === 'verkeersborden' && styles.carouselCardTitleWrapEmbeddedWide,
       ]
     : {
-        top: Math.round((metrics.isTablet ? 34 : 26) * metrics.scale),
-        left: Math.round(12 * metrics.scale),
-        right: Math.round(12 * metrics.scale),
+        top: Math.round((metricsIsTablet ? 34 : 26) * scale),
+        left: Math.round(12 * scale),
+        right: Math.round(12 * scale),
       };
   const titleScale = getEmbeddedThemeTitleScale(item.id);
+  const isTrafficSignsTitle = item.id === 'verkeersborden';
+  const shouldAutoFitTitle = !usesEmbeddedFrame || isTrafficSignsTitle;
+  const minimumTitleScale = isTrafficSignsTitle ? 0.58 : usesEmbeddedFrame ? 0.88 : 0.58;
   const titleTextStyle = {
-    fontSize: Math.round(28 * metrics.scale * titleScale),
-    lineHeight: Math.round((usesEmbeddedFrame ? 40 : 34) * metrics.scale * titleScale),
+    fontSize: Math.round((usesEmbeddedFrame ? 32 : 28) * scale * titleScale),
+    lineHeight: Math.round((isTrafficSignsTitle ? 34 : usesEmbeddedFrame ? 42 : 34) * scale * titleScale),
+    ...(usesEmbeddedFrame ? { width: '100%' } : null),
     ...(usesEmbeddedFrame ? getEmbeddedThemeTitleStyle(item.id) : { color: '#ffffff' }),
   };
 
@@ -1116,41 +1750,65 @@ function ThemeCard({ item, metrics, isPremium = false, onLockedPress }) {
         ]}
       >
         {themeImage ? (
-          <ImageBackground
-            source={themeImage}
-            resizeMode={usesEmbeddedFrame ? 'contain' : 'cover'}
-            fadeDuration={0}
-            imageStyle={[
-              styles.carouselCardImage,
-              usesEmbeddedFrame && styles.carouselCardImageEmbedded,
-            ]}
+          <View
             style={[
               styles.carouselCardBody,
               usesEmbeddedFrame && styles.carouselCardBodyEmbedded,
               cardBodyStyle,
             ]}
           >
+            <ExpoImage
+              source={themeImage}
+              contentFit={usesEmbeddedFrame ? 'contain' : 'cover'}
+              cachePolicy="memory-disk"
+              transition={0}
+              style={[
+                styles.carouselCardImageFill,
+                styles.carouselCardImage,
+                usesEmbeddedFrame && styles.carouselCardImageEmbedded,
+              ]}
+            />
             {usesEmbeddedFrame ? null : <View style={styles.carouselCardOverlay} />}
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
             <View style={[styles.carouselCardTitleWrap, titleStyle]}>
-              <Text style={[styles.carouselCardTitle, titleTextStyle]}>{item.title}</Text>
+              <Text
+                allowFontScaling={false}
+                numberOfLines={1}
+                adjustsFontSizeToFit={shouldAutoFitTitle}
+                minimumFontScale={minimumTitleScale}
+                maxFontSizeMultiplier={1}
+                style={[
+                  styles.carouselCardTitle,
+                  titleTextStyle,
+                  isTrafficSignsTitle && styles.carouselCardTitleNoWrap,
+                ]}
+              >
+                {item.title}
+              </Text>
             </View>
-          </ImageBackground>
+          </View>
         ) : (
           <View style={[styles.carouselCardBody, cardBodyStyle, { backgroundColor: item.surface }]}>
             {isLocked ? <View style={styles.carouselCardLockedDim} /> : null}
             {isLocked ? (
-              <Pressable accessibilityRole="button" onPress={onLockedPress} style={styles.carouselCardLockPressable}>
+              <View pointerEvents="none" style={styles.carouselCardLockPressable}>
                 <Image source={THEME_LOCK_OVERLAY_IMAGE} resizeMode="cover" style={styles.carouselCardLockOverlay} />
-              </Pressable>
+              </View>
             ) : null}
             <View style={[styles.carouselCardTitleWrap, titleStyle]}>
-              <Text style={[styles.carouselCardTitle, titleTextStyle]}>{item.title}</Text>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit={shouldAutoFitTitle}
+                minimumFontScale={minimumTitleScale}
+                style={[styles.carouselCardTitle, titleTextStyle]}
+              >
+                {item.title}
+              </Text>
             </View>
           </View>
         )}
@@ -1167,26 +1825,52 @@ function ChoiceChip({ label, selected, onPress }) {
   );
 }
 
-function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metrics, variant = 'win' }) {
+function SettingsRuleSlider({
+  title,
+  titleIcon,
+  value,
+  options,
+  onChange,
+  metrics,
+  variant = 'win',
+  optionRefs = null,
+  info = null,
+  onInfoPress = null,
+}) {
+  const scale = metrics?.scale ?? 1;
+  const metricsIsTablet = Boolean(metrics?.isTablet);
+  const settingsTitleIconSize = metrics?.settingsTitleIconSize ?? 54;
+  const settingsSliderImageSize = metrics?.settingsSliderImageSize ?? 58;
+  const settingsSliderDiagonalImageSize = metrics?.settingsSliderDiagonalImageSize ?? 58;
   const isDiagonal = variant === 'diagonal';
+  const isDutch = variant === 'dutch';
+  const isCardLayout = variant === 'cardLayout';
   const [railWidth, setRailWidth] = useState(0);
   const selectorTranslateX = useRef(new Animated.Value(0)).current;
   const selectorScale = useRef(new Animated.Value(1)).current;
   const selectedIndex = Math.max(0, options.findIndex((option) => option.id === value));
   const optionCount = options.length;
   const selectorWidth = railWidth > 0 ? railWidth / optionCount : 0;
-  const frameSource = isDiagonal
-    ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
-    : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
-  const frameAspectRatio = isDiagonal ? (919 / 1475) : (935 / 1490);
-  const selectorColors = isDiagonal
-    ? ['#A553FF', '#7B24D8', '#4F1196']
-    : ['#62D629', '#2EAA0F', '#146E06'];
-  const titleShadowColor = isDiagonal ? '#4A0A83' : '#155F04';
-  const frameWidth = Math.round(clamp(metrics.scale * 346, 314, metrics.isTablet ? 520 : 382));
+  const frameSource = isDutch
+    ? SETTINGS_RULE_SLIDER_FRAME_DUTCH_ITEMS
+    : isCardLayout
+      ? SETTINGS_RULE_SLIDER_FRAME_CARD_LAYOUT
+      : isDiagonal
+        ? SETTINGS_RULE_SLIDER_FRAME_DIAGONAL
+        : SETTINGS_RULE_SLIDER_FRAME_WINCONDITION;
+  const frameAspectRatio = isDutch ? (992 / 1586) : isCardLayout ? (1024 / 1536) : isDiagonal ? (919 / 1475) : (935 / 1490);
+  const selectorColors = isDutch
+    ? ['#FFB02A', '#FF7A00', '#C84A00']
+    : isCardLayout
+      ? ['#40B8FF', '#1086E8', '#0050B5']
+      : isDiagonal
+        ? ['#A553FF', '#7B24D8', '#4F1196']
+        : ['#62D629', '#2EAA0F', '#146E06'];
+  const titleShadowColor = isDutch ? '#A64000' : isCardLayout ? '#004C9F' : isDiagonal ? '#4A0A83' : '#155F04';
+  const frameWidth = Math.round(clamp(scale * 346, 314, metricsIsTablet ? 520 : 382));
   const frameHeight = Math.round(frameWidth * frameAspectRatio);
-  const selectorVisualWidth = isDiagonal ? selectorWidth : selectorWidth * 1.06;
-  const selectorVisualOffset = isDiagonal ? 0 : selectorWidth * -0.03;
+  const selectorVisualWidth = isDiagonal || isDutch || isCardLayout ? selectorWidth : selectorWidth * 1.06;
+  const selectorVisualOffset = isDiagonal || isDutch || isCardLayout ? 0 : selectorWidth * -0.03;
 
   function animateSelectorToIndex(index) {
     if (!selectorWidth) {
@@ -1256,15 +1940,18 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
         ]}
         imageStyle={styles.settingsRuleFrameImage}
       >
-        <View style={styles.settingsRuleTitleOverlay}>
+        <View style={[
+          styles.settingsRuleTitleOverlay,
+          isCardLayout && styles.settingsRuleTitleOverlayCardLayout,
+        ]}>
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.95}
+            minimumFontScale={0.58}
             style={[
               styles.settingsRuleTitle,
               {
-                fontSize: Math.round((metrics.isTablet ? 32 : 29) * metrics.scale),
+                fontSize: Math.round((isDutch ? (metricsIsTablet ? 30 : 27) : isCardLayout ? (metricsIsTablet ? 30 : 27) : (metricsIsTablet ? 32 : 29)) * scale),
                 textShadowColor: titleShadowColor,
               },
             ]}
@@ -1278,12 +1965,34 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             style={[
               styles.settingsRuleTitleIcon,
               {
-                width: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 1.14) : Math.round(metrics.settingsTitleIconSize * 0.92),
-                height: isDiagonal ? Math.round(metrics.settingsTitleIconSize * 0.92) : Math.round(metrics.settingsTitleIconSize * 0.92),
+	                width: isDiagonal
+	                  ? Math.round(settingsTitleIconSize * 1.14)
+	                  : isDutch
+	                    ? Math.round(settingsTitleIconSize * 1.18)
+	                    : isCardLayout
+	                      ? Math.round(settingsTitleIconSize * 0.96)
+	                    : Math.round(settingsTitleIconSize * 0.92),
+	                height: isDiagonal
+	                  ? Math.round(settingsTitleIconSize * 0.92)
+	                  : isDutch
+	                    ? Math.round(settingsTitleIconSize * 0.98)
+	                    : isCardLayout
+	                      ? Math.round(settingsTitleIconSize * 0.96)
+	                    : Math.round(settingsTitleIconSize * 0.92),
               },
             ]}
           />
         </View>
+        <InfoButton
+          info={info}
+          onInfoPress={onInfoPress}
+          style={[
+            styles.settingsRuleInfoButton,
+            isDiagonal && styles.settingsRuleInfoButtonDiagonal,
+            isDutch && styles.settingsRuleInfoButtonDutch,
+            isCardLayout && styles.settingsRuleInfoButtonCardLayout,
+          ]}
+        />
 
         <View
           onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
@@ -1321,43 +2030,53 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
             {options.map((option, index) => {
               const selected = option.id === value;
               const isLongLabel = option.label.length >= 9;
-              const baseLabelSize = isDiagonal ? 25 : (metrics.isTablet ? 22 : 20);
-              const labelSize = option.label.length >= 9
-                ? 17
+              const isFullCardLabel = option.id === 'heel-blok';
+              const hasImage = Boolean(option.image);
+              const baseLabelSize = isDiagonal ? 25 : isDutch ? 18 : isCardLayout ? 18 : (metricsIsTablet ? 22 : 20);
+              const labelSize = isLongLabel && !isFullCardLabel
+                ? (isDutch || isCardLayout ? 15 : 17)
                 : baseLabelSize;
-              const optionImageSize = isDiagonal
-                ? Math.round(metrics.settingsSliderDiagonalImageSize * 0.84)
-                : Math.round(metrics.settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
+	              const optionImageSize = isDiagonal
+	                ? Math.round(settingsSliderDiagonalImageSize * 0.84)
+	                : isDutch
+	                  ? Math.round(settingsSliderImageSize * 1.02)
+	                  : isCardLayout
+	                    ? Math.round(settingsSliderImageSize * 1.04)
+	                  : Math.round(settingsSliderImageSize * (isLongLabel ? 0.82 : 0.88));
 
               return (
                 <Pressable
                   key={String(option.id)}
+                  ref={optionRefs?.[String(option.id)]}
+                  collapsable={false}
                   onPress={() => handleOptionPress(option, index)}
                   style={styles.settingsRuleOption}
                 >
                   <View style={styles.settingsRuleOptionContent}>
-                    <Image
-                      source={option.image}
-                      resizeMode="contain"
-                      fadeDuration={0}
-                      style={[
-                        styles.settingsRuleOptionImage,
-                        {
-                          width: optionImageSize,
-                          height: optionImageSize,
-                        },
-                      ]}
-                    />
+                    {hasImage ? (
+                      <Image
+                        source={option.image}
+                        resizeMode="contain"
+                        fadeDuration={0}
+                        style={[
+                          styles.settingsRuleOptionImage,
+                          {
+                            width: optionImageSize,
+                            height: optionImageSize,
+                          },
+                        ]}
+                      />
+                    ) : null}
                     <Text
-                      numberOfLines={1}
+                      numberOfLines={isDutch || isCardLayout || isFullCardLabel ? 2 : 1}
                       adjustsFontSizeToFit
-                      minimumFontScale={0.58}
+                      minimumFontScale={isFullCardLabel ? 0.82 : 0.7}
                       style={[
-                        styles.settingsRuleOptionLabel,
-                        {
-                          fontSize: Math.round(labelSize * metrics.scale),
-                          lineHeight: Math.round((labelSize + 9) * metrics.scale),
-                        },
+	                        styles.settingsRuleOptionLabel,
+	                        {
+	                          fontSize: Math.round(labelSize * scale),
+	                          lineHeight: Math.round((labelSize + (isDutch || isCardLayout || isFullCardLabel ? 5 : 9)) * scale),
+	                        },
                         selected && styles.settingsRuleOptionLabelSelected,
                       ]}
                     >
@@ -1374,13 +2093,61 @@ function SettingsRuleSlider({ title, titleIcon, value, options, onChange, metric
   );
 }
 
+function SettingsTextSegment({ title, value, options, onChange, metrics }) {
+  const scale = metrics?.scale ?? 1;
+  const isTablet = Boolean(metrics?.isTablet);
+
+  return (
+    <View style={styles.settingsTextSection}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.76}
+	        style={[
+	          styles.settingsTextTitle,
+	          { fontSize: Math.round((isTablet ? 24 : 21) * scale) },
+	        ]}
+      >
+        {title}
+      </Text>
+      <View style={styles.settingsTextOptionsRow}>
+        {options.map((option) => {
+          const selected = option.id === value;
+          return (
+            <Pressable
+              key={String(option.id)}
+              onPress={() => onChange(option.id)}
+              style={[
+                styles.settingsTextOption,
+                selected && styles.settingsTextOptionSelected,
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={[
+                  styles.settingsTextOptionLabel,
+                  selected && styles.settingsTextOptionLabelSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function TitleBlock({ label, variant = 'section', metrics }) {
   const isPage = variant === 'page';
   const titleScale = metrics?.scale ?? 1;
   const blockStyle = metrics ? {
-    minWidth: Math.round((isPage ? 220 : 184) * titleScale),
+    minWidth: Math.round((isPage ? 220 : 222) * titleScale),
     minHeight: Math.round((isPage ? 50 : 46) * titleScale),
-    paddingHorizontal: Math.round((isPage ? 28 : 24) * titleScale),
+    paddingHorizontal: Math.round((isPage ? 28 : 20) * titleScale),
     marginTop: isPage ? 0 : metrics.titleMarginTop,
     marginBottom: isPage ? metrics.pageTitleMarginBottom : metrics.titleMarginBottom,
   } : null;
@@ -1406,6 +2173,9 @@ function TitleBlock({ label, variant = 'section', metrics }) {
         style={styles.titleBlockGloss}
       />
       <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
         style={[
           styles.titleBlockText,
           isPage && styles.titleBlockTextPage,
@@ -1424,10 +2194,18 @@ function GameModeCardArt({
   compact = false,
   motion = false,
   setupPreview = false,
+  info = null,
+  onInfoPress = null,
 }) {
   const hover = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (ANDROID_DISABLE_SETUP_IDLE_MOTION) {
+      hover.stopAnimation();
+      hover.setValue(0);
+      return undefined;
+    }
+
     if (
       mode.id !== 'klassiek'
       && mode.id !== 'claim'
@@ -1479,9 +2257,11 @@ function GameModeCardArt({
         <Image source={CLAIM_GAME_MODE_BASE} resizeMode="contain" fadeDuration={0} style={styles.gameModeCardBaseImage} />
         <Text
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.62}
           style={styles.claimGameModeTitle}
         >
-          Claim
+          {mode.title}
         </Text>
 
         <Animated.Image
@@ -1497,6 +2277,11 @@ function GameModeCardArt({
               ],
             },
           ]}
+        />
+        <InfoButton
+          info={info}
+          onInfoPress={onInfoPress}
+          style={styles.gameModeInfoButton}
         />
       </View>
     );
@@ -1520,8 +2305,13 @@ function GameModeCardArt({
         ]}
       >
         <Image source={COLLECTIEF_GAME_MODE_BASE} resizeMode="contain" fadeDuration={0} style={styles.gameModeCardBaseImage} />
-        <Text numberOfLines={1} style={styles.collectiefGameModeTitle}>
-          Collectief
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.56}
+          style={styles.collectiefGameModeTitle}
+        >
+          {mode.title}
         </Text>
 
         <Animated.Image
@@ -1537,6 +2327,11 @@ function GameModeCardArt({
               ],
             },
           ]}
+        />
+        <InfoButton
+          info={info}
+          onInfoPress={onInfoPress}
+          style={styles.gameModeInfoButton}
         />
       </View>
     );
@@ -1577,11 +2372,13 @@ function GameModeCardArt({
         />
         <Text
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.58}
           style={[
             styles.kaartcodeGameModeTitle,
           ]}
         >
-          Kaartcode
+          {mode.title}
         </Text>
         <View
           style={[
@@ -1646,6 +2443,11 @@ function GameModeCardArt({
             },
           ]}
         />
+        <InfoButton
+          info={info}
+          onInfoPress={onInfoPress}
+          style={[styles.gameModeInfoButton, styles.kaartcodeGameModeInfoButton]}
+        />
       </View>
     );
   }
@@ -1660,7 +2462,19 @@ function GameModeCardArt({
           motion && styles.simpleGameModeCardArtMotion,
         ]}
       >
-        <Text style={styles.gameModeChoiceText}>{mode.title}</Text>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.58}
+          style={styles.gameModeChoiceText}
+        >
+          {mode.title}
+        </Text>
+        <InfoButton
+          info={info}
+          onInfoPress={onInfoPress}
+          style={styles.gameModeInfoButton}
+        />
       </View>
     );
   }
@@ -1698,12 +2512,14 @@ function GameModeCardArt({
       <Image source={KLASSIEK_GAME_MODE_BASE} resizeMode="contain" fadeDuration={0} style={styles.gameModeCardBaseImage} />
       <Text
         numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.58}
         style={[
           styles.klassiekGameModeTitle,
           compact && styles.klassiekGameModeTitleCompact,
         ]}
       >
-        Klassiek
+        {mode.title}
       </Text>
       <View
         style={[
@@ -1764,16 +2580,22 @@ function GameModeCardArt({
           ]}
         />
       </View>
+      <InfoButton
+        info={info}
+        onInfoPress={onInfoPress}
+        style={styles.gameModeInfoButton}
+      />
     </View>
   );
 }
 
-function GameModePickerSection({ icon, modes, selectedModeId, hiddenModeId, choiceRefs, itemProgress, onSelect, variant, metrics }) {
+function GameModePickerSection({ icon, modes, selectedModeId, hiddenModeId, choiceRefs, itemProgress, onSelect, onInfoPress, variant, metrics }) {
   const featuredMode = variant === 'wifi' ? modes[0] : null;
   const remainingModes = featuredMode ? modes.slice(1) : modes;
   const iconProgress = itemProgress[variant === 'wifi' ? 'wifiIcon' : 'offlineIcon'];
   const choiceGap = metrics?.pickerChoiceGap ?? 14;
   const isWifiSection = variant === 'wifi';
+  const scale = metrics?.scale ?? 1;
   const panelToChoiceGap = metrics?.pickerPanelToChoiceGap ?? 10;
   const offlinePanelMarginTop = metrics
     ? Math.round(panelToChoiceGap * 1.5 - metrics.pickerGap)
@@ -1784,12 +2606,12 @@ function GameModePickerSection({ icon, modes, selectedModeId, hiddenModeId, choi
       <Animated.View
         style={[
           styles.gameModeWifiPanel,
-          metrics && {
-            width: metrics.pickerStatusPanelWidth,
-            height: metrics.pickerStatusPanelHeight,
-            marginTop: isWifiSection ? Math.round(-38 * metrics.scale) : offlinePanelMarginTop,
-            marginBottom: panelToChoiceGap,
-          },
+	          metrics && {
+	            width: metrics.pickerStatusPanelWidth,
+	            height: metrics.pickerStatusPanelHeight,
+	            marginTop: isWifiSection ? Math.round(-38 * scale) : offlinePanelMarginTop,
+	            marginBottom: panelToChoiceGap,
+	          },
           getPickerIntroStyle(iconProgress),
         ]}
       >
@@ -1838,6 +2660,7 @@ function GameModePickerSection({ icon, modes, selectedModeId, hiddenModeId, choi
             choiceRefs={choiceRefs}
             progress={itemProgress[featuredMode.id]}
             onPress={() => onSelect(featuredMode.id)}
+            onInfoPress={onInfoPress}
             featured
             metrics={metrics}
           />
@@ -1852,6 +2675,7 @@ function GameModePickerSection({ icon, modes, selectedModeId, hiddenModeId, choi
               choiceRefs={choiceRefs}
               progress={itemProgress[mode.id]}
               onPress={() => onSelect(mode.id)}
+              onInfoPress={onInfoPress}
               metrics={metrics}
             />
           ))}
@@ -1861,7 +2685,7 @@ function GameModePickerSection({ icon, modes, selectedModeId, hiddenModeId, choi
   );
 }
 
-function GameModeChoiceButton({ mode, selected, hidden, choiceRefs, progress, onPress, featured, metrics }) {
+function GameModeChoiceButton({ mode, selected, hidden, choiceRefs, progress, onPress, onInfoPress, featured, metrics }) {
   const isCompact = mode.id !== 'wegenkaart' && !featured && !selected;
   const frameStyle = metrics ? {
     height: featured ? metrics.pickerFeaturedChoiceHeight : metrics.pickerChoiceHeight,
@@ -1890,7 +2714,17 @@ function GameModeChoiceButton({ mode, selected, hidden, choiceRefs, progress, on
           selected && styles.gameModeChoiceButtonSelected,
         ]}
       >
-        <GameModeCardArt mode={mode} selected={selected} compact={isCompact} />
+        <GameModeCardArt
+          mode={mode}
+          selected={selected}
+          compact={isCompact}
+          info={{
+            id: `picker-mode-${mode.id}`,
+            title: mode.title,
+            body: mode.infoBody ?? mode.subtitle,
+          }}
+          onInfoPress={onInfoPress}
+        />
       </Pressable>
     </Animated.View>
   );
@@ -1948,6 +2782,154 @@ function MovingGameModeCard({ motion, progress }) {
       ]}
     >
       <GameModeCardArt mode={motion.mode} selected motion />
+    </Animated.View>
+  );
+}
+
+function InfoButton({ info, onInfoPress, style }) {
+  const buttonRef = useRef(null);
+
+  if (!info || !onInfoPress) {
+    return null;
+  }
+
+  return (
+    <Pressable
+      ref={buttonRef}
+      collapsable={false}
+      accessibilityRole="button"
+      accessibilityLabel={`Uitleg: ${info.title}`}
+      hitSlop={10}
+      onPress={(event) => {
+        event?.stopPropagation?.();
+        void Haptics.selectionAsync();
+        onInfoPress(info, buttonRef);
+      }}
+      onStartShouldSetResponder={() => true}
+      style={[styles.infoButton, style]}
+    >
+      <Image
+        source={INFO_BUTTON_IMAGE}
+        resizeMode="contain"
+        fadeDuration={0}
+        style={styles.infoButtonImage}
+      />
+    </Pressable>
+  );
+}
+
+function InfoPopoverOverlay({ popover, progress, screenWidth, screenHeight, onClose }) {
+  if (!popover?.anchor) {
+    return null;
+  }
+
+  const bubbleWidth = Math.round(clamp(screenWidth * 0.78, 248, 330));
+  const bubbleEstimatedHeight = popover.body.length > 110 ? 144 : popover.body.length > 85 ? 132 : 116;
+  const anchorCenterX = popover.anchor.x + popover.anchor.width / 2;
+  const anchorCenterY = popover.anchor.y + popover.anchor.height / 2;
+  const showAbove = anchorCenterY > screenHeight * 0.52;
+  const gap = showAbove ? 22 : 16;
+  const bubbleLeft = Math.round(clamp(anchorCenterX - bubbleWidth * 0.5, 14, screenWidth - bubbleWidth - 14));
+  const bubbleTop = showAbove
+    ? Math.round(Math.max(72, popover.anchor.y - bubbleEstimatedHeight - gap))
+    : Math.round(Math.min(screenHeight - bubbleEstimatedHeight - 32, popover.anchor.y + popover.anchor.height + gap));
+  const arrowLeft = Math.round(clamp(anchorCenterX - bubbleLeft - 14, 22, bubbleWidth - 38));
+  const anchorSize = Math.max(popover.anchor.width, popover.anchor.height) + 10;
+
+  return (
+    <Animated.View
+      pointerEvents="auto"
+      style={[
+        styles.infoOverlay,
+        {
+          opacity: progress,
+        },
+      ]}
+    >
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.infoAnchorGlow,
+          {
+            left: anchorCenterX - anchorSize / 2,
+            top: anchorCenterY - anchorSize / 2,
+            width: anchorSize,
+            height: anchorSize,
+            borderRadius: anchorSize / 2,
+            transform: [
+              {
+                scale: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.72, 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Sluit uitleg: ${popover.title}`}
+        onPress={onClose}
+        style={[
+          styles.infoAnchorButtonClone,
+          {
+            left: popover.anchor.x,
+            top: popover.anchor.y,
+            width: popover.anchor.width,
+            height: popover.anchor.height,
+          },
+        ]}
+      >
+        <Image
+          source={INFO_BUTTON_IMAGE}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={styles.infoButtonImage}
+        />
+      </Pressable>
+      <Animated.View
+        style={[
+          styles.infoBubble,
+          {
+            width: bubbleWidth,
+            left: bubbleLeft,
+            top: bubbleTop,
+            transform: [
+              {
+                translateY: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [showAbove ? 8 : -8, 0],
+                }),
+              },
+              {
+                scale: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.94, 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.infoBubbleArrow,
+            showAbove ? styles.infoBubbleArrowBottom : styles.infoBubbleArrowTop,
+            { left: arrowLeft },
+          ]}
+        />
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+          style={styles.infoBubbleTitle}
+        >
+          {popover.title}
+        </Text>
+        <Text style={styles.infoBubbleBody}>{popover.body}</Text>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -2045,6 +3027,100 @@ const styles = StyleSheet.create({
   },
   selectedGameModeCardHidden: {
     opacity: 0,
+  },
+  infoButton: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 30,
+    elevation: 30,
+  },
+  infoButtonImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gameModeInfoButton: {
+    right: '7.5%',
+    bottom: '4.5%',
+    width: 27,
+    height: 27,
+  },
+  kaartcodeGameModeInfoButton: {
+    right: '5%',
+  },
+  infoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 60,
+    elevation: 60,
+    backgroundColor: 'rgba(6, 14, 25, 0.48)',
+  },
+  infoAnchorGlow: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255, 214, 54, 0.18)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 223, 79, 0.72)',
+  },
+  infoAnchorButtonClone: {
+    position: 'absolute',
+    zIndex: 64,
+    elevation: 64,
+  },
+  infoBubble: {
+    position: 'absolute',
+    minHeight: 106,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: '#D7E8F5',
+    backgroundColor: '#F8FDFF',
+    paddingHorizontal: 16,
+    paddingTop: 13,
+    paddingBottom: 14,
+    shadowColor: '#05182A',
+    shadowOpacity: 0.34,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 65,
+    zIndex: 65,
+  },
+  infoBubbleArrow: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRightWidth: 3,
+    borderBottomWidth: 3,
+    borderColor: '#D7E8F5',
+    backgroundColor: '#F8FDFF',
+    transform: [{ rotate: '45deg' }],
+  },
+  infoBubbleArrowTop: {
+    top: -12,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+  },
+  infoBubbleArrowBottom: {
+    bottom: -12,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+  },
+  infoBubbleTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 21,
+    lineHeight: 25,
+    color: '#183D56',
+    letterSpacing: 0,
+    textShadowColor: 'rgba(255,255,255,0.72)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  infoBubbleBody: {
+    marginTop: 5,
+    fontFamily: 'FredokaOne_400Regular',
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#34536A',
+    letterSpacing: 0,
   },
   selectedGameModeEyebrow: {
     fontSize: 12,
@@ -2276,16 +3352,16 @@ const styles = StyleSheet.create({
   },
   kaartcodeBingoCard: {
     position: 'absolute',
-    width: '31%',
-    height: '40%',
-    bottom: '9%',
+    width: '25%',
+    height: '33%',
+    bottom: '11%',
     zIndex: 3,
   },
   kaartcodeBingoCardYellow: {
-    left: '9%',
+    left: '22%',
   },
   kaartcodeBingoCardBlue: {
-    right: '9%',
+    right: '22%',
   },
   kaartcodeNoWifiIcon: {
     position: 'absolute',
@@ -2392,6 +3468,8 @@ const styles = StyleSheet.create({
     left: -8,
     right: -8,
     bottom: 0,
+    zIndex: 24,
+    elevation: 24,
   },
   collapsedPanelPressTarget: {
     position: 'absolute',
@@ -2534,6 +3612,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 10,
   },
+  confirmBackdropTutorial: {
+    backgroundColor: 'rgba(12, 12, 12, 0.18)',
+  },
+  modalTutorialCoachLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    elevation: 50,
+  },
+  modalTutorialHighlightLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 40,
+    elevation: 40,
+  },
   confirmCard: {
     width: '100%',
     maxWidth: 360,
@@ -2573,15 +3664,19 @@ const styles = StyleSheet.create({
   confirmGlossyButton: {
     flex: 1,
   },
+  connectionErrorActions: {
+    marginTop: 10,
+    transform: [{ translateY: -14 }],
+  },
   panelShell: {
     overflow: 'hidden',
     backgroundColor: 'transparent',
     borderWidth: 0,
-    shadowColor: '#3B0504',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 14,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    zIndex: 24,
+    elevation: 24,
   },
   rulesPanelImage: {
     ...StyleSheet.absoluteFillObject,
@@ -2682,16 +3777,79 @@ const styles = StyleSheet.create({
   panelContentGloss: {
     ...StyleSheet.absoluteFillObject,
   },
+  settingsMenuScroll: {
+    flex: 1,
+    marginTop: 18,
+    marginBottom: 52,
+  },
   settingsMenuBody: {
     alignItems: 'center',
     width: '100%',
     paddingTop: 36,
     paddingBottom: 28,
   },
+  settingsScrollbarTrack: {
+    position: 'absolute',
+    top: 28,
+    right: 34,
+    bottom: 82,
+    width: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.12)',
+    overflow: 'hidden',
+  },
+  settingsScrollbarThumb: {
+    width: '100%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(151, 80, 29, 0.34)',
+  },
   settingsRuleSection: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  settingsTextSection: {
+    width: '86%',
+    maxWidth: 382,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 2,
+    borderColor: 'rgba(45, 127, 178, 0.3)',
+  },
+  settingsTextTitle: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  settingsTextOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  settingsTextOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: '#E8F5FF',
+    borderWidth: 2,
+    borderColor: '#B7D8EF',
+  },
+  settingsTextOptionSelected: {
+    backgroundColor: '#159B3B',
+    borderColor: '#0B6B27',
+  },
+  settingsTextOptionLabel: {
+    fontFamily: 'FredokaOne_400Regular',
+    color: '#17415a',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  settingsTextOptionLabelSelected: {
+    color: '#FFFFFF',
   },
   settingsRuleFrame: {
     alignItems: 'center',
@@ -2699,6 +3857,24 @@ const styles = StyleSheet.create({
   settingsRuleFrameImage: {
     width: '100%',
     height: '100%',
+  },
+  settingsRuleInfoButton: {
+    top: '15%',
+    right: '2.4%',
+    width: 28,
+    height: 28,
+  },
+  settingsRuleInfoButtonDiagonal: {
+    top: '16%',
+    right: '2.8%',
+  },
+  settingsRuleInfoButtonDutch: {
+    top: '16%',
+    right: '2.8%',
+  },
+  settingsRuleInfoButtonCardLayout: {
+    top: '14.6%',
+    right: '3%',
   },
   settingsRuleTitleOverlay: {
     position: 'absolute',
@@ -2712,6 +3888,10 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 6,
     zIndex: 4,
+  },
+  settingsRuleTitleOverlayCardLayout: {
+    top: '1.15%',
+    height: '23%',
   },
   settingsRuleTitleRow: {
     width: '92%',
@@ -2923,6 +4103,11 @@ const styles = StyleSheet.create({
   carouselCardImage: {
     borderRadius: 22,
   },
+  carouselCardImageFill: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   carouselCardImageEmbedded: {
     borderRadius: 0,
   },
@@ -2954,10 +4139,14 @@ const styles = StyleSheet.create({
   },
   carouselCardTitleWrapEmbedded: {
     top: '1.5%',
-    left: '10%',
-    right: '10%',
+    left: '6%',
+    right: '6%',
     minHeight: 46,
     justifyContent: 'center',
+  },
+  carouselCardTitleWrapEmbeddedWide: {
+    left: '-5%',
+    right: '-5%',
   },
   carouselCardTitleWrapEmbeddedTablet: {
     top: '4.6%',
@@ -2970,5 +4159,10 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.38)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 5,
+  },
+  carouselCardTitleNoWrap: {
+    width: '100%',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
 });

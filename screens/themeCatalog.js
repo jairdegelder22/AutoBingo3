@@ -55,6 +55,17 @@ export const THEMES = [
     cardOutline: '#7DD6FF',
   },
   {
+    id: 'bergen',
+    label: 'Bergen',
+    premium: true,
+    emoji: '⛰️',
+    bg: '#2F8F6E',
+    textColor: '#FFFDF7',
+    cardSurface: '#3f8f6a',
+    cardBorder: '#1f5f4b',
+    cardOutline: '#FFCF00',
+  },
+  {
     id: 'voertuigen',
     label: 'Voertuigen',
     premium: true,

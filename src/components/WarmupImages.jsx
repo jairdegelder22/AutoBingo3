@@ -1,11 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Platform, StyleSheet, View } from 'react-native';
 import {
   getAssetKey,
   uniqueAssets,
 } from '../assets/preloadManifest';
 import {
-  isImageAssetPreloaded,
   markImageAssetPreloaded,
   preloadImageAssets,
 } from '../assets/preloadImages';
@@ -24,16 +23,16 @@ function WarmupImages({
   const stableAssets = useMemo(() => uniqueAssets(assets), [assets]);
   const assetKeys = useMemo(() => stableAssets.map(getAssetKey), [stableAssets]);
   const keySignature = assetKeys.join('|');
+  const resolvedBatchSize = Platform.OS === 'android'
+    ? Math.min(batchSize, 8)
+    : batchSize;
+  const batchIntervalMs = Platform.OS === 'android' ? 32 : 16;
 
   useEffect(() => {
-    readyKeysRef.current = new Set(
-      stableAssets
-        .filter(isImageAssetPreloaded)
-        .map(getAssetKey)
-    );
+    readyKeysRef.current = new Set();
     readyCalledRef.current = false;
-    setBatchLimit(batchSize);
-  }, [batchSize, keySignature, stableAssets]);
+    setBatchLimit(resolvedBatchSize);
+  }, [keySignature, resolvedBatchSize, stableAssets]);
 
   useEffect(() => {
     if (!active) {
@@ -51,9 +50,9 @@ function WarmupImages({
           return current;
         }
 
-        return Math.min(stableAssets.length, current + batchSize);
+        return Math.min(stableAssets.length, current + resolvedBatchSize);
       });
-    }, 16);
+    }, batchIntervalMs);
 
     const fallbackTimer = typeof timeoutMs === 'number'
       ? setTimeout(() => {
@@ -76,7 +75,7 @@ function WarmupImages({
         clearTimeout(fallbackTimer);
       }
     };
-  }, [active, batchSize, onReady, stableAssets, timeoutMs]);
+  }, [active, batchIntervalMs, onReady, resolvedBatchSize, stableAssets, timeoutMs]);
 
   function markReady(source) {
     const key = getAssetKey(source);
@@ -98,13 +97,12 @@ function WarmupImages({
 
   return (
     <View pointerEvents="none" style={styles.container}>
-      {stableAssets.slice(0, batchLimit).map((source) => (
+      {stableAssets.slice(0, batchLimit).map((source, index) => (
         <Image
-          key={getAssetKey(source)}
+          key={`${getAssetKey(source)}:${index}`}
           source={source}
           resizeMode="contain"
           fadeDuration={0}
-          onLoad={() => markReady(source)}
           onLoadEnd={() => markReady(source)}
           onError={() => markReady(source)}
           style={[
@@ -123,13 +121,14 @@ function WarmupImages({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: 0,
-    top: 0,
-    width: 96,
-    height: 96,
-    opacity: 0.01,
+    left: -10000,
+    top: -10000,
+    width: 128,
+    height: 128,
+    opacity: 0,
     overflow: 'hidden',
     zIndex: 0,
+    elevation: 0,
   },
   image: {
     position: 'absolute',

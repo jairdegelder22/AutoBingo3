@@ -11,6 +11,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { clamp, getResponsiveMetrics } from '../utils/responsive';
 
 type GameSettingsPanelProps = {
   title?: string;
@@ -21,10 +22,6 @@ type GameSettingsPanelProps = {
 
 const HEADER_HEIGHT = 74;
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
 export default function GameSettingsPanel({
   title = 'Spelregels',
   expandedHeight = 300,
@@ -34,12 +31,12 @@ export default function GameSettingsPanel({
   const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
-  const scale = clamp(Math.min(width / 430, height / 932), 0.9, 1.18);
-  const headerHeight = Math.round(HEADER_HEIGHT * scale);
+  const metrics = getResponsiveMetrics(width, height);
+  const headerHeight = metrics.s(HEADER_HEIGHT, Math.round(HEADER_HEIGHT * 0.9), Math.round(HEADER_HEIGHT * 1.18));
   const resolvedExpandedHeight = Math.round(
     expandedHeight === 300
       ? clamp(height * 0.32, 270, 420)
-      : expandedHeight * scale
+      : metrics.s(expandedHeight)
   );
 
   const containerHeight = useMemo(
@@ -85,9 +82,9 @@ export default function GameSettingsPanel({
             styles.contentArea,
             {
               height: resolvedExpandedHeight,
-              paddingHorizontal: Math.round(20 * scale),
-              paddingTop: Math.round(18 * scale),
-              paddingBottom: Math.round(12 * scale),
+              paddingHorizontal: metrics.s(20),
+              paddingTop: metrics.s(18),
+              paddingBottom: metrics.s(12),
             },
           ]}
         >
@@ -110,7 +107,7 @@ export default function GameSettingsPanel({
               styles.header,
               {
                 minHeight: headerHeight,
-                paddingHorizontal: Math.round(18 * scale),
+                paddingHorizontal: metrics.s(18),
               },
             ]}
           >
@@ -118,13 +115,13 @@ export default function GameSettingsPanel({
               style={[
                 styles.handle,
                 {
-                  top: Math.round(10 * scale),
-                  width: Math.round(56 * scale),
-                  height: Math.round(6 * scale),
+                  top: metrics.s(10),
+                  width: metrics.s(56),
+                  height: metrics.s(6),
                 },
               ]}
             />
-            <Text style={[styles.headerTitle, { fontSize: Math.round(18 * scale) }]}>{title}</Text>
+            <Text style={[styles.headerTitle, { fontSize: metrics.font(18) }]}>{title}</Text>
           </LinearGradient>
         </Pressable>
       </Animated.View>

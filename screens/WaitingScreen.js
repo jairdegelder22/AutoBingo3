@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
@@ -42,6 +42,12 @@ import { getResponsiveMetrics } from '../src/utils/responsive';
 import useOnlineConnectionStatus from '../src/hooks/useOnlineConnectionStatus';
 import ConnectionWarningOverlay from '../src/components/ConnectionWarningOverlay';
 import { WAITING_ROOM_ASSETS } from '../src/assets/preloadManifest';
+import { useTranslation } from '../src/i18n/useTranslation';
+import { usePremium } from '../src/premium/PremiumContext';
+import { isSkinAvailableForPlayer } from '../src/skins/skinCatalog';
+
+const PREMIUM_SKIN_LOCK_IMAGE = require('../assets/images/host-lock-padlock.png');
+import { getDefaultPlayerNameForLanguage } from '../src/i18n/languages';
 
 const MAX_PLAYER_NAME_LENGTH = 12;
 const MAX_LOCAL_PLAYERS = 2;
@@ -412,20 +418,20 @@ function SkinCarouselModal({
   onClose,
   onSelectSkin,
 }) {
-  const orderedSkins = useMemo(
-    () => [selectedSkin, ...SKIN_OPTIONS.filter((skin) => skin !== selectedSkin)],
-    [selectedSkin]
-  );
-  const [activeIndex, setActiveIndex] = useState(0);
+  const { t } = useTranslation();
+  const { isPremium, ownedPaidSkins } = usePremium();
+  const selectedSkinIndex = Math.max(0, SKIN_OPTIONS.indexOf(selectedSkin));
+  const [activeIndex, setActiveIndex] = useState(selectedSkinIndex);
 
   useEffect(() => {
     if (visible) {
-      setActiveIndex(0);
+      setActiveIndex(selectedSkinIndex);
     }
-  }, [visible]);
+  }, [selectedSkinIndex, visible]);
 
-  const activeSkin = orderedSkins[activeIndex] ?? selectedSkin;
+  const activeSkin = SKIN_OPTIONS[activeIndex] ?? selectedSkin;
   const activeSkinTaken = takenSkins.includes(activeSkin) && activeSkin !== selectedSkin;
+  const activeSkinLocked = !isSkinAvailableForPlayer(activeSkin, { isPremium, ownedPaidSkins });
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -449,41 +455,53 @@ function SkinCarouselModal({
           ]}
         >
           <ThemeCarousel
-            items={orderedSkins}
+            items={SKIN_OPTIONS}
             itemWidth={224}
             itemSpacing={0}
             onSnapToItem={setActiveIndex}
             keyExtractor={(item) => item}
             containerStyle={styles.carouselWrap}
-            flatListProps={{ initialScrollIndex: 0 }}
-            renderCard={({ item, isFocused }) => (
-              <View
-                style={[
-                  styles.carouselCardShell,
-                  { shadowColor: PLAYER_HEX[item] ?? PLAYER_HEX.rood },
-                  !isFocused && styles.carouselCardShellMuted,
-                ]}
-              >
+            flatListProps={{ initialScrollIndex: selectedSkinIndex }}
+            renderCard={({ item }) => {
+              const itemLocked = !isSkinAvailableForPlayer(item, { isPremium, ownedPaidSkins });
+
+              return (
                 <View
                   style={[
-                    styles.carouselCard,
-                    takenSkins.includes(item) && item !== selectedSkin ? styles.carouselCardTaken : null,
+                    styles.carouselCardShell,
+                    { shadowColor: PLAYER_HEX[item] ?? PLAYER_HEX.rood },
                   ]}
                 >
-                  <PlayerAvatar skin={item} size={CAROUSEL_CAR_SIZE} />
+                  <View
+                    style={[
+                      styles.carouselCard,
+                      takenSkins.includes(item) && item !== selectedSkin ? styles.carouselCardTaken : null,
+                    ]}
+                  >
+                    <View style={itemLocked ? styles.lockedSkinPreview : null}>
+                      <PlayerAvatar skin={item} size={CAROUSEL_CAR_SIZE} />
+                    </View>
+                    {itemLocked ? (
+                      <Image
+                        source={PREMIUM_SKIN_LOCK_IMAGE}
+                        style={styles.premiumSkinLock}
+                        resizeMode="contain"
+                      />
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-            )}
+              );
+            }}
           />
 
           <View style={styles.selectButtonWrap}>
             <GlossyButton
-              label="Selecteer"
+              label={t('common.select')}
               variant="green"
               heightOverride={62}
               horizontalPadding={44}
               onPress={() => onSelectSkin(activeSkin)}
-              disabled={activeSkinTaken}
+              disabled={activeSkinTaken || activeSkinLocked}
             />
           </View>
         </Animated.View>
@@ -585,6 +603,7 @@ export default function WaitingScreen({ navigation, route }) {
     && !(Array.isArray(config?.spelers) && config.spelers.length);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { isTablet } = getResponsiveMetrics(screenWidth, screenHeight);
+  const { language } = useTranslation();
   const isLiveLobby = config?.syncType === 'live';
   const connectionStatus = useOnlineConnectionStatus(isLiveLobby);
   const liveConnectionOffline = isLiveLobby && connectionStatus.isOffline;
@@ -944,8 +963,10 @@ export default function WaitingScreen({ navigation, route }) {
       navigation.goBack?.();
     }
 
-    setLeaveConfirmVisible(false);
-    setLeaveLobbyReveal(null);
+    setTimeout(() => {
+      setLeaveConfirmVisible(false);
+      setLeaveLobbyReveal(null);
+    }, 80);
   }
 
   const remotePlayers = useMemo(
@@ -1110,7 +1131,10 @@ export default function WaitingScreen({ navigation, route }) {
       ...remotePlayers.map((player) => player.skin),
       ...spelers.map((player) => player.skin),
     ]);
-    const preferredSkins = SKIN_OPTIONS.filter((skin) => !usedSkins.has(skin));
+    const preferredSkins = SKIN_OPTIONS.filter((skin) => (
+      !usedSkins.has(skin)
+      && isSkinAvailableForPlayer(skin)
+    ));
     const fallbackSkin = preferredSkins[0] ?? 'blauw';
 
     setSpelers((current) => [
@@ -1310,7 +1334,7 @@ export default function WaitingScreen({ navigation, route }) {
                 onChangeName={(naam) => updateSpeler(0, { naam })}
                 onOpenSkinPicker={() => animatePickerOpen(0)}
                 attentionDelay={0}
-                defaultName="Speler 1"
+                defaultName={getDefaultPlayerNameForLanguage(language, 0)}
               />
             </Animated.View>
 
@@ -1363,7 +1387,7 @@ export default function WaitingScreen({ navigation, route }) {
                     onOpenSkinPicker={() => animatePickerOpen(1)}
                     onRemove={() => handleRemovePlayer(1)}
                     attentionDelay={CAR_ATTENTION_STAGGER_MS}
-                    defaultName="Speler 2"
+                    defaultName={getDefaultPlayerNameForLanguage(language, 1)}
                   />
                 </Animated.View>
               ) : null}
@@ -1720,9 +1744,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 8,
   },
-  carouselCardShellMuted: {
-    opacity: 0.55,
-  },
   carouselCard: {
     width: CAROUSEL_CAR_SIZE,
     height: CAROUSEL_CAR_SIZE,
@@ -1731,6 +1752,19 @@ const styles = StyleSheet.create({
   },
   carouselCardTaken: {
     opacity: 0.32,
+  },
+  lockedSkinPreview: {
+    opacity: 0.28,
+  },
+  premiumSkinLock: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    left: '50%',
+    top: '50%',
+    marginLeft: -41,
+    marginTop: -34,
+    zIndex: 4,
   },
   playerAvatarWrap: {
     position: 'relative',

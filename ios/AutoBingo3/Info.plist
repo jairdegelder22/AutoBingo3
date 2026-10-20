@@ -5,9 +5,13 @@
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
     <key>CFBundleDevelopmentRegion</key>
-    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <string>nl</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+      <string>nl</string>
+    </array>
     <key>CFBundleDisplayName</key>
-    <string>AutoBingo3</string>
+    <string>AutoBingo</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -19,7 +23,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+	<string>1.3.3</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -38,9 +42,9 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>1</string>
+	<string>12</string>
     <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-3940256099942544~1458002511</string>
+    <string>ca-app-pub-5873918058071695~2488958739</string>
     <key>GADDelayAppMeasurementInit</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -59,7 +63,7 @@
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Auto Bingo gebruikt je foto's alleen als jij een screenshot toevoegt aan een bugmelding.</string>
+    <string>AutoBingo gebruikt je foto's alleen als jij een screenshot toevoegt aan een bugmelding.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UILaunchStoryboardName</key>

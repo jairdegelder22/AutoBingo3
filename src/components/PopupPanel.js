@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ImageBackground, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Asset } from 'expo-asset';
 import { getResponsiveMetrics } from '../utils/responsive';
@@ -32,8 +32,12 @@ export default function PopupPanel({
   style,
 }) {
   const { width, height } = useWindowDimensions();
-  const { isTablet, tabletScale } = getResponsiveMetrics(width, height);
-  const popupTextScale = isTablet ? Math.min(tabletScale, 1.28) : 1;
+  const metrics = getResponsiveMetrics(width, height);
+  const { isTablet, tabletScale } = metrics;
+  const popupTextScale = isTablet ? Math.min(tabletScale, 1.28) : metrics.fontScale;
+  const maxPanelWidth = compact
+    ? metrics.s(380, 320, isTablet ? 590 : 380)
+    : metrics.s(430, 340, isTablet ? 680 : 430);
   const [assetReady, setAssetReady] = useState(popupPanelAssetLoaded);
   const [imageReady, setImageReady] = useState(false);
   const contentReady = assetReady && imageReady;
@@ -60,9 +64,7 @@ export default function PopupPanel({
       style={[
         styles.panel,
         compact && styles.panelCompact,
-        isTablet && {
-          maxWidth: compact ? 590 : 680,
-        },
+        { maxWidth: maxPanelWidth },
         style,
       ]}
       imageStyle={styles.panelImage}
@@ -83,7 +85,7 @@ export default function PopupPanel({
               isTablet && {
                 fontSize: (compact ? 32 : 38) * popupTextScale,
                 lineHeight: (compact ? 39 : 46) * popupTextScale,
-                marginBottom: 18,
+                marginBottom: metrics.s(18),
               },
               { fontFamily },
             ]}
@@ -111,8 +113,8 @@ export default function PopupPanel({
             style={[
               styles.actions,
               isTablet && {
-                marginTop: 32,
-                transform: [{ translateY: 20 }],
+                marginTop: metrics.s(32),
+                transform: [{ translateY: metrics.s(20) }],
               },
               actionsStyle,
             ]}

@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Image, Pressable, StyleSheet } from 'react-native';
+import React, { memo, useState } from 'react';
+import { Pressable, StyleSheet } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import * as Haptics from '../settings/haptics';
 import { playSoundEffect } from '../audio/soundEffects';
 import { useAppSettings } from '../settings/AppSettingsContext';
@@ -47,10 +48,11 @@ export default function AnimatedBackButton({
         disabled && styles.buttonDisabled,
       ]}
     >
-      <Image
+      <ExpoImage
         source={pressed ? BACK_BUTTON_PRESSED_IMAGE : BACK_BUTTON_IMAGE}
-        resizeMode="contain"
-        fadeDuration={0}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        transition={0}
         style={styles.image}
       />
     </Pressable>

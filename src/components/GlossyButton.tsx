@@ -33,6 +33,7 @@ interface GlossyButtonProps {
   heightOverride?: number;
   contentOffsetY?: number;
   labelFontScale?: number;
+  labelNumberOfLines?: number;
   hapticStyle?: ImpactFeedbackStyleValue;
   hapticNotificationType?: NotificationFeedbackTypeValue;
   disableHaptics?: boolean;
@@ -100,10 +101,6 @@ const SIZE_TOKENS = {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
 export default function GlossyButton({
   label,
   onPress,
@@ -118,6 +115,7 @@ export default function GlossyButton({
   heightOverride,
   contentOffsetY = 0,
   labelFontScale = 1,
+  labelNumberOfLines = 1,
   hapticStyle = Haptics.ImpactFeedbackStyle.Medium,
   hapticNotificationType,
   disableHaptics = false,
@@ -127,15 +125,19 @@ export default function GlossyButton({
   const { width, height } = useWindowDimensions();
   const { settings } = useAppSettings();
   const pressAnim = useRef(new Animated.Value(0)).current;
-  const { isTablet } = getResponsiveMetrics(width, height);
+  const metrics = getResponsiveMetrics(width, height);
+  const { isTablet } = metrics;
 
   const variantTokens = VARIANT_TOKENS[variant];
   const sizeTokens = SIZE_TOKENS[size];
-  const scale = clamp(Math.min(width / 430, height / 932), 0.9, isTablet ? 1.28 : 1.18);
-  const responsiveHeight = Math.round(sizeTokens.height * scale);
-  const responsiveRadius = Math.round(sizeTokens.borderRadius * scale);
-  const responsiveFontSize = Math.round(sizeTokens.fontSize * scale * labelFontScale);
-  const responsivePadding = Math.round(sizeTokens.paddingHorizontal * scale);
+  const minimumFontSize = Math.round(sizeTokens.fontSize * 0.9 * labelFontScale);
+  const maximumFontSize = isTablet
+    ? Math.round(sizeTokens.fontSize * 1.24 * labelFontScale)
+    : Math.round(sizeTokens.fontSize * 1.12 * labelFontScale);
+  const responsiveHeight = metrics.s(sizeTokens.height, Math.round(sizeTokens.height * 0.9), isTablet ? Math.round(sizeTokens.height * 1.28) : Math.round(sizeTokens.height * 1.18));
+  const responsiveRadius = metrics.s(sizeTokens.borderRadius, Math.round(sizeTokens.borderRadius * 0.9), isTablet ? Math.round(sizeTokens.borderRadius * 1.28) : Math.round(sizeTokens.borderRadius * 1.18));
+  const responsiveFontSize = metrics.font(sizeTokens.fontSize * labelFontScale, minimumFontSize, maximumFontSize);
+  const responsivePadding = metrics.s(sizeTokens.paddingHorizontal, Math.round(sizeTokens.paddingHorizontal * 0.9), isTablet ? Math.round(sizeTokens.paddingHorizontal * 1.28) : Math.round(sizeTokens.paddingHorizontal * 1.18));
   const buttonHeight = heightOverride ?? responsiveHeight;
   const innerRadius = responsiveRadius - 2;
 
@@ -298,7 +300,7 @@ export default function GlossyButton({
               >
                 {icon ? <Text style={[styles.icon, { fontSize: responsiveFontSize - 1 }]}>{icon}</Text> : null}
                 <Text
-                  numberOfLines={1}
+                  numberOfLines={labelNumberOfLines}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                   style={[

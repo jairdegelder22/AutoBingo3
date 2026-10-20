@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LEGAL_ACCEPTANCE_STORAGE_KEY, LEGAL_TERMS_VERSION, LEGAL_URLS } from './legalConfig';
@@ -17,6 +17,21 @@ export async function hasAcceptedCurrentLegalTerms() {
 export default function LegalConsentGate({ onAccepted, backgroundColor = 'rgba(0, 0, 0, 0.48)' }) {
   const [accepting, setAccepting] = useState(false);
   const [hasRead, setHasRead] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [scrollViewHeight, setScrollViewHeight] = useState(0);
+  const [scrollContentHeight, setScrollContentHeight] = useState(0);
+  const scrollableDistance = Math.max(scrollContentHeight - scrollViewHeight, 0);
+  const canScroll = scrollableDistance > 8;
+  const scrollProgress = scrollableDistance > 0
+    ? Math.min(Math.max(scrollOffset / scrollableDistance, 0), 1)
+    : 0;
+  const scrollbarTrackHeight = Math.max(scrollViewHeight - 18, 0);
+  const scrollbarThumbHeight = canScroll
+    ? Math.max(42, scrollbarTrackHeight * (scrollViewHeight / scrollContentHeight))
+    : 0;
+  const scrollbarThumbTop = canScroll
+    ? 9 + (scrollbarTrackHeight - scrollbarThumbHeight) * scrollProgress
+    : 0;
 
   async function openLegalUrl(url) {
     try {
@@ -53,14 +68,28 @@ export default function LegalConsentGate({ onAccepted, backgroundColor = 'rgba(0
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const reachedBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 24;
 
+    setScrollOffset(contentOffset.y);
+
     if (reachedBottom) {
       setHasRead(true);
     }
   }
 
   function handleContentSizeChange(_contentWidth, contentHeight) {
-    if (contentHeight <= 0) {
-      return;
+    setScrollContentHeight(contentHeight);
+
+    if (scrollViewHeight > 0 && contentHeight <= scrollViewHeight + 8) {
+      setHasRead(true);
+    }
+  }
+
+  function handleScrollLayout(event) {
+    const nextScrollViewHeight = event.nativeEvent.layout.height;
+
+    setScrollViewHeight(nextScrollViewHeight);
+
+    if (scrollContentHeight > 0 && scrollContentHeight <= nextScrollViewHeight + 8) {
+      setHasRead(true);
     }
   }
 
@@ -68,48 +97,66 @@ export default function LegalConsentGate({ onAccepted, backgroundColor = 'rgba(0
     <View style={[styles.screen, { backgroundColor }]}>
       <View style={styles.panel}>
         <Text style={styles.title}>AutoBingo</Text>
-        <ScrollView
-          style={styles.scrollArea}
-          contentContainerStyle={styles.scrollContent}
-          onScroll={handleScroll}
-          onContentSizeChange={handleContentSizeChange}
-          scrollEventThrottle={16}
-        >
-          <Text style={styles.heading}>Gebruiksvoorwaarden en privacy</Text>
-          <Text style={styles.body}>
-            Door verder te gaan ga je akkoord met onze Gebruiksvoorwaarden en ons Privacybeleid.
-          </Text>
-          <Text style={styles.body}>
-            AutoBingo is bedoeld voor <Text style={styles.bold}>passagiers</Text>.{' '}
-            <Text style={styles.bold}>Bestuurders mogen de app niet bedienen tijdens het rijden.</Text>{' '}
-            Gebruik de app alleen op een veilige manier en volg altijd de verkeersregels.
-          </Text>
-          <Text style={styles.body}>
-            We bewaren je akkoord lokaal op dit apparaat met versie {LEGAL_TERMS_VERSION}. Als de voorwaarden later
-            wijzigen, vragen we opnieuw om akkoord.
-          </Text>
-          <View style={styles.linkStack}>
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => {
-                void openLegalUrl(LEGAL_URLS.terms);
-              }}
-              style={styles.linkButton}
-            >
-              <Text style={styles.link}>Lees de Gebruiksvoorwaarden</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => {
-                void openLegalUrl(LEGAL_URLS.privacy);
-              }}
-              style={styles.linkButton}
-            >
-              <Text style={styles.link}>Lees het Privacybeleid</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.footerText}>Scroll naar beneden om akkoord te kunnen gaan.</Text>
-        </ScrollView>
+        <View style={styles.scrollArea}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            onLayout={handleScrollLayout}
+            onScroll={handleScroll}
+            onContentSizeChange={handleContentSizeChange}
+            persistentScrollbar
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator
+          >
+            <Text style={styles.heading}>Gebruiksvoorwaarden en privacy</Text>
+            <Text style={styles.body}>
+              Door verder te gaan ga je akkoord met onze Gebruiksvoorwaarden en ons Privacybeleid.
+            </Text>
+            <Text style={styles.body}>
+              AutoBingo is bedoeld voor <Text style={styles.bold}>passagiers</Text>.{' '}
+              <Text style={styles.bold}>Bestuurders mogen de app niet bedienen tijdens het rijden.</Text>{' '}
+              Gebruik de app alleen op een veilige manier en volg altijd de verkeersregels.
+            </Text>
+            <Text style={styles.body}>
+              We bewaren je akkoord lokaal op dit apparaat met versie {LEGAL_TERMS_VERSION}. Als de voorwaarden later
+              wijzigen, vragen we opnieuw om akkoord.
+            </Text>
+            <View style={styles.linkStack}>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => {
+                  void openLegalUrl(LEGAL_URLS.terms);
+                }}
+                style={styles.linkButton}
+              >
+                <Text style={styles.link}>Lees de Gebruiksvoorwaarden</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => {
+                  void openLegalUrl(LEGAL_URLS.privacy);
+                }}
+                style={styles.linkButton}
+              >
+                <Text style={styles.link}>Lees het Privacybeleid</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.footerText}>Scroll naar beneden om akkoord te kunnen gaan.</Text>
+          </ScrollView>
+          {canScroll ? (
+            <View pointerEvents="none" style={styles.scrollbarTrack}>
+              <View
+                style={[
+                  styles.scrollbarThumb,
+                  {
+                    height: scrollbarThumbHeight,
+                    top: scrollbarThumbTop,
+                  },
+                ]}
+              />
+            </View>
+          ) : null}
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: accepting || !hasRead }}
@@ -168,9 +215,30 @@ const styles = StyleSheet.create({
   },
   scrollArea: {
     maxHeight: 330,
+    position: 'relative',
+  },
+  scrollView: {
+    maxHeight: 330,
   },
   scrollContent: {
     paddingBottom: 8,
+    paddingRight: 18,
+  },
+  scrollbarTrack: {
+    position: 'absolute',
+    top: 0,
+    right: 2,
+    bottom: 0,
+    width: 8,
+    borderRadius: 4,
+    backgroundColor: '#D8DEE8',
+  },
+  scrollbarThumb: {
+    position: 'absolute',
+    left: 1,
+    right: 1,
+    borderRadius: 3,
+    backgroundColor: '#E03030',
   },
   heading: {
     marginBottom: 10,

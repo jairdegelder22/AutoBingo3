@@ -1,25 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Easing, Image, ImageBackground, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import CircularReveal from '../components/CircularReveal';
 import GlossyButton from '../src/components/GlossyButton';
 import WarmupImages from '../src/components/WarmupImages';
 import * as Haptics from '../src/settings/haptics';
 import { useAppSettings } from '../src/settings/AppSettingsContext';
 import { usePremium } from '../src/premium/PremiumContext';
-import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
 import { hasPremiumEntitlement } from '../src/premium/revenueCatClient';
-import { getResponsiveMetrics } from '../src/utils/responsive';
+import { useAccount } from '../src/account/AccountContext';
+import PremiumPaywallModal from '../src/premium/PremiumPaywallModal';
+import { getAssetPanelWidth } from '../src/utils/responsive';
 import { LEGAL_URLS } from '../src/legal/legalConfig';
 import { redeemUnlockCode } from '../src/unlocks/unlockCodes';
 import { SETTINGS_ASSETS } from '../src/assets/preloadManifest';
+import { useTranslation } from '../src/i18n/useTranslation';
 
 const SETTINGS_MENU_IMAGE = require('../assets/images/settings/settings-menu-panel.png');
 const SETTINGS_LANGUAGE_IMAGE = require('../assets/images/settings/settings-language.png');
 const SETTINGS_TUTORIAL_IMAGE = require('../assets/images/settings/settings-tutorial.png');
 const SETTINGS_PRIVACY_IMAGE = require('../assets/images/settings/settings-privacy.png');
-const SETTINGS_PREMIUM_RESTORE_IMAGE = require('../assets/images/settings/settings-premium-restore.png');
 const SETTINGS_PREMIUM_IMAGE = require('../assets/images/premium/main-menu-premium-crown.png');
 const CODE_ENTRY_MENU_IMAGE = require('../assets/images/settings/code-invoeren-menu.png');
+const HOST_LOCK_CHAINS_IMAGE = require('../assets/images/host-lock-chains.png');
+const HOST_LOCK_PADLOCK_IMAGE = require('../assets/images/host-lock-padlock.png');
 const SFX_ON_IMAGE = require('../assets/images/settings/toggles/sfx-on.png');
 const SFX_OFF_IMAGE = require('../assets/images/settings/toggles/sfx-off.png');
 const MUSIC_ON_IMAGE = require('../assets/images/settings/toggles/music-on.png');
@@ -33,33 +37,40 @@ const APP_VERSION = require('../app.json').expo.version;
 const SETTINGS_MENU_ASPECT_RATIO = 975 / 1614;
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function SettingsScreen({ navigation, onClose, visible = true }) {
+export default function SettingsScreen({ navigation, onClose, onTutorial, onPremiumCodeDisabled, visible = true }) {
   const { settings, updateSetting } = useAppSettings();
+  const { languageOptions, t } = useTranslation();
   const {
     available: premiumAvailable,
     customerInfo,
+    disablePaidSkinCodeUnlock,
+    disablePremiumCodeUnlock,
     isPremium,
     restorePremiumPurchases,
+    unlockAllPaidSkinsWithCode,
     unlockPremiumWithCode,
   } = usePremium();
+  const {
+    loading: accountLoading,
+    signingInProvider,
+    signInWithApple,
+    signInWithGoogle,
+    signOut,
+    user,
+  } = useAccount();
   const { width, height } = useWindowDimensions();
   const [premiumModalVisible, setPremiumModalVisible] = useState(false);
   const [codeModalVisible, setCodeModalVisible] = useState(false);
-  const [restoreInProgress, setRestoreInProgress] = useState(false);
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const [tutorialPickerVisible, setTutorialPickerVisible] = useState(false);
+  const [tutorialHandoffColor, setTutorialHandoffColor] = useState(null);
   const [menuImageReady, setMenuImageReady] = useState(!visible);
   const menuProgress = useRef(new Animated.Value(visible ? 1 : 0)).current;
-  const { isTablet } = getResponsiveMetrics(width, height);
-  const menuWidth = isTablet
-    ? Math.min(width - 20, height * SETTINGS_MENU_ASPECT_RATIO * 0.95, 560)
-    : Math.min(width - 10, height * SETTINGS_MENU_ASPECT_RATIO * 0.94, 430);
+  const menuWidth = getAssetPanelWidth(width, height, SETTINGS_MENU_ASPECT_RATIO, 430, 560);
   const menuHeight = menuWidth / SETTINGS_MENU_ASPECT_RATIO;
   const menuScale = menuWidth / 975;
   const scaled = (value) => value * menuScale;
   const closeSettings = onClose ?? (() => navigation.goBack());
-  const handleSettingsWarmupReady = useCallback(() => {
-    setMenuImageReady(true);
-  }, []);
-
   useEffect(() => {
     menuProgress.stopAnimation();
 
@@ -88,40 +99,23 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
   }, [menuImageReady, menuProgress, visible]);
 
   useEffect(() => {
-    if (!visible) {
-      setPremiumModalVisible(false);
-      setCodeModalVisible(false);
-      setMenuImageReady(false);
+    if (visible) {
+      setTutorialHandoffColor(null);
+      return undefined;
     }
+
+    setPremiumModalVisible(false);
+    setCodeModalVisible(false);
+    setLanguageModalVisible(false);
+    setTutorialPickerVisible(false);
+    setMenuImageReady(false);
+
+    const clearHandoffTimer = setTimeout(() => {
+      setTutorialHandoffColor(null);
+    }, 420);
+
+    return () => clearTimeout(clearHandoffTimer);
   }, [visible]);
-
-  async function handleRestorePremium() {
-    if (restoreInProgress) {
-      return;
-    }
-
-    if (!premiumAvailable) {
-      Alert.alert('Premium herstellen', 'Aankopen herstellen is nog niet beschikbaar in deze build.');
-      return;
-    }
-
-    setRestoreInProgress(true);
-
-    try {
-      const info = await restorePremiumPurchases();
-
-      if (hasPremiumEntitlement(info)) {
-        Alert.alert('Premium herstellen', 'Aankopen hersteld.');
-        return;
-      }
-
-      Alert.alert('Premium herstellen', 'Geen actieve premium aankoop gevonden.');
-    } catch (_error) {
-      Alert.alert('Premium herstellen', 'Herstellen lukt nu niet. Probeer het zo opnieuw.');
-    } finally {
-      setRestoreInProgress(false);
-    }
-  }
 
   async function openPremiumManagementUrl() {
     const managementUrl = customerInfo?.managementURL
@@ -140,8 +134,8 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
     } catch (_error) {
       const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play';
       Alert.alert(
-        'Premium beheren',
-        `Open de ${storeName} en ga naar je abonnementen om Auto Bingo Premium te beheren.`
+        t('settings.managePremium'),
+        t('settings.openStoreFallback', { storeName })
       );
     }
   }
@@ -150,12 +144,17 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
     try {
       await Linking.openURL(url);
     } catch (_error) {
-      Alert.alert('Link openen lukt niet', 'Probeer het later opnieuw.');
+      Alert.alert(t('settings.linkFailedTitle'), t('settings.linkFailedMessage'));
     }
   }
 
   function handlePremiumPress() {
     if (!isPremium) {
+      if (!premiumAvailable) {
+        Alert.alert(t('common.premium'), t('settings.restoreUnavailable'));
+        return;
+      }
+
       setPremiumModalVisible(true);
       return;
     }
@@ -163,12 +162,12 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
     const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play';
 
     Alert.alert(
-      'Premium beheren',
-      `Je premium is actief. Stopzetten of aanpassen loopt via je ${storeName}-abonnementen.`,
+      t('settings.managePremium'),
+      t('settings.premiumActive', { storeName }),
       [
-        { text: 'Sluiten', style: 'cancel' },
+        { text: t('common.close'), style: 'cancel' },
         {
-          text: `Open ${storeName}`,
+          text: t('settings.openStore', { storeName }),
           onPress: () => {
             void openPremiumManagementUrl();
           },
@@ -178,37 +177,141 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
   }
 
   async function handleRedeemCode(code) {
-    return redeemUnlockCode(code, { unlockPremiumWithCode });
+    const result = await redeemUnlockCode(code, {
+      unlockPremiumWithCode,
+      disablePremiumCodeUnlock,
+      unlockAllPaidSkinsWithCode,
+      disablePaidSkinCodeUnlock,
+    });
+
+    if (result?.ok && result.effects?.includes('appReset')) {
+      setTimeout(() => {
+        setCodeModalVisible(false);
+        closeSettings();
+        onPremiumCodeDisabled?.();
+      }, 0);
+    }
+
+    return result;
+  }
+
+  async function signInAndReport(provider) {
+    try {
+      const session = provider === 'apple'
+        ? await signInWithApple()
+        : await signInWithGoogle();
+
+      if (session?.user) {
+        const restoredCustomerInfo = await restorePremiumPurchases().catch(() => null);
+        const premiumRestored = hasPremiumEntitlement(restoredCustomerInfo) || isPremium;
+        const message = premiumRestored
+          ? t('settings.saveProgressAndPremiumLinked')
+          : t('settings.saveProgressLinked');
+
+        Alert.alert(t('settings.saveProgress'), message);
+      }
+    } catch (_error) {
+      Alert.alert(t('settings.saveProgress'), t('settings.saveProgressFailed'));
+    }
+  }
+
+  function handleSaveProgressPress() {
+    if (accountLoading || signingInProvider) {
+      return;
+    }
+
+    if (user) {
+      Alert.alert(
+        t('settings.saveProgress'),
+        t('settings.saveProgressActive'),
+        [
+          { text: t('common.close'), style: 'cancel' },
+          {
+            text: t('settings.signOut'),
+            style: 'destructive',
+            onPress: () => {
+              void signOut().catch(() => {
+                Alert.alert(t('settings.saveProgress'), t('settings.signOutFailed'));
+              });
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    if (Platform.OS === 'ios') {
+      void signInAndReport('apple');
+      return;
+    }
+
+    if (Platform.OS === 'android') {
+      void signInAndReport('google');
+      return;
+    }
+
+    Alert.alert(
+      t('settings.saveProgress'),
+      t('settings.saveProgressMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.continueWithApple'),
+          onPress: () => {
+            void signInAndReport('apple');
+          },
+        },
+        {
+          text: t('settings.continueWithGoogle'),
+          onPress: () => {
+            void signInAndReport('google');
+          },
+        },
+      ]
+    );
+  }
+
+  function handleTutorialChoice(choice) {
+    setTutorialHandoffColor(choice.color ?? '#F5C400');
+    onTutorial?.({ ...choice, deferSettingsClose: true });
+    setTimeout(() => {
+      setTutorialPickerVisible(false);
+      closeSettings();
+    }, 120);
   }
 
   const shortcutButtons = [
     {
       key: 'language',
-      label: 'Taal',
+      label: t('settings.language'),
       icon: SETTINGS_LANGUAGE_IMAGE,
-      onPress: () => Alert.alert('Taal', 'Taalinstellingen komen later.'),
+      onPress: () => setLanguageModalVisible(true),
+    },
+    {
+      key: 'tutorial',
+      label: t('settings.tutorial'),
+      icon: SETTINGS_TUTORIAL_IMAGE,
+      onPress: () => setTutorialPickerVisible(true),
     },
     {
       key: 'premium',
-      label: isPremium ? 'Premium beheren' : 'Premium',
+      label: isPremium ? t('settings.managePremium') : t('common.premium'),
       icon: SETTINGS_PREMIUM_IMAGE,
       onPress: handlePremiumPress,
     },
     {
-      key: 'tutorial',
-      label: 'Tutorial',
-      icon: SETTINGS_TUTORIAL_IMAGE,
-      onPress: () => Alert.alert('Tutorial', 'Tutorial komt later.'),
-    },
-    {
-      key: 'restore-premium',
-      label: restoreInProgress ? 'Laden...' : 'Premium herstellen',
-      icon: SETTINGS_PREMIUM_RESTORE_IMAGE,
-      onPress: handleRestorePremium,
+      key: 'save-progress',
+      label: accountLoading || signingInProvider
+        ? t('common.loading')
+        : user
+          ? t('settings.progressSaved')
+          : t('settings.saveProgress'),
+      icon: null,
+      onPress: handleSaveProgressPress,
     },
     {
       key: 'redeem-code',
-      label: 'Code invoeren',
+      label: t('settings.redeemCode'),
       icon: null,
       onPress: () => setCodeModalVisible(true),
     },
@@ -233,7 +336,7 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={closeSettings}>
+    <Modal visible={visible} transparent animationType={tutorialHandoffColor ? 'none' : 'fade'} onRequestClose={closeSettings}>
       <View style={styles.screen}>
         <WarmupImages
           assets={SETTINGS_ASSETS}
@@ -241,7 +344,6 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
           timeoutMs={null}
           imageSize={128}
           batchSize={16}
-          onReady={handleSettingsWarmupReady}
         />
         <Pressable style={styles.dismissBackdrop} onPress={closeSettings} />
 
@@ -253,10 +355,16 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
           <ImageBackground
             source={SETTINGS_MENU_IMAGE}
             resizeMode="stretch"
-            style={[styles.menu, { width: menuWidth, height: menuHeight }]}
+            style={[
+              styles.menu,
+              { width: menuWidth, height: menuHeight },
+            ]}
             fadeDuration={0}
             onLoadEnd={() => setMenuImageReady(true)}
+            imageStyle={styles.menuImage}
           >
+            {menuImageReady ? (
+              <>
             <View
               style={[
                 styles.topToggles,
@@ -281,7 +389,7 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
                 badgeSize={scaled(70)}
               />
               <MiniToggleButton
-                label="Muziek"
+                label={t('settings.music')}
                 active={settings.musicEnabled}
                 activeIcon={MUSIC_ON_IMAGE}
                 inactiveIcon={MUSIC_OFF_IMAGE}
@@ -293,7 +401,7 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
                 badgeSize={scaled(70)}
               />
               <MiniToggleButton
-                label="Trilling"
+                label={t('settings.haptics')}
                 active={settings.hapticsEnabled}
                 activeIcon={HAPTICS_ON_IMAGE}
                 inactiveIcon={HAPTICS_OFF_IMAGE}
@@ -342,7 +450,7 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
                 },
               ]}
             >
-              Versie {APP_VERSION}
+              {t('common.version')} {APP_VERSION}
             </Text>
 
             <View
@@ -357,20 +465,22 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
               ]}
             >
               <LegalLink
-                label="Gebruiksvoorwaarden"
+                label={t('settings.terms')}
                 fontSize={scaled(25)}
                 onPress={() => {
                   void openLegalUrl(LEGAL_URLS.terms);
                 }}
               />
               <LegalLink
-                label="Privacybeleid"
+                label={t('settings.privacy')}
                 fontSize={scaled(25)}
                 onPress={() => {
                   void openLegalUrl(LEGAL_URLS.privacy);
                 }}
               />
             </View>
+              </>
+            ) : null}
           </ImageBackground>
         </Animated.View>
       </View>
@@ -383,7 +493,40 @@ export default function SettingsScreen({ navigation, onClose, visible = true }) 
         visible={codeModalVisible}
         onClose={() => setCodeModalVisible(false)}
         onRedeem={handleRedeemCode}
+        t={t}
       />
+      <LanguagePickerModal
+        visible={languageModalVisible}
+        currentLanguageId={settings.language}
+        languageOptions={languageOptions}
+        title={t('settings.languageTitle')}
+        message={t('settings.languageMessage')}
+        onClose={() => setLanguageModalVisible(false)}
+        onSelect={(language) => {
+          updateSetting('language', language.id);
+          setLanguageModalVisible(false);
+        }}
+      />
+      <TutorialPickerModal
+        visible={tutorialPickerVisible}
+        isPremium={isPremium}
+        onClose={() => setTutorialPickerVisible(false)}
+        onSelect={handleTutorialChoice}
+        onLockedPremium={() => {
+          setTutorialPickerVisible(false);
+          setPremiumModalVisible(true);
+        }}
+        t={t}
+      />
+      {tutorialHandoffColor ? (
+        <View
+          pointerEvents="auto"
+          style={[
+            styles.tutorialHandoffScreen,
+            { backgroundColor: tutorialHandoffColor },
+          ]}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -489,7 +632,14 @@ function MiniToggleButton({
                 end={{ x: 1, y: 0 }}
                 style={styles.miniToggleGlossPill}
               />
-              <Text style={[styles.miniToggleText, { fontSize, lineHeight: fontSize * 1.1 }]}>{label}</Text>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.64}
+                style={[styles.miniToggleText, { fontSize, lineHeight: fontSize * 1.1 }]}
+              >
+                {label}
+              </Text>
               <View style={[styles.miniToggleIconWrap, { width: iconSize, height: iconSize }]}>
                 <Image source={icon} resizeMode="contain" style={styles.miniToggleIcon} fadeDuration={0} />
                 <Image
@@ -586,13 +736,14 @@ function SettingsShortcutButton({ label, icon, onPress, height, iconSize, iconRi
   );
 }
 
-function UnlockCodeModal({ visible, onClose, onRedeem }) {
+function UnlockCodeModal({ visible, onClose, onRedeem, t }) {
   const { width, height } = useWindowDimensions();
+  const codeInputRef = useRef(null);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const panelWidth = Math.min(width - 10, height * (962 / 1179) * 0.94, 430);
+  const panelWidth = getAssetPanelWidth(width, height, 962 / 1179, 430, 560);
 
   useEffect(() => {
     if (!visible) {
@@ -644,8 +795,8 @@ function UnlockCodeModal({ visible, onClose, onRedeem }) {
     } catch (_error) {
       setResult({
         ok: false,
-        title: 'Code invoeren lukt niet',
-        message: 'Probeer het zo opnieuw.',
+        title: t('code.failedTitle'),
+        message: t('code.failedMessage'),
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -686,34 +837,45 @@ function UnlockCodeModal({ visible, onClose, onRedeem }) {
                 }
               }}
             />
-            <Text style={styles.codeTitle}>Code invoeren</Text>
+            <Text style={styles.codeTitle}>{t('code.title')}</Text>
             <Text style={styles.codeMessage}>
-              Vul een speciale code in om extra's op dit apparaat vrij te spelen.
+              {t('code.message')}
             </Text>
-            <TextInput
-              value={code}
-              onChangeText={(nextCode) => {
-                setCode(nextCode);
-                setResult(null);
-              }}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              editable={!busy}
-              style={styles.codeInput}
-            />
-            <View style={styles.codeResultSlot}>
-              {result ? (
-                <Text style={[styles.codeResult, result.ok ? styles.codeResultSuccess : styles.codeResultError]}>
-                  {result.title}. {result.message}
-                </Text>
-              ) : null}
-            </View>
+            <Pressable style={styles.codeInputShell} onPress={() => codeInputRef.current?.focus()}>
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={styles.codeInputText}
+              >
+                {code}
+              </Text>
+              <TextInput
+                ref={codeInputRef}
+                value={code}
+                onChangeText={(nextCode) => {
+                  setCode(nextCode.replace(/[\r\n]+/g, '').toUpperCase());
+                  setResult(null);
+                }}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                autoComplete="off"
+                keyboardType="visible-password"
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                editable={!busy}
+                multiline={false}
+                numberOfLines={1}
+                scrollEnabled={false}
+                blurOnSubmit={false}
+                caretHidden
+                contextMenuHidden
+                style={styles.codeHiddenInput}
+              />
+            </Pressable>
             <View style={styles.codeActions}>
               <View style={styles.codeActionButton}>
                 <GlossyButton
-                  label={busy ? 'Laden...' : 'Invoeren'}
+                  label={busy ? t('common.loading') : t('code.submit')}
                   variant="green"
                   size="normal"
                   onPress={handleSubmit}
@@ -721,10 +883,281 @@ function UnlockCodeModal({ visible, onClose, onRedeem }) {
                 />
               </View>
             </View>
+            <View style={styles.codeResultSlot}>
+              {result ? (
+                <Text style={[styles.codeResult, result.ok ? styles.codeResultSuccess : styles.codeResultError]}>
+                  {result.title}. {result.message}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+const TUTORIAL_CHOICES = [
+  {
+    id: 'general',
+    titleKey: 'tutorial.general',
+    variant: 'yellow',
+    color: '#F5C400',
+  },
+  {
+    id: 'menu',
+    titleKey: 'tutorial.menu',
+    variant: 'green',
+    color: '#159B3B',
+  },
+  {
+    id: 'join',
+    titleKey: 'tutorial.join',
+    variant: 'blue',
+    color: '#1A7BD4',
+  },
+  {
+    id: 'host',
+    titleKey: 'tutorial.host',
+    variant: 'red',
+    color: '#E03030',
+    premium: true,
+  },
+];
+
+function LanguagePickerModal({
+  visible,
+  currentLanguageId,
+  languageOptions,
+  title,
+  message,
+  onClose,
+  onSelect,
+}) {
+  const { width, height } = useWindowDimensions();
+  const panelWidth = getAssetPanelWidth(width, height, 962 / 1179, 430, 560);
+  const languageChoiceGap = Math.round(Math.max(10, Math.min(14, panelWidth * 0.032)));
+  const languageContentPadding = 46;
+  const languageChoiceWidth = Math.floor((panelWidth - languageContentPadding * 2 - languageChoiceGap) / 2);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.tutorialPickerScreen}>
+        <Pressable style={styles.dismissBackdrop} onPress={onClose} />
+        <View style={[styles.codePanel, { width: panelWidth }]}>
+          <Image
+            pointerEvents="none"
+            source={CODE_ENTRY_MENU_IMAGE}
+            resizeMode="contain"
+            style={styles.codePanelBackground}
+            fadeDuration={0}
+          />
+          <View style={[styles.codePanelContent, styles.languagePanelContent]}>
+            <Text style={[styles.codeTitle, styles.tutorialPickerTitle]}>{title}</Text>
+            <Text style={styles.codeMessage}>{message}</Text>
+            <View style={styles.languageChoiceStack}>
+              {languageOptions.map((language, index) => {
+                const selected = language.id === currentLanguageId;
+                const isLeftColumn = index % 2 === 0;
+                const isLastRow = index >= languageOptions.length - 2;
+
+                return (
+                  <View
+                    key={language.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={[
+                      styles.languageChoice,
+                      {
+                        width: languageChoiceWidth,
+                        marginRight: isLeftColumn ? languageChoiceGap : 0,
+                        marginBottom: isLastRow ? 0 : languageChoiceGap,
+                      },
+                    ]}
+                  >
+                    <GlossyButton
+                      label={language.nativeName}
+                      variant={selected ? 'green' : 'blue'}
+                      heightOverride={58}
+                      horizontalPadding={18}
+                      labelFontScale={0.96}
+                      onPress={() => onSelect(language)}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function TutorialPickerModal({ visible, isPremium, onClose, onSelect, onLockedPremium, t }) {
+  const { width, height } = useWindowDimensions();
+  const revealRef = useRef(null);
+  const pendingChoiceRef = useRef(null);
+  const pickerProgress = useRef(new Animated.Value(0)).current;
+  const [revealColor, setRevealColor] = useState('#F5C400');
+  const [revealOrigin, setRevealOrigin] = useState({ x: width / 2, y: height / 2 });
+  const panelWidth = getAssetPanelWidth(width, height, 962 / 1179, 430, 560);
+  const tutorialChoiceGap = Math.round(Math.max(10, Math.min(14, panelWidth * 0.032)));
+  const tutorialContentPadding = 48;
+  const tutorialChoiceWidth = Math.floor((panelWidth - tutorialContentPadding * 2 - tutorialChoiceGap) / 2);
+
+  useEffect(() => {
+    pickerProgress.stopAnimation();
+
+    if (!visible) {
+      pickerProgress.setValue(0);
+      return;
+    }
+
+    pickerProgress.setValue(0);
+    Animated.timing(pickerProgress, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [pickerProgress, visible]);
+
+  if (!visible) {
+    return null;
+  }
+
+  function handleChoicePress(choice, event) {
+    if (choice.premium && !isPremium) {
+      onLockedPremium?.();
+      return;
+    }
+
+    pendingChoiceRef.current = choice;
+    setRevealColor(choice.color);
+    setRevealOrigin({
+      x: event?.nativeEvent?.pageX ?? width / 2,
+      y: event?.nativeEvent?.pageY ?? height / 2,
+    });
+
+    requestAnimationFrame(() => {
+      revealRef.current?.reveal();
+    });
+  }
+
+  return (
+    <Animated.View
+      style={[
+        styles.tutorialPickerScreen,
+        {
+          opacity: pickerProgress,
+        },
+      ]}
+    >
+      <Pressable style={styles.dismissBackdrop} onPress={onClose} />
+      <Animated.View
+        style={[
+          styles.codePanel,
+          {
+            width: panelWidth,
+            transform: [
+              {
+                scale: pickerProgress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.965, 1],
+                }),
+              },
+              {
+                translateY: pickerProgress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [10, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Image
+          pointerEvents="none"
+          source={CODE_ENTRY_MENU_IMAGE}
+          resizeMode="contain"
+          style={styles.codePanelBackground}
+          fadeDuration={0}
+        />
+        <View style={[styles.codePanelContent, styles.tutorialPanelContent]}>
+          <Text style={[styles.codeTitle, styles.tutorialPickerTitle]}>{t('tutorial.title')}</Text>
+          <Text style={styles.codeMessage}>
+            {t('tutorial.message')}
+          </Text>
+          <View style={styles.tutorialChoiceStack}>
+            {TUTORIAL_CHOICES.map((choice, index) => {
+              const locked = choice.premium && !isPremium;
+              const isLeftColumn = index % 2 === 0;
+              const isLastRow = index >= TUTORIAL_CHOICES.length - 2;
+              const buttonLabel = choice.id === 'general'
+                ? t(choice.titleKey).replace(' AutoBingo', '\nAutoBingo')
+                : t(choice.titleKey);
+
+              return (
+                <View
+                  key={choice.id}
+                  style={[
+                    styles.tutorialChoiceItem,
+                    {
+                      width: tutorialChoiceWidth,
+                      marginRight: isLeftColumn ? tutorialChoiceGap : 0,
+                      marginBottom: isLastRow ? 0 : tutorialChoiceGap,
+                    },
+                    locked && styles.tutorialChoiceItemLocked,
+                  ]}
+                >
+                  <GlossyButton
+                    label={buttonLabel}
+                    variant={choice.variant}
+                    size="normal"
+                    heightOverride={78}
+                    horizontalPadding={12}
+                    labelFontScale={choice.id === 'general' ? 0.8 : 0.7}
+                    labelNumberOfLines={choice.id === 'general' ? 2 : 1}
+                    onPress={(event) => handleChoicePress(choice, event)}
+                  />
+                  {locked ? (
+                    <View pointerEvents="none" style={styles.tutorialChoiceLockLayer}>
+                      <View style={styles.tutorialChoiceLockDim} />
+                      <Image
+                        source={HOST_LOCK_CHAINS_IMAGE}
+                        resizeMode="cover"
+                        style={styles.tutorialChoiceLockChains}
+                        fadeDuration={0}
+                      />
+                      <Image
+                        source={HOST_LOCK_PADLOCK_IMAGE}
+                        resizeMode="contain"
+                        style={styles.tutorialChoiceLockPadlock}
+                        fadeDuration={0}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </Animated.View>
+      <CircularReveal
+        ref={revealRef}
+        color={revealColor}
+        originX={revealOrigin.x}
+        originY={revealOrigin.y}
+        onComplete={() => {
+          const choice = pendingChoiceRef.current;
+          pendingChoiceRef.current = null;
+          if (choice) {
+            onSelect(choice);
+          }
+        }}
+      />
+    </Animated.View>
   );
 }
 
@@ -761,6 +1194,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.34,
     shadowRadius: 20,
     elevation: 16,
+  },
+  menuImage: {
+    width: '100%',
+    height: '100%',
   },
   topToggles: {
     position: 'absolute',
@@ -849,6 +1286,20 @@ const styles = StyleSheet.create({
     zIndex: 9200,
     elevation: 9200,
   },
+  tutorialPickerScreen: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.52)',
+    padding: 18,
+    zIndex: 9300,
+    elevation: 9300,
+  },
+  tutorialHandoffScreen: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 13000,
+    elevation: 13000,
+  },
   codePanel: {
     aspectRatio: 962 / 1179,
     alignItems: 'stretch',
@@ -869,8 +1320,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingHorizontal: 58,
-    paddingTop: 130,
+    paddingTop: 106,
     paddingBottom: 86,
+  },
+  tutorialPanelContent: {
+    paddingHorizontal: 48,
+    paddingTop: 112,
+    paddingBottom: 72,
+  },
+  languagePanelContent: {
+    paddingHorizontal: 46,
+    paddingTop: 104,
+    paddingBottom: 78,
+  },
+  tutorialPickerTitle: {
+    fontSize: 34,
+    lineHeight: 40,
+    marginBottom: -6,
   },
   codePanelDismissLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -889,27 +1355,51 @@ const styles = StyleSheet.create({
   },
   codeMessage: {
     zIndex: 1,
-    marginTop: 8,
+    marginTop: 4,
     fontFamily: 'FredokaOne_400Regular',
     color: '#315266',
     fontSize: 15,
     lineHeight: 21,
     textAlign: 'center',
   },
-  codeInput: {
+  codeInputShell: {
     zIndex: 1,
     width: '100%',
-    minHeight: 58,
-    marginTop: 34,
+    height: 58,
+    marginTop: 24,
     borderRadius: 16,
     borderWidth: 3,
     borderColor: '#1A75BA',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
+    paddingVertical: 0,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  codeInputText: {
     fontFamily: 'FredokaOne_400Regular',
     fontSize: 18,
+    lineHeight: 24,
     color: '#17364A',
-    textAlign: 'center',
+    textAlign: 'left',
+    includeFontPadding: false,
+    overflow: 'hidden',
+  },
+  codeHiddenInput: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 0,
+    height: 58,
+    color: 'transparent',
+    opacity: 0.02,
+    fontSize: 18,
+    lineHeight: 24,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    textAlign: 'left',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   codeResult: {
     fontFamily: 'FredokaOne_400Regular',
@@ -920,10 +1410,10 @@ const styles = StyleSheet.create({
   codeResultSlot: {
     zIndex: 1,
     width: '100%',
-    minHeight: 58,
+    minHeight: 48,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
+    justifyContent: 'flex-start',
+    marginTop: 10,
   },
   codeResultSuccess: {
     color: '#087233',
@@ -936,10 +1426,64 @@ const styles = StyleSheet.create({
     width: '68%',
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 0,
+    marginTop: 6,
   },
   codeActionButton: {
     width: '100%',
+  },
+  tutorialChoiceStack: {
+    zIndex: 1,
+    width: '100%',
+    marginTop: 28,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  languageChoiceStack: {
+    zIndex: 1,
+    width: '100%',
+    marginTop: 38,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  languageChoice: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  tutorialChoiceItem: {
+    position: 'relative',
+    flexGrow: 0,
+    flexShrink: 0,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderRadius: 19,
+  },
+  tutorialChoiceItemLocked: {
+    opacity: 0.98,
+  },
+  tutorialChoiceLockLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tutorialChoiceLockDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+  },
+  tutorialChoiceLockChains: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  tutorialChoiceLockPadlock: {
+    width: 44,
+    height: 44,
   },
   legalLinks: {
     position: 'absolute',

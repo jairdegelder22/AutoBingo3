@@ -24,6 +24,10 @@
       }
     },
     "production": {
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_ADMOB_USE_REAL_ADS": "true"
+      },
       "autoIncrement": true
     }
   },
