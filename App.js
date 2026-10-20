@@ -24,6 +24,7 @@ import { AccountProvider } from './src/account/AccountContext';
 import { AdsProvider, useAds } from './src/ads/AdProvider';
 import { getDriverWarningMetrics, getResponsiveMetrics } from './src/utils/responsive';
 import useOnlineConnectionStatus from './src/hooks/useOnlineConnectionStatus';
+import useActivityTracking from './src/hooks/useActivityTracking';
 import LegalConsentGate, { hasAcceptedCurrentLegalTerms } from './src/legal/LegalConsentGate';
 import {
   playSoundEffect,
@@ -600,6 +601,17 @@ export default function App() {
   const tutorialActive = tutorialStepIndex !== null;
   const tutorialStep = tutorialActive ? activeTutorialSteps[tutorialStepIndex] : null;
   const legalAccepted = legalStatus === 'accepted';
+  const activityConfig = currentRoute.params?.config;
+  const activityIsGame = currentRoute.name === 'Spel' && !currentRoute.params?.tutorialMode;
+  useActivityTracking(
+    legalAccepted,
+    activityIsGame ? (activityConfig?.syncType === 'live' ? 'online' : 'offline') : null,
+    activityConfig?.spelers?.length || activityConfig?.aantalSpelersOpDitApparaat || 1,
+    activityIsGame ? JSON.stringify([
+      currentRoute.params?.replayAt, activityConfig?.lobbyCode,
+      activityConfig?.startedAt, activityConfig?.seed, activityConfig?.salt,
+    ]) : null
+  );
   const legalRequired = legalStatus === 'required';
   const shouldShowDriverWarning = legalAccepted && currentRoute.name === 'Home' && !driverWarningComplete;
   const bootRevealCanStart = legalAccepted && driverWarningComplete;
